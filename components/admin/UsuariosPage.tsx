@@ -2,16 +2,17 @@
 
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
-import { Plus, Edit2, UserX, UserCheck, Search, CreditCard } from "lucide-react";
+import { Plus, Edit2, UserX, UserCheck, Search, CreditCard, KeyRound } from "lucide-react";
 import { perfilLabel } from "@/lib/helpers";
 import type { User, Cartao } from "@/lib/types";
 
 export default function UsuariosPage() {
-  const { users, cartoes, addUser, updateUser, toggleUserAtivo, addCartao, updateCartao, removeCartao } = useAppStore();
+  const { users, cartoes, currentUser, addUser, updateUser, toggleUserAtivo, resetSenha, addCartao, updateCartao, removeCartao } = useAppStore();
   const [search, setSearch] = useState("");
   const [modalUser, setModalUser] = useState<User | "new" | null>(null);
   const [activeTab, setActiveTab] = useState<"dados" | "erp" | "cartoes">("dados");
   const [cartaoModal, setCartaoModal] = useState<{ userId: string; cartao?: Cartao } | null>(null);
+  const [resetModal, setResetModal] = useState<User | null>(null);
 
   const filtered = users.filter((u) => {
     const q = search.toLowerCase();
@@ -117,6 +118,11 @@ export default function UsuariosPage() {
                       <div className="flex items-center gap-1">
                         <button onClick={() => openEdit(u)} className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground" title="Editar">
                           <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => setResetModal(u)}
+                          className="p-1.5 rounded-lg hover:bg-accent/10 text-accent transition"
+                          title="Resetar senha">
+                          <KeyRound className="w-4 h-4" />
                         </button>
                         <button onClick={() => toggleUserAtivo(u.id)}
                           className={`p-1.5 rounded-lg transition ${u.ativo ? "hover:bg-destructive/10 text-destructive" : "hover:bg-success/10 text-success"}`}
@@ -310,6 +316,48 @@ export default function UsuariosPage() {
             <div className="flex gap-3">
               <button onClick={() => setCartaoModal(null)} className="flex-1 py-2 rounded-lg border border-input text-sm font-medium hover:bg-muted transition">Cancelar</button>
               <button onClick={saveCartao} className="flex-1 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition">Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Senha Modal */}
+      {resetModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-5 flex flex-col gap-4">
+            <h3 className="font-semibold text-foreground">Resetar Senha</h3>
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-warning/10">
+                <KeyRound className="w-5 h-5 text-warning" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm text-foreground">
+                  Você está redefinindo a senha de <strong>{resetModal.nome}</strong>.
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  A senha será resetada para <strong className="text-primary">12345</strong> e o usuário será obrigado a criar uma nova senha no próximo login.
+                </p>
+              </div>
+            </div>
+            <div className="bg-muted/30 rounded-lg p-3">
+              <p className="text-xs text-muted-foreground">
+                <strong>Ação irreversível:</strong> Esta ação não pode ser desfeita. O usuário precisará fazer login com a senha padrão.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setResetModal(null)} className="flex-1 py-2 rounded-lg border border-input text-sm font-medium hover:bg-muted transition">
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (currentUser) {
+                    resetSenha(resetModal.id, currentUser.id);
+                    setResetModal(null);
+                  }
+                }}
+                className="flex-1 py-2 rounded-lg bg-warning text-white text-sm font-semibold hover:bg-warning/90 transition">
+                Confirmar Reset
+              </button>
             </div>
           </div>
         </div>

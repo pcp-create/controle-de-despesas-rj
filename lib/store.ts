@@ -31,6 +31,9 @@ interface AppState {
     novaSenha: string
   ) => { ok: boolean; msg: string };
 
+  // Reset senha (admin only)
+  resetSenha: (userId: string, adminId: string) => { ok: boolean; msg: string };
+
   // Data
   users: User[];
   cartoes: Cartao[];
@@ -110,6 +113,26 @@ export const useAppStore = create<AppState>()(
           data: new Date().toISOString(),
         });
         return { ok: true, msg: "Senha alterada com sucesso." };
+      },
+
+      resetSenha: (userId, adminId) => {
+        const users = get().users;
+        const user = users.find((u) => u.id === userId);
+        if (!user) return { ok: false, msg: "Usuário não encontrado." };
+        set({
+          users: users.map((u) =>
+            u.id === userId ? { ...u, senha: "12345", primeiroAcesso: true } : u
+          ),
+        });
+        get().addAuditoria({
+          usuarioId: adminId,
+          acao: "Senha resetada",
+          entidade: "Usuário",
+          entidadeId: userId,
+          detalhes: `Senha do usuário ${user.nome} foi resetada para 12345 com obrigação de trocar no primeiro acesso.`,
+          data: new Date().toISOString(),
+        });
+        return { ok: true, msg: "Senha resetada com sucesso." };
       },
 
       addUser: (user) => {
