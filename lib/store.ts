@@ -56,7 +56,9 @@ interface AppState {
   updateTipoDespesa: (id: string, data: Partial<TipoDespesa>) => void;
 
   // Despesas
-  addDespesa: (despesa: Omit<Despesa, "id" | "dataCriacao" | "dataAtualizacao">) => void;
+  addDespesa: (despesa: Omit<Despesa, "id" | "dataCriacao" | "dataAtualizacao">) => string;
+  updateDespesa: (id: string, data: Partial<Despesa>) => void;
+  enviarDespesa: (id: string) => { ok: boolean; msg: string };
   updateDespesaStatus: (
     id: string,
     statusAprovacao: ApprovalStatus,
@@ -180,9 +182,10 @@ export const useAppStore = create<AppState>()(
 
       addDespesa: (despesa) => {
         const now = new Date().toISOString();
+        const newId = genId();
         const newDespesa: Despesa = {
           ...despesa,
-          id: genId(),
+          id: newId,
           dataCriacao: now,
           dataAtualizacao: now,
         };
@@ -191,10 +194,87 @@ export const useAppStore = create<AppState>()(
           usuarioId: despesa.tecnicoId,
           acao: "Despesa criada",
           entidade: "Despesa",
-          entidadeId: newDespesa.id,
-          detalhes: `Despesa ${despesa.numeroOS} criada. Status: ${despesa.statusERP}`,
+          entidadeId: newId,
+          detalhes: `Despesa ${despesa.numeroOS} criada como rascunho.`,
           data: now,
         });
+        return newId;
+      },
+
+      updateDespesa: (id, data) => {
+        const now = new Date().toISOString();
+        const despesa = get().despesas.find((d) => d.id === id);
+        if (!despesa || despesa.statusERP !== "Rascunho") return;
+        set({
+          despesas: get().despesas.map((d) =>
+            d.id === id ? { ...d, ...data, dataAtualizacao: now } : d
+          ),
+        });
+        get().addAuditoria({
+          usuarioId: despesa.tecnicoId,
+          acao: "Despesa editada",
+          entidade: "Despesa",
+          entidadeId: id,
+          detalhes: `Despesa ${despesa.numeroOS} foi editada.`,
+          data: now,
+        });
+      },
+
+      enviarDespesa: (id) => {
+        const now = new Date().toISOString();
+        const despesa = get().despesas.find((d) => d.id === id);
+        if (!despesa) return { ok: false, msg: "Despesa não encontrada." };
+        if (despesa.statusERP !== "Rascunho") return { ok: false, msg: "Despesa já foi enviada." };
+
+        const tipo = get().tiposDespesa.find((t) => t.id === despesa.tipoDespesaId);
+        const dentroDoLimite = tipo?.limiteMaximo !== undefined && despesa.valor <= tipo.limiteMaximo;
+
+        // Se dentro do limite, pula aprovação do gestor
+        const newStatusAprovacao: ApprovalStatus = dentroDoLimite ? "AprovadoGestor" : "AguardandoGestor";
+        const newStatusERP: ERPStatus = dentroDoLimite ? "AprovadoGestorERPAtualizado" : "EnviadoAguardandoGestor";
+
+        const erpPayload = {
+          id: despesa.id,
+          cliente: despesa.cliente,
+          os: despesa.numeroOS,
+          tipo: tipo?.nome,
+          valor: despesa.valor,
+          documento: despesa.documento,
+          observacao: despesa.observacao,
+          statusAprovacao: newStatusAprovacao,
+          status: dentroDoLimite ? "Aprovado" : "Pendente",
+          dataEnvio: now,
+        };
+
+        set({
+          despesas: get().despesas.map((d) =>
+            d.id === id
+              ? {
+                  ...d,
+                  statusAprovacao: newStatusAprovacao,
+                  statusERP: newStatusERP,
+                  erpId: `ERP-${Date.now()}`,
+                  erpPayload: JSON.stringify(erpPayload),
+                  erpResposta: JSON.stringify({ success: true, id: `ERP-${Date.now()}`, message: "Enviado com sucesso" }),
+                  dataAtualizacao: now,
+                  ...(dentroDoLimite ? { dataAprovacao: now, gestorAprovadorId: "sistema" } : {}),
+                }
+              : d
+          ),
+        });
+
+        get().addAuditoria({
+          usuarioId: despesa.tecnicoId,
+          acao: dentroDoLimite ? "Despesa enviada (aprovação automática)" : "Despesa enviada para aprovação",
+          entidade: "Despesa",
+          entidadeId: id,
+          detalhes: dentroDoLimite
+            ? `Despesa ${despesa.numeroOS} no valor de R$ ${despesa.valor.toFixed(2)} foi enviada e aprovada automaticamente (dentro do limite de R$ ${tipo?.limiteMaximo?.toFixed(2)}).`
+            : `Despesa ${despesa.numeroOS} no valor de R$ ${despesa.valor.toFixed(2)} foi enviada e aguarda aprovação do gestor.`,
+          data: now,
+        });
+
+        return { ok: true, msg: dentroDoLimite ? "Despesa enviada e aprovada automaticamente!" : "Despesa enviada para aprovação do gestor." };
       },
 
       updateDespesaStatus: (id, statusAprovacao, statusERP, extras) => {

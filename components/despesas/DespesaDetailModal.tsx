@@ -1,7 +1,7 @@
 "use client";
 
 import { useAppStore } from "@/lib/store";
-import { X, FileText } from "lucide-react";
+import { X, FileText, Download, Image, File } from "lucide-react";
 import type { Despesa } from "@/lib/types";
 import {
   formatCurrency,
@@ -19,11 +19,21 @@ interface Props {
 }
 
 export default function DespesaDetailModal({ despesa: d, onClose }: Props) {
-  const { tiposDespesa, cartoes, users } = useAppStore();
+  const { tiposDespesa, cartoes, users, currentUser } = useAppStore();
   const tipo = tiposDespesa.find((t) => t.id === d.tipoDespesaId);
   const cartao = cartoes.find((c) => c.id === d.cartaoId);
   const tecnico = users.find((u) => u.id === d.tecnicoId);
   const gestor = users.find((u) => u.id === d.gestorAprovadorId);
+
+  // Verifica se o usuário pode ver anexos (dono, gestor, financeiro, admin)
+  const canViewAnexo =
+    currentUser?.id === d.tecnicoId ||
+    currentUser?.perfil === "gestor" ||
+    currentUser?.perfil === "financeiro" ||
+    currentUser?.perfil === "administrador";
+
+  const isImage = d.comprovanteNome?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+  const isPDF = d.comprovanteNome?.match(/\.pdf$/i);
 
   const row = (label: string, value: React.ReactNode) => (
     <div className="flex flex-col gap-0.5 py-2 border-b border-border last:border-0">
@@ -64,12 +74,63 @@ export default function DespesaDetailModal({ despesa: d, onClose }: Props) {
           {row("Documento", d.documento)}
           {row("Cartão Utilizado", cartao ? `${cartao.nome} – ${cartao.bandeira} **** ${cartao.ultimos4}` : "-")}
           {row("Observação", d.observacao)}
-          {d.comprovanteNome && row("Comprovante", (
-            <span className="flex items-center gap-1.5 text-accent">
-              <FileText className="w-3.5 h-3.5" />
-              {d.comprovanteNome}
-            </span>
-          ))}
+          
+          {/* Seção de Comprovante */}
+          {d.comprovanteNome && canViewAnexo && (
+            <div className="mt-3 p-4 bg-muted/30 rounded-xl border border-border">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Comprovante Anexado</p>
+              <div className="flex items-start gap-3">
+                <div className={`p-3 rounded-lg ${isImage ? "bg-accent/10" : "bg-primary/10"}`}>
+                  {isImage ? (
+                    <Image className="w-6 h-6 text-accent" />
+                  ) : isPDF ? (
+                    <FileText className="w-6 h-6 text-primary" />
+                  ) : (
+                    <File className="w-6 h-6 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{d.comprovanteNome}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {isImage ? "Imagem" : isPDF ? "Documento PDF" : "Arquivo"} • Anexado em {formatDateTime(d.dataCriacao)}
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => {
+                        // Em produção, isso abriria o arquivo do storage
+                        if (d.comprovanteUrl) {
+                          window.open(d.comprovanteUrl, "_blank");
+                        } else {
+                          alert("Visualização do comprovante: " + d.comprovanteNome);
+                        }
+                      }}
+                      className="px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/10 rounded-lg transition flex items-center gap-1.5"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      Visualizar
+                    </button>
+                    <button
+                      onClick={() => {
+                        // Em produção, isso baixaria o arquivo
+                        alert("Download do comprovante: " + d.comprovanteNome);
+                      }}
+                      className="px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted rounded-lg transition flex items-center gap-1.5"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Baixar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {d.comprovanteNome && !canViewAnexo && (
+            <div className="mt-3 p-3 bg-muted/30 rounded-lg text-sm text-muted-foreground">
+              Comprovante disponível apenas para o técnico responsável, gestor ou financeiro.
+            </div>
+          )}
+          
           {row("ID ERP", d.erpId)}
           {row("Data do Lançamento", formatDateTime(d.dataCriacao))}
 

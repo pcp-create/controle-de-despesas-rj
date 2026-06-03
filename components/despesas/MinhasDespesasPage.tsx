@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
-import { PlusCircle, Search, Eye } from "lucide-react";
+import { PlusCircle, Search, Eye, Edit2, Send, FileText } from "lucide-react";
 import {
   formatCurrency,
   formatDate,
@@ -16,13 +16,15 @@ import type { Despesa } from "@/lib/types";
 
 interface Props {
   onNova: () => void;
+  onEditar: (despesa: Despesa) => void;
 }
 
-export default function MinhasDespesasPage({ onNova }: Props) {
-  const { currentUser, despesas, tiposDespesa, cartoes } = useAppStore();
+export default function MinhasDespesasPage({ onNova, onEditar }: Props) {
+  const { currentUser, despesas, tiposDespesa, cartoes, enviarDespesa } = useAppStore();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [selected, setSelected] = useState<Despesa | null>(null);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
   const myDespesas = despesas
     .filter((d) => d.tecnicoId === currentUser?.id)
@@ -40,6 +42,18 @@ export default function MinhasDespesasPage({ onNova }: Props) {
     return matchSearch && matchStatus;
   });
 
+  const handleEnviar = (despesa: Despesa) => {
+    const result = enviarDespesa(despesa.id);
+    if (result.ok) {
+      setFeedback({ type: "success", msg: result.msg });
+    } else {
+      setFeedback({ type: "error", msg: result.msg });
+    }
+    setTimeout(() => setFeedback(null), 4000);
+  };
+
+  const isRascunho = (d: Despesa) => d.statusERP === "Rascunho";
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between">
@@ -52,6 +66,15 @@ export default function MinhasDespesasPage({ onNova }: Props) {
           Nova Despesa
         </button>
       </div>
+
+      {/* Feedback */}
+      {feedback && (
+        <div className={`px-4 py-3 rounded-lg text-sm font-medium ${
+          feedback.type === "success" ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
+        }`}>
+          {feedback.msg}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -71,6 +94,7 @@ export default function MinhasDespesasPage({ onNova }: Props) {
           className="px-3 py-2.5 rounded-lg border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="">Todos os status</option>
+          <option value="Rascunho">Rascunho</option>
           <option value="EnviadoAguardandoGestor">Aguardando Gestor</option>
           <option value="AprovadoGestorERPAtualizado">Aprovado</option>
           <option value="ReprovadoERPAtualizado">Reprovado</option>
@@ -90,7 +114,7 @@ export default function MinhasDespesasPage({ onNova }: Props) {
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Valor</th>
                 <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden sm:table-cell">Status</th>
                 <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden md:table-cell">ERP</th>
-                <th className="px-4 py-3" />
+                <th className="px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -103,8 +127,9 @@ export default function MinhasDespesasPage({ onNova }: Props) {
               )}
               {filtered.map((d) => {
                 const tipo = tiposDespesa.find((t) => t.id === d.tipoDespesaId);
+                const rascunho = isRascunho(d);
                 return (
-                  <tr key={d.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition">
+                  <tr key={d.id} className={`border-b border-border last:border-0 hover:bg-muted/20 transition ${rascunho ? "bg-warning/5" : ""}`}>
                     <td className="px-4 py-3 text-foreground">{formatDate(d.dataDespesa)}</td>
                     <td className="px-4 py-3 font-medium text-foreground">{tipo?.nome ?? "-"}</td>
                     <td className="px-4 py-3">
@@ -116,9 +141,15 @@ export default function MinhasDespesasPage({ onNova }: Props) {
                       {formatCurrency(d.valor)}
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${approvalStatusColor[d.statusAprovacao]}`}>
-                        {approvalStatusLabel[d.statusAprovacao]}
-                      </span>
+                      {rascunho ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-warning/10 text-warning">
+                          Rascunho
+                        </span>
+                      ) : (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${approvalStatusColor[d.statusAprovacao]}`}>
+                          {approvalStatusLabel[d.statusAprovacao]}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${erpStatusColor[d.statusERP]}`}>
@@ -126,12 +157,49 @@ export default function MinhasDespesasPage({ onNova }: Props) {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => setSelected(d)}
-                        className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground hover:text-foreground"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        {/* Ver detalhes */}
+                        <button
+                          onClick={() => setSelected(d)}
+                          className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground hover:text-foreground"
+                          title="Ver detalhes"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        
+                        {/* Ver comprovante */}
+                        {d.comprovanteNome && (
+                          <button
+                            onClick={() => setSelected(d)}
+                            className="p-1.5 rounded-lg hover:bg-muted transition text-accent hover:text-accent/80"
+                            title="Ver comprovante"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </button>
+                        )}
+                        
+                        {/* Editar (apenas rascunho) */}
+                        {rascunho && (
+                          <button
+                            onClick={() => onEditar(d)}
+                            className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground hover:text-foreground"
+                            title="Editar despesa"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        
+                        {/* Enviar (apenas rascunho) */}
+                        {rascunho && (
+                          <button
+                            onClick={() => handleEnviar(d)}
+                            className="p-1.5 rounded-lg hover:bg-accent/10 transition text-accent"
+                            title="Enviar despesa"
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

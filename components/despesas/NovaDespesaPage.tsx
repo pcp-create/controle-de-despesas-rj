@@ -1,17 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAppStore } from "@/lib/store";
-import { ArrowLeft, Upload, X, Info } from "lucide-react";
+import { ArrowLeft, Upload, X, Info, Save, Send } from "lucide-react";
 import { formatCurrency } from "@/lib/helpers";
 import type { Despesa } from "@/lib/types";
 
 interface Props {
   onBack: () => void;
+  editDespesa?: Despesa | null;
 }
 
-export default function NovaDespesaPage({ onBack }: Props) {
-  const { currentUser, tiposDespesa, cartoes, addDespesa } = useAppStore();
+export default function NovaDespesaPage({ onBack, editDespesa }: Props) {
+  const { currentUser, tiposDespesa, cartoes, addDespesa, updateDespesa, enviarDespesa } = useAppStore();
+  const isEditing = !!editDespesa;
+  
   const [form, setForm] = useState({
     dataDespesa: new Date().toISOString().slice(0, 10),
     cliente: "",
@@ -23,15 +26,36 @@ export default function NovaDespesaPage({ onBack }: Props) {
     observacao: "",
   });
   const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [existingComprovante, setExistingComprovante] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(editDespesa?.id || null);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Carregar dados se editando
+  useEffect(() => {
+    if (editDespesa) {
+      setForm({
+        dataDespesa: editDespesa.dataDespesa,
+        cliente: editDespesa.cliente,
+        numeroOS: editDespesa.numeroOS,
+        tipoDespesaId: editDespesa.tipoDespesaId,
+        valor: editDespesa.valor.toString(),
+        documento: editDespesa.documento || "",
+        cartaoId: editDespesa.cartaoId || "",
+        observacao: editDespesa.observacao || "",
+      });
+      if (editDespesa.comprovanteNome) {
+        setExistingComprovante(editDespesa.comprovanteNome);
+      }
+    }
+  }, [editDespesa]);
 
   const meusCartoes = cartoes.filter((c) => c.usuarioId === currentUser?.id && c.ativo);
   const tiposAtivos = tiposDespesa.filter((t) => t.ativo);
   const tipoSelecionado = tiposAtivos.find((t) => t.id === form.tipoDespesaId);
   const valorNum = parseFloat(form.valor) || 0;
-  const acimaLimite =
-    tipoSelecionado?.limiteMaximo !== undefined && valorNum > tipoSelecionado.limiteMaximo;
+  const acimaLimite = tipoSelecionado?.limiteMaximo !== undefined && valorNum > tipoSelecionado.limiteMaximo;
+  const dentroLimite = tipoSelecionado?.limiteMaximo !== undefined && valorNum <= tipoSelecionado.limiteMaximo;
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -42,70 +66,82 @@ export default function NovaDespesaPage({ onBack }: Props) {
     if (!form.valor || valorNum <= 0) e.valor = "Informe um valor válido";
     if (!form.documento.trim()) e.documento = "Obrigatório";
     if (meusCartoes.length > 0 && !form.cartaoId) e.cartaoId = "Selecione o cartão";
-    if (tipoSelecionado?.exigeComprovante && !comprovanteFile) e.comprovante = "Comprovante obrigatório";
+    if (tipoSelecionado?.exigeComprovante && !comprovanteFile && !existingComprovante) {
+      e.comprovante = "Comprovante obrigatório";
+    }
     return e;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const buildDespesaData = () => ({
+    tecnicoId: currentUser!.id,
+    dataDespesa: form.dataDespesa,
+    cliente: form.cliente,
+    numeroOS: form.numeroOS,
+    tipoDespesaId: form.tipoDespesaId,
+    valor: valorNum,
+    documento: form.documento,
+    cartaoId: form.cartaoId || undefined,
+    observacao: form.observacao,
+    comprovanteNome: comprovanteFile?.name || existingComprovante || undefined,
+    comprovanteUrl: comprovanteFile ? URL.createObjectURL(comprovanteFile) : editDespesa?.comprovanteUrl,
+    statusAprovacao: "AguardandoGestor" as const,
+    statusERP: "Rascunho" as const,
+  });
+
+  const handleSalvar = (e: React.FormEvent) => {
     e.preventDefault();
     const errs = validate();
-    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      return;
+    }
 
-    const cartao = meusCartoes.find((c) => c.id === form.cartaoId);
-    const tipo = tipoSelecionado;
+    const data = buildDespesaData();
 
-    const despesa: Omit<Despesa, "id" | "dataCriacao" | "dataAtualizacao"> = {
-      tecnicoId: currentUser!.id,
-      dataDespesa: form.dataDespesa,
-      cliente: form.cliente,
-      numeroOS: form.numeroOS,
-      tipoDespesaId: form.tipoDespesaId,
-      valor: valorNum,
-      documento: form.documento,
-      cartaoId: form.cartaoId || undefined,
-      observacao: form.observacao,
-      comprovanteNome: comprovanteFile?.name,
-      statusAprovacao: "AguardandoGestor",
-      statusERP: "EnviadoAguardandoGestor",
-      erpId: `ERP-${Date.now()}`,
-      erpPayload: JSON.stringify({
-        cliente: form.cliente,
-        os: form.numeroOS,
-        tipo: tipo?.nome,
-        valor: valorNum,
-        complemento: `${form.cliente} ${form.numeroOS} ${tipo?.nome}`,
-        observacao: `${form.observacao} Cartão: ${cartao ? `${cartao.nome} **** ${cartao.ultimos4}` : "N/A"}`,
-        statusAprovacao: "AguardandoGestor",
-        status: "Pendente",
-      }),
-      erpResposta: JSON.stringify({ success: true, id: `ERP-${Date.now()}`, message: "Lançado com sucesso" }),
-    };
+    if (savedId) {
+      // Atualizar despesa existente
+      updateDespesa(savedId, data);
+      setFeedback({ type: "success", msg: "Despesa atualizada! Você pode continuar editando ou enviar." });
+    } else {
+      // Criar nova despesa como rascunho
+      const newId = addDespesa(data);
+      setSavedId(newId);
+      setFeedback({ type: "success", msg: "Despesa salva como rascunho! Você pode continuar editando ou enviar." });
+    }
 
-    addDespesa(despesa);
-    setSubmitted(true);
+    setErrors({});
+    setTimeout(() => setFeedback(null), 4000);
   };
 
-  if (submitted) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <div className="w-16 h-16 rounded-full bg-success/15 flex items-center justify-center">
-          <svg className="w-8 h-8 text-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-        <h2 className="text-lg font-semibold text-foreground">Despesa lançada!</h2>
-        <p className="text-sm text-muted-foreground text-center max-w-xs">
-          Sua despesa foi salva e enviada ao ERP. Aguardando aprovação do gestor.
-        </p>
-        <button
-          onClick={onBack}
-          className="mt-2 px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition"
-        >
-          Ver minhas despesas
-        </button>
-      </div>
-    );
-  }
+  const handleEnviar = () => {
+    const errs = validate();
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      return;
+    }
+
+    let despesaId = savedId;
+
+    // Se não foi salvo ainda, salvar primeiro
+    if (!despesaId) {
+      const data = buildDespesaData();
+      despesaId = addDespesa(data);
+      setSavedId(despesaId);
+    } else {
+      // Atualizar antes de enviar
+      const data = buildDespesaData();
+      updateDespesa(despesaId, data);
+    }
+
+    // Enviar despesa
+    const result = enviarDespesa(despesaId);
+    if (result.ok) {
+      setFeedback({ type: "success", msg: result.msg });
+      setTimeout(() => onBack(), 2000);
+    } else {
+      setFeedback({ type: "error", msg: result.msg });
+    }
+  };
 
   const fieldClass = (key: string) =>
     `w-full px-3 py-2.5 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-ring transition ${
@@ -118,10 +154,26 @@ export default function NovaDespesaPage({ onBack }: Props) {
         <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-bold text-foreground">Nova Despesa</h1>
+        <h1 className="text-lg font-bold text-foreground">
+          {isEditing ? "Editar Despesa" : "Nova Despesa"}
+        </h1>
+        {savedId && (
+          <span className="ml-auto px-2.5 py-1 rounded-full bg-warning/10 text-warning text-xs font-medium">
+            Rascunho
+          </span>
+        )}
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-border shadow-sm p-5 flex flex-col gap-4">
+      {/* Feedback */}
+      {feedback && (
+        <div className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium flex items-center gap-2 ${
+          feedback.type === "success" ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
+        }`}>
+          {feedback.msg}
+        </div>
+      )}
+
+      <form onSubmit={handleSalvar} className="bg-white rounded-xl border border-border shadow-sm p-5 flex flex-col gap-4">
         {/* Row 1 */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-1.5">
@@ -145,20 +197,25 @@ export default function NovaDespesaPage({ onBack }: Props) {
 
         {/* Tipo info */}
         {tipoSelecionado && (
-          <div className={`rounded-lg px-3 py-2.5 text-sm flex items-start gap-2 ${acimaLimite ? "bg-destructive/10 border border-destructive/20" : "bg-muted"}`}>
-            <Info className={`w-4 h-4 mt-0.5 flex-shrink-0 ${acimaLimite ? "text-destructive" : "text-muted-foreground"}`} />
+          <div className={`rounded-lg px-3 py-2.5 text-sm flex items-start gap-2 ${
+            acimaLimite 
+              ? "bg-destructive/10 border border-destructive/20" 
+              : dentroLimite 
+                ? "bg-success/10 border border-success/20" 
+                : "bg-muted"
+          }`}>
+            <Info className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
+              acimaLimite ? "text-destructive" : dentroLimite ? "text-success" : "text-muted-foreground"
+            }`} />
             <div className="flex flex-col gap-0.5">
               {tipoSelecionado.limiteMaximo !== undefined && (
-                <span className={acimaLimite ? "text-destructive font-medium" : "text-foreground"}>
+                <span className={acimaLimite ? "text-destructive font-medium" : dentroLimite ? "text-success font-medium" : "text-foreground"}>
                   {acimaLimite
-                    ? `Despesa acima do limite permitido (${formatCurrency(tipoSelecionado.limiteMaximo)}). Será enviada para aprovação do gestor.`
-                    : `Limite: ${formatCurrency(tipoSelecionado.limiteMaximo)}`}
+                    ? `Valor acima do limite (${formatCurrency(tipoSelecionado.limiteMaximo)}). Será enviada para aprovação do gestor.`
+                    : `Valor dentro do limite (${formatCurrency(tipoSelecionado.limiteMaximo)}). Aprovação automática ao enviar.`}
                 </span>
               )}
               {tipoSelecionado.exigeComprovante && <span className="text-muted-foreground text-xs">Comprovante obrigatório</span>}
-              {tipoSelecionado.exigeAprovacaoAcimaLimite && !acimaLimite && (
-                <span className="text-muted-foreground text-xs">Exige aprovação acima do limite</span>
-              )}
               {tipoSelecionado.observacaoPadrao && (
                 <span className="text-muted-foreground text-xs italic">{tipoSelecionado.observacaoPadrao}</span>
               )}
@@ -244,6 +301,14 @@ export default function NovaDespesaPage({ onBack }: Props) {
                   <X className="w-4 h-4" />
                 </button>
               </div>
+            ) : existingComprovante ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-foreground font-medium">{existingComprovante}</span>
+                <button type="button" onClick={(e) => { e.preventDefault(); setExistingComprovante(null); }}
+                  className="text-muted-foreground hover:text-destructive transition">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             ) : (
               <>
                 <Upload className="w-6 h-6 text-muted-foreground" />
@@ -257,14 +322,21 @@ export default function NovaDespesaPage({ onBack }: Props) {
           {errors.comprovante && <p className="text-xs text-destructive">{errors.comprovante}</p>}
         </div>
 
-        <div className="flex gap-3 pt-2">
+        {/* Botões */}
+        <div className="flex flex-col sm:flex-row gap-3 pt-2">
           <button type="button" onClick={onBack}
             className="flex-1 py-2.5 rounded-lg border border-input text-sm font-medium hover:bg-muted transition">
             Cancelar
           </button>
           <button type="submit"
-            className="flex-1 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent/90 transition">
-            Lançar Despesa
+            className="flex-1 py-2.5 rounded-lg border border-accent text-accent text-sm font-semibold hover:bg-accent/5 transition flex items-center justify-center gap-2">
+            <Save className="w-4 h-4" />
+            Salvar Rascunho
+          </button>
+          <button type="button" onClick={handleEnviar}
+            className="flex-1 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent/90 transition flex items-center justify-center gap-2">
+            <Send className="w-4 h-4" />
+            Enviar Despesa
           </button>
         </div>
       </form>

@@ -15,6 +15,7 @@ import UsuariosPage from "@/components/admin/UsuariosPage";
 import TiposDespesaPage from "@/components/admin/TiposDespesaPage";
 import AuditoriaPage from "@/components/admin/AuditoriaPage";
 import AlterarSenhaModal from "@/components/auth/AlterarSenhaModal";
+import type { Despesa } from "@/lib/types";
 
 export type PageKey =
   | "dashboard"
@@ -34,6 +35,7 @@ export default function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showAlterarSenha, setShowAlterarSenha] = useState(false);
+  const [editingDespesa, setEditingDespesa] = useState<Despesa | null>(null);
 
   const navigate = (p: PageKey) => {
     if (p === "alterar-senha") {
@@ -42,13 +44,29 @@ export default function AppShell() {
     }
     setPage(p);
     setSidebarOpen(false);
+    setEditingDespesa(null); // Limpa edição ao navegar
+  };
+
+  const handleEditDespesa = (despesa: Despesa) => {
+    setEditingDespesa(despesa);
+    setPage("nova-despesa");
   };
 
   const renderPage = () => {
     switch (page) {
       case "dashboard": return <Dashboard onNavigate={navigate} />;
-      case "nova-despesa": return <NovaDespesaPage onBack={() => setPage("minhas-despesas")} />;
-      case "minhas-despesas": return <MinhasDespesasPage onNova={() => setPage("nova-despesa")} />;
+      case "nova-despesa": return (
+        <NovaDespesaPage 
+          onBack={() => { setEditingDespesa(null); setPage("minhas-despesas"); }} 
+          editDespesa={editingDespesa}
+        />
+      );
+      case "minhas-despesas": return (
+        <MinhasDespesasPage 
+          onNova={() => { setEditingDespesa(null); setPage("nova-despesa"); }}
+          onEditar={handleEditDespesa}
+        />
+      );
       case "aprovacao": return <AprovacaoPage />;
       case "financeiro": return <FinanceiroPage />;
       case "relatorios": return <RelatoriosPage />;
