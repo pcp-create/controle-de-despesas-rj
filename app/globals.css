@@ -114,9 +114,37 @@
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   html {
     @apply font-sans;
+  }
+
+  /* Typography refinements */
+  h1 {
+    @apply font-bold font-sans;
+    letter-spacing: -0.02em;
+  }
+  h2 {
+    @apply font-semibold font-sans;
+    letter-spacing: -0.01em;
+  }
+  h3,
+  h4 {
+    @apply font-semibold font-sans;
+  }
+  h5,
+  h6 {
+    @apply font-medium font-sans;
+  }
+  p {
+    @apply font-normal font-sans;
+    line-height: 1.6;
+  }
+  button {
+    @apply font-medium font-sans;
   }
 }
 
