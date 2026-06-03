@@ -1,16 +1,28 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAppStore } from "@/lib/store";
+import LoginPage from "@/components/auth/LoginPage";
+import AppShell from "@/components/layout/AppShell";
+import AlterarSenhaModal from "@/components/auth/AlterarSenhaModal";
+
 export default function Home() {
+  const currentUser = useAppStore((s) => s.currentUser);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+  if (!currentUser) return <LoginPage />;
+
   return (
-    <div className="flex min-h-screen items-center justify-center font-sans">
-      <main className="flex w-full max-w-3xl flex-col items-center gap-8 px-6 py-16 text-center sm:items-start sm:text-left">
-        <div className="flex flex-col gap-4">
-          <h1 className="text-4xl font-bold tracking-tight">
-            Controle de Despesas
-          </h1>
-          <p className="max-w-md text-lg text-muted-foreground">
-            To get started, send a prompt or modify this page directly.
-          </p>
-        </div>
-      </main>
-    </div>
+    <>
+      {currentUser.primeiroAcesso && (
+        <AlterarSenhaModal forced userId={currentUser.id} />
+      )}
+      <AppShell />
+    </>
   );
 }

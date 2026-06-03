@@ -1,41 +1,31 @@
-import { Analytics } from '@vercel/analytics/next'
-import type { Metadata } from 'next'
-import './globals.css'
+import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.app',
-  icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
-  },
-}
+  title: "Controle de Despesas - RJ Compressores",
+  description:
+    "Sistema de controle de despesas corporativas para técnicos externos da RJ Compressores.",
+  generator: "v0.app",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#1a2d5a",
+  width: "device-width",
+  initialScale: 1,
+  userScalable: false,
+};
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en">
-      <body className="font-sans antialiased">
-        {children}
-        {process.env.NODE_ENV === 'production' && <Analytics />}
-      </body>
+    <html lang="pt-BR" className={`${inter.variable} bg-background`}>
+      <body className="font-sans antialiased">{children}</body>
     </html>
-  )
+  );
 }
