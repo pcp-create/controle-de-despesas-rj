@@ -29,7 +29,7 @@ export default function Header({ onMenuClick, onAlterarSenha }: Props) {
 
   return (
     <header className="flex items-center justify-between h-14 px-4 md:px-6 bg-white border-b border-border flex-shrink-0">
-      {/* Left: Hamburger (mobile) */}
+      {/* Hamburguer — apenas mobile */}
       <button
         onClick={onMenuClick}
         className="lg:hidden p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
@@ -37,6 +37,7 @@ export default function Header({ onMenuClick, onAlterarSenha }: Props) {
       >
         <Menu className="w-5 h-5" />
       </button>
+      {/* Placeholder para alinhar itens no desktop */}
       <div className="hidden lg:block" />
 
       {/* Right: User menu */}

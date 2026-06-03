@@ -32,6 +32,7 @@ export default function AppShell() {
   const currentUser = useAppStore((s) => s.currentUser);
   const [page, setPage] = useState<PageKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showAlterarSenha, setShowAlterarSenha] = useState(false);
 
   const navigate = (p: PageKey) => {
@@ -61,7 +62,14 @@ export default function AppShell() {
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar desktop */}
-      <Sidebar currentPage={page} onNavigate={navigate} />
+      <div className="hidden lg:flex">
+        <Sidebar
+          currentPage={page}
+          onNavigate={navigate}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+        />
+      </div>
 
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
@@ -75,7 +83,14 @@ export default function AppShell() {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <Sidebar currentPage={page} onNavigate={navigate} mobile onClose={() => setSidebarOpen(false)} />
+        <Sidebar
+            currentPage={page}
+            onNavigate={navigate}
+            collapsed={false}
+            onToggleCollapse={() => {}}
+            mobile
+            onClose={() => setSidebarOpen(false)}
+          />
       </div>
 
       {/* Main content */}
