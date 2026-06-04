@@ -149,7 +149,6 @@ export default function SimpleLogin() {
                 </>
               ) : (
                 <>
-                  <LogIn className="w-5 h-5" />
                   Entrar
                 </>
               )}
