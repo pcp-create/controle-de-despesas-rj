@@ -277,19 +277,17 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             {errors.valor && <span className="text-xs text-destructive">{errors.valor}</span>}
           </div>
 
-          {/* Data da despesa — só aparece quando NÃO é hospedagem */}
-          {!calculaDiarias && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-foreground">Data da Despesa *</label>
-              <input
-                type="date"
-                value={form.dataDespesa}
-                onChange={(e) => setForm({ ...form, dataDespesa: e.target.value })}
-                className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              {errors.dataDespesa && <span className="text-xs text-destructive">{errors.dataDespesa}</span>}
-            </div>
-          )}
+          {/* Data da despesa — sempre visível, seja hospedagem ou não */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-foreground">Data da Despesa *</label>
+            <input
+              type="date"
+              value={form.dataDespesa}
+              onChange={(e) => setForm({ ...form, dataDespesa: e.target.value })}
+              className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            {errors.dataDespesa && <span className="text-xs text-destructive">{errors.dataDespesa}</span>}
+          </div>
         </div>
 
         {/* -------- Bloco de Hospedagem -------- */}
@@ -309,7 +307,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                   value={form.dataCheckin}
                   onChange={(e) => {
                     const v = e.target.value;
-                    setForm((f) => ({ ...f, dataCheckin: v, dataDespesa: v }));
+                    setForm((f) => ({ ...f, dataCheckin: v }));
                   }}
                   className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
