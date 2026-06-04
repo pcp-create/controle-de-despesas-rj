@@ -153,6 +153,13 @@ export default function SimpleLogin() {
               )}
             </button>
           </form>
+
+          {/* Info */}
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-xs text-blue-800">
+              <strong>Sem acesso?</strong> Se você não possui uma conta ou esqueceu suas credenciais, entre em contato com o administrador do sistema para gerar seu acesso.
+            </p>
+          </div>
         </div>
 
         {/* Footer */}
