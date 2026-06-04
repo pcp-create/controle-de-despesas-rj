@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { formatCurrency } from "@/lib/helpers";
 import { DollarSign, TrendingUp, Search, Download, Calendar, Eye, FileCheck, AlertCircle } from "lucide-react";
+import * as XLSX from "xlsx";
 import {
   BarChart,
   Bar,
@@ -99,6 +100,53 @@ export default function FinanceiroPageSupabase() {
       (d.erp_id || "").toString().includes(term)
     );
   });
+
+  // Função de exportação em XLSX
+  const handleExportar = () => {
+    const dados = despesasFiltradas.map((d) => {
+      const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
+      const tecnico = profiles.find((p) => p.id === d.tecnico_id);
+      return {
+        Data: new Date(d.data_despesa).toLocaleDateString("pt-BR"),
+        Técnico: tecnico?.nome || "-",
+        Tipo: tipo?.nome || "-",
+        Cliente: d.cliente,
+        "Número OS": d.numero_os || "-",
+        Valor: Number(d.valor),
+        "Status Aprovação": d.status_aprovacao === "AprovadoGestor" ? "Aprovado" : 
+                           d.status_aprovacao === "AguardandoGestor" ? "Aguardando" : 
+                           d.status_aprovacao === "Reprovado" ? "Reprovado" : "-",
+        "Comprovante": d.comprovante_url ? "Sim" : "Não",
+        "Status ERP": d.status_erp || "Rascunho",
+        "Data Envio": d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "-",
+        "ERP ID": d.erp_id || "-",
+      };
+    });
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(dados);
+    
+    // Ajustar largura das colunas
+    const colWidths = [
+      { wch: 12 }, // Data
+      { wch: 20 }, // Técnico
+      { wch: 15 }, // Tipo
+      { wch: 25 }, // Cliente
+      { wch: 12 }, // Número OS
+      { wch: 12 }, // Valor
+      { wch: 15 }, // Status Aprovação
+      { wch: 12 }, // Comprovante
+      { wch: 12 }, // Status ERP
+      { wch: 12 }, // Data Envio
+      { wch: 15 }, // ERP ID
+    ];
+    worksheet["!cols"] = colWidths;
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Despesas");
+    
+    const nomeArquivo = `Despesas_${new Date().toLocaleDateString("pt-BR").replace(/\//g, "-")}.xlsx`;
+    XLSX.writeFile(workbook, nomeArquivo);
+  };
 
   if (isLoading) {
     return (
@@ -260,7 +308,9 @@ export default function FinanceiroPageSupabase() {
                 className="pl-9 pr-4 py-1.5 rounded-lg border border-input bg-background text-sm w-64"
               />
             </div>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition">
+            <button 
+              onClick={handleExportar}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition">
               <Download className="w-4 h-4" />
               Exportar
             </button>
