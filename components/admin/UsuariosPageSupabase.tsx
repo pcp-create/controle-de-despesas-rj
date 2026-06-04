@@ -442,9 +442,10 @@ export default function UsuariosPageSupabase() {
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-foreground">Empresa ID</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       value={form.empresaId || ""}
-                      onChange={(e) => setForm({ ...form, empresaId: e.target.value })}
+                      onChange={(e) => setForm({ ...form, empresaId: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 1"
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
@@ -453,9 +454,10 @@ export default function UsuariosPageSupabase() {
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-foreground">Fornecedor ID</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       value={form.fornecedorId || ""}
-                      onChange={(e) => setForm({ ...form, fornecedorId: e.target.value })}
+                      onChange={(e) => setForm({ ...form, fornecedorId: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 101"
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
@@ -464,9 +466,10 @@ export default function UsuariosPageSupabase() {
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-foreground">Condição de Pagamento ID</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       value={form.condicaoPagamentoId || ""}
-                      onChange={(e) => setForm({ ...form, condicaoPagamentoId: e.target.value })}
+                      onChange={(e) => setForm({ ...form, condicaoPagamentoId: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 1"
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
@@ -475,9 +478,10 @@ export default function UsuariosPageSupabase() {
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-foreground">Operação Financeira ID</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       value={form.operacaoFinanceiraId || ""}
-                      onChange={(e) => setForm({ ...form, operacaoFinanceiraId: e.target.value })}
+                      onChange={(e) => setForm({ ...form, operacaoFinanceiraId: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 5"
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
@@ -486,9 +490,10 @@ export default function UsuariosPageSupabase() {
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-foreground">Moeda ID</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       value={form.moedaId || ""}
-                      onChange={(e) => setForm({ ...form, moedaId: e.target.value })}
+                      onChange={(e) => setForm({ ...form, moedaId: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 1"
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
@@ -497,9 +502,10 @@ export default function UsuariosPageSupabase() {
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-foreground">Centro de Custo ID</label>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       value={form.centroCustoId || ""}
-                      onChange={(e) => setForm({ ...form, centroCustoId: e.target.value })}
+                      onChange={(e) => setForm({ ...form, centroCustoId: e.target.value.replace(/[^0-9]/g, '') })}
                       placeholder="Ex: 1"
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
