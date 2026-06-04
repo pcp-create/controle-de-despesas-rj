@@ -7,7 +7,7 @@ export default function AuditoriaPageSupabase() {
   const { auditoria, profiles } = useAppStore();
 
   const sorted = [...auditoria].sort(
-    (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
   return (
@@ -40,14 +40,14 @@ export default function AuditoriaPageSupabase() {
                 </tr>
               )}
               {sorted.map((entry) => {
-                const user = profiles.find((u) => u.id === entry.usuarioId);
+                const user = profiles.find((u) => u.id === entry.user_id);
                 return (
                   <tr key={entry.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition">
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap text-xs">
-                      {formatDateTime(entry.data)}
+                      {formatDateTime(entry.created_at)}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <p className="font-medium text-foreground text-xs">{user?.nome ?? entry.usuarioId}</p>
+                      <p className="font-medium text-foreground text-xs">{user?.nome ?? entry.user_id}</p>
                       <p className="text-xs text-muted-foreground">{user?.perfil}</p>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
@@ -57,7 +57,7 @@ export default function AuditoriaPageSupabase() {
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
                       {entry.entidade ?? "-"}
-                      {entry.entidadeId && <span className="ml-1 text-foreground">#{entry.entidadeId.slice(-6)}</span>}
+                      {entry.entidade_id && <span className="ml-1 text-foreground">#{entry.entidade_id.slice(-6)}</span>}
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground max-w-xs truncate">
                       {entry.detalhes ?? "-"}
