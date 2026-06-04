@@ -109,8 +109,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!mounted || controller.signal.aborted) return;
 
         if (event === "SIGNED_IN" && session?.user) {
-          // Após login, buscar perfil
-          const profileData = await fetchProfile(session.user.id, controller.signal);
+          // Após login, buscar perfil com retry
+          let profileData = null;
+          let retries = 3;
+          
+          while (retries > 0 && !profileData) {
+            profileData = await fetchProfile(session.user.id, controller.signal);
+            if (!profileData) {
+              await new Promise(resolve => setTimeout(resolve, 300));
+              retries--;
+            }
+          }
           
           if (!mounted || controller.signal.aborted) return;
 
@@ -118,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(session.user);
             setProfile(profileData);
             setLoading(false);
-          } else {
+          } else if (profileData) {
             // Usuário inativo, fazer logout
             await supabase.auth.signOut();
             setUser(null);
@@ -152,11 +161,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
+        // Tratamento específico de erros
+        if (error.message.includes("Email not confirmed")) {
+          return { error: "Email não confirmado. Verifique sua caixa de entrada." };
+        }
+        if (error.message.includes("Invalid login") || error.message.includes("Invalid credentials")) {
+          return { error: "Email ou senha incorretos" };
+        }
         return { error: error.message };
       }
 
-      // Login bem-sucedido - o listener onAuthStateChange vai lidar com o resto
-      // Retornar imediatamente sem esperar pelo perfil
+      // Adicionar pequeno delay para evitar race conditions
+      // O listener onAuthStateChange vai buscar o perfil
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       return { error: null };
     } catch (err) {
       return { error: err instanceof Error ? err.message : "Erro ao fazer login" };
