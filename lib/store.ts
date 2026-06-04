@@ -70,8 +70,7 @@ interface AppState {
   addAuditoria: (entry: Omit<AuditoriaEntry, "id">) => void;
 }
 
-let idCounter = 1000;
-const genId = () => `gen_${++idCounter}`;
+const genId = () => `id_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
 export const useAppStore = create<AppState>()(
   persist(
