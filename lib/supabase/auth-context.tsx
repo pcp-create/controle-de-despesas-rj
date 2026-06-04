@@ -35,10 +35,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [supabaseReady, setSupabaseReady] = useState(false);
 
   const supabase = createClient();
 
+  // Verificar se o cliente Supabase está pronto
+  useEffect(() => {
+    if (supabase) {
+      setSupabaseReady(true);
+    } else {
+      // Retry after a short delay if supabase isn't ready
+      const timer = setTimeout(() => {
+        setSupabaseReady(!!createClient());
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [supabase]);
+
   const fetchProfile = useCallback(async (userId: string) => {
+    if (!supabase) return null;
+    
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
@@ -54,6 +70,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [supabase]);
 
   useEffect(() => {
+    if (!supabase || !supabaseReady) {
+      setLoading(false);
+      return;
+    }
+
     // Verificar sessão atual
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -86,9 +107,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase, fetchProfile]);
+  }, [supabase, supabaseReady, fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
+    if (!supabase) return { error: "Supabase não está disponível" };
+    
     setLoading(true);
     
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -121,6 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    if (!supabase) return;
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
@@ -128,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = async (data: Partial<Profile>) => {
     if (!user) return { error: "Usuário não autenticado" };
+    if (!supabase) return { error: "Supabase não está disponível" };
 
     const { error } = await supabase
       .from("profiles")
@@ -146,6 +171,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const changePassword = async (newPassword: string) => {
+    if (!supabase) return { error: "Supabase não está disponível" };
+    
     const { error } = await supabase.auth.updateUser({
       password: newPassword,
     });
