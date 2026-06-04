@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/lib/supabase/auth-context";
 import { useDespesas } from "@/lib/supabase/hooks";
 import type { Despesa } from "@/lib/supabase/hooks";
 import Sidebar from "./Sidebar";
@@ -17,6 +16,7 @@ import IntegracoesERPPageSupabase from "@/components/integracoes/IntegracoesERPP
 import UsuariosPageSupabase from "@/components/admin/UsuariosPageSupabase";
 import TiposDespesaPageSupabase from "@/components/admin/TiposDespesaPageSupabase";
 import AlterarSenhaModalSupabase from "@/components/auth/AlterarSenhaModalSupabase";
+import { useAppStore } from "@/lib/store";
 
 export type PageKey =
   | "dashboard"
@@ -32,7 +32,7 @@ export type PageKey =
   | "alterar-senha";
 
 export default function AppShellSupabase() {
-  const { profile } = useAuth();
+  const { currentUser } = useAppStore();
   const [page, setPage] = useState<PageKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -129,7 +129,7 @@ export default function AppShellSupabase() {
       <BottomNav currentPage={page} onNavigate={navigate} />
 
       {/* Floating Nova Despesa button mobile */}
-      {profile?.perfil === "tecnico" && page !== "nova-despesa" && (
+      {currentUser?.perfil === "tecnico" && page !== "nova-despesa" && (
         <button
           onClick={() => navigate("nova-despesa")}
           className="fixed bottom-20 right-4 z-30 lg:hidden w-14 h-14 rounded-full bg-accent text-white shadow-lg flex items-center justify-center text-2xl font-bold hover:bg-accent/90 active:scale-95 transition-all"
