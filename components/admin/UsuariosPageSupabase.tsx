@@ -219,6 +219,16 @@ export default function UsuariosPageSupabase() {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
 
+      console.log("[v0] Adding cartao with data:", {
+        user_id: editingUser.id,
+        banco: novoCartao.banco,
+        bandeira: novoCartao.bandeira,
+        ultimos_digitos: novoCartao.ultimosDigitos,
+        apelido: novoCartao.apelido,
+        is_padrao: novoCartao.isPadrao,
+        ativo: true,
+      });
+
       const { data, error } = await supabase
         .from("cartoes")
         .insert([
@@ -234,12 +244,20 @@ export default function UsuariosPageSupabase() {
         ])
         .select();
 
+      console.log("[v0] Supabase response:", { data, error });
+
       if (error) {
-        setFeedback({ type: "error", msg: "Erro ao adicionar cartão" });
-        console.error("[v0] Error adding cartao:", error);
+        console.error("[v0] Supabase error details:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
+        setFeedback({ type: "error", msg: `Erro: ${error.message}` });
         return;
       }
 
+      console.log("[v0] Cartao added successfully:", data);
       setUserCartoes([...userCartoes, data[0]]);
       setNovoCartao({
         banco: "",
@@ -252,8 +270,8 @@ export default function UsuariosPageSupabase() {
       setFeedback({ type: "success", msg: "Cartão adicionado com sucesso!" });
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
-      setFeedback({ type: "error", msg: "Erro ao adicionar cartão" });
-      console.error("[v0] Failed to add cartao:", err);
+      console.error("[v0] Exception caught:", err);
+      setFeedback({ type: "error", msg: `Erro: ${err instanceof Error ? err.message : 'Erro desconhecido'}` });
     } finally {
       setCartoesLoading(false);
     }
