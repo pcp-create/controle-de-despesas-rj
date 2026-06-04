@@ -35,14 +35,10 @@ interface UsuarioForm {
   telefone?: string;
   empresaId?: string;
   fornecedorId?: string;
-  documento?: string;
-  dataEmissao?: string;
-  dataEntrada?: string;
   condicaoPagamentoId?: string;
   operacaoFinanceiraId?: string;
   moedaId?: string;
-  valor?: number;
-  dataCompetencia?: string;
+  centroCustoId?: string;
 }
 
 const initialForm: UsuarioForm = {
@@ -55,14 +51,10 @@ const initialForm: UsuarioForm = {
   telefone: "",
   empresaId: "",
   fornecedorId: "",
-  documento: "",
-  dataEmissao: "",
-  dataEntrada: "",
   condicaoPagamentoId: "",
   operacaoFinanceiraId: "",
   moedaId: "",
-  valor: 0,
-  dataCompetencia: "",
+  centroCustoId: "",
 };
 
 export default function UsuariosPageSupabase() {
@@ -111,14 +103,10 @@ export default function UsuariosPageSupabase() {
         telefone: user.telefone || "",
         empresaId: user.empresaId || "",
         fornecedorId: user.fornecedorId || "",
-        documento: user.documento || "",
-        dataEmissao: user.dataEmissao || "",
-        dataEntrada: user.dataEntrada || "",
         condicaoPagamentoId: user.condicaoPagamentoId || "",
         operacaoFinanceiraId: user.operacaoFinanceiraId || "",
         moedaId: user.moedaId || "",
-        valor: user.valor || 0,
-        dataCompetencia: user.dataCompetencia || "",
+        centroCustoId: user.centroCustoId || "",
       });
     } else {
       setEditingUser(null);
@@ -484,42 +472,6 @@ export default function UsuariosPageSupabase() {
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Documento *</label>
-                    <input
-                      type="text"
-                      value={form.documento || ""}
-                      onChange={(e) => setForm({ ...form, documento: e.target.value })}
-                      placeholder="Ex: 12345678/0001-90"
-                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-foreground">Data Emissão *</label>
-                      <input
-                        type="datetime-local"
-                        value={form.dataEmissao || ""}
-                        onChange={(e) => setForm({ ...form, dataEmissao: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                        required
-                      />
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-foreground">Data Entrada *</label>
-                      <input
-                        type="datetime-local"
-                        value={form.dataEntrada || ""}
-                        onChange={(e) => setForm({ ...form, dataEntrada: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-foreground">Condição de Pagamento</label>
                     <select
                       value={form.condicaoPagamentoId || ""}
@@ -568,26 +520,13 @@ export default function UsuariosPageSupabase() {
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Valor *</label>
+                    <label className="text-sm font-medium text-foreground">Centro de Custo</label>
                     <input
                       type="number"
-                      step="0.01"
-                      min="0"
-                      value={form.valor || ""}
-                      onChange={(e) => setForm({ ...form, valor: parseFloat(e.target.value) || 0 })}
+                      value={form.centroCustoId || ""}
+                      onChange={(e) => setForm({ ...form, centroCustoId: e.target.value })}
+                      placeholder="Digite o ID do centro de custo"
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      required
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Data Competência *</label>
-                    <input
-                      type="datetime-local"
-                      value={form.dataCompetencia || ""}
-                      onChange={(e) => setForm({ ...form, dataCompetencia: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      required
                     />
                   </div>
                 </>

@@ -43,6 +43,12 @@ export const mockMoedas = [
   { id: "3", nome: "Euro (EUR)", codigo: "EUR" },
 ];
 
+export const mockCentrosCusto = [
+  { id: "1", nome: "Centro de Custo 1" },
+  { id: "2", nome: "Centro de Custo 2" },
+  { id: "3", nome: "Centro de Custo 3" },
+  { id: "4", nome: "Centro de Custo 4" },
+];
 
 export const mockUsers: User[] = [
   {
