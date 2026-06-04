@@ -34,7 +34,7 @@ export type PageKey =
   | "auditoria"
   | "alterar-senha";
 
-export default function AppShellSupabase() {
+export type NavigateFn = (page: PageKey, statusFilter?: string) => void;
   const { currentUser } = useAppStore();
   useLoadSupabaseData();
   
@@ -43,12 +43,14 @@ export default function AppShellSupabase() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showAlterarSenha, setShowAlterarSenha] = useState(false);
   const [editingDespesa, setEditingDespesa] = useState<Despesa | null>(null);
+  const [initialStatusFilter, setInitialStatusFilter] = useState<string | undefined>(undefined);
 
-  const navigate = (p: PageKey) => {
+  const navigate = (p: PageKey, statusFilter?: string) => {
     if (p === "alterar-senha") {
       setShowAlterarSenha(true);
       return;
     }
+    setInitialStatusFilter(statusFilter);
     setPage(p);
     setSidebarOpen(false);
     setEditingDespesa(null);
@@ -72,6 +74,7 @@ export default function AppShellSupabase() {
         <MinhasDespesasPageSupabase 
           onNova={() => { setEditingDespesa(null); setPage("nova-despesa"); }}
           onEditar={handleEditDespesa}
+          initialStatus={initialStatusFilter}
         />
       );
       case "aprovacao": return <AprovacaoPageSupabase />;
@@ -80,7 +83,7 @@ export default function AppShellSupabase() {
       case "relatorios": return <RelatoriosPageSupabase />;
       case "usuarios": return <UsuariosPageSupabase />;
       case "tipos-despesa": return <TiposDespesaPageSupabase />;
-      case "todas-despesas": return <TodasDespesasPage />;
+      case "todas-despesas": return <TodasDespesasPage initialStatus={initialStatusFilter} />;
       case "auditoria": return <AuditoriaPageSupabase />;
       default: return <DashboardSupabase onNavigate={navigate} />;
     }

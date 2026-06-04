@@ -5,18 +5,13 @@ import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import {
   DollarSign,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Send,
-  AlertTriangle,
   TrendingUp,
-  PlusCircle,
   ArrowRight,
   CalendarDays,
+  PlusCircle,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/helpers";
-import type { PageKey } from "@/components/layout/AppShellSupabase";
+import { formatCurrency, getStatusGeral, statusGeralConfig } from "@/lib/helpers";
+import type { PageKey, NavigateFn } from "@/components/layout/AppShellSupabase";
 import {
   BarChart,
   Bar,
@@ -31,7 +26,7 @@ import {
 } from "recharts";
 
 interface Props {
-  onNavigate: (page: PageKey) => void;
+  onNavigate: NavigateFn;
 }
 
 const MESES = [
@@ -93,12 +88,25 @@ export default function DashboardSupabase({ onNavigate }: Props) {
     ? `${dataInicial.split("-").reverse().join("/")} até ${dataFinal.split("-").reverse().join("/")}`
     : "Período personalizado";
 
-  const total = myDespesas.reduce((s, d) => s + Number(d.valor), 0);
-  const aguardando = myDespesas.filter((d) => d.status_aprovacao === "AguardandoGestor").length;
-  const aprovadas = myDespesas.filter((d) => d.status_aprovacao === "AprovadoGestor").length;
-  const reprovadas = myDespesas.filter((d) => d.status_aprovacao === "Reprovado").length;
-  const enviadas = myDespesas.filter((d) => d.status_erp !== "Rascunho" && d.status_erp !== "ErroEnvioERP").length;
-  const erros = myDespesas.filter((d) => d.status_erp === "ErroEnvioERP" || d.status_erp === "ErroAtualizarERP").length;
+  const total       = myDespesas.reduce((s, d) => s + Number(d.valor), 0);
+  const naoEnviadas = myDespesas.filter((d) => getStatusGeral(d.status_erp ?? "", d.status_aprovacao) === "nao_enviado").length;
+  const enviadas    = myDespesas.filter((d) => getStatusGeral(d.status_erp ?? "", d.status_aprovacao) === "enviado").length;
+  const aguardando  = myDespesas.filter((d) => getStatusGeral(d.status_erp ?? "", d.status_aprovacao) === "aguardando_aprovacao").length;
+  const aprovadas   = myDespesas.filter((d) => getStatusGeral(d.status_erp ?? "", d.status_aprovacao) === "aprovado").length;
+  const reprovadas  = myDespesas.filter((d) => getStatusGeral(d.status_erp ?? "", d.status_aprovacao) === "reprovado").length;
+
+  // Navega para a página correta com o filtro de status
+  const handleCardClick = (statusKey: string) => {
+    if (statusKey === "aguardando_aprovacao" && (perfil === "administrador" || perfil === "gestor")) {
+      onNavigate("aprovacao");
+      return;
+    }
+    if (perfil === "tecnico") {
+      onNavigate("minhas-despesas", statusKey);
+    } else {
+      onNavigate("todas-despesas", statusKey);
+    }
+  };
 
   // Chart data por tipo
   const byTipo = tiposDespesa.map((t) => ({
@@ -133,14 +141,12 @@ export default function DashboardSupabase({ onNavigate }: Props) {
 
   const totalGeral = byUsuario.reduce((s, u) => s + u.total, 0);
 
-  const cards = [
-    { label: "Total do Período", value: formatCurrency(total), icon: <DollarSign className="w-5 h-5" />, color: "bg-primary/10 text-primary", big: true },
-    { label: "Lançamentos", value: myDespesas.length, icon: <TrendingUp className="w-5 h-5" />, color: "bg-accent/10 text-accent" },
-    { label: "Aguardando Gestor", value: aguardando, icon: <Clock className="w-5 h-5" />, color: "bg-warning/10 text-warning" },
-    { label: "Aprovadas", value: aprovadas, icon: <CheckCircle className="w-5 h-5" />, color: "bg-success/10 text-success" },
-    { label: "Reprovadas", value: reprovadas, icon: <XCircle className="w-5 h-5" />, color: "bg-destructive/10 text-destructive" },
-    { label: "Enviadas ao ERP", value: enviadas, icon: <Send className="w-5 h-5" />, color: "bg-primary/10 text-primary" },
-    { label: "Erros de Integração", value: erros, icon: <AlertTriangle className="w-5 h-5" />, color: "bg-destructive/10 text-destructive" },
+  const statusCards: { key: string; value: number }[] = [
+    { key: "nao_enviado",          value: naoEnviadas },
+    { key: "enviado",              value: enviadas },
+    { key: "aguardando_aprovacao", value: aguardando },
+    { key: "aprovado",             value: aprovadas },
+    { key: "reprovado",            value: reprovadas },
   ];
 
   const recentDespesas = [...myDespesas]
@@ -238,22 +244,49 @@ export default function DashboardSupabase({ onNavigate }: Props) {
         )}
       </div>
 
-      {/* Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {cards.map((card) => (
-          <div
-            key={card.label}
-            className={`bg-white rounded-xl p-4 border border-border shadow-sm flex flex-col gap-2 ${card.big ? "col-span-2 sm:col-span-1" : ""}`}
-          >
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${card.color}`}>
-              {card.icon}
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">{card.value}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{card.label}</p>
-            </div>
+      {/* Card total + 5 cards de status clicáveis */}
+      <div className="flex flex-col gap-3">
+        {/* Card total */}
+        <div className="bg-white rounded-xl p-4 border border-border shadow-sm flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <DollarSign className="w-5 h-5" />
           </div>
-        ))}
+          <div>
+            <p className="text-2xl font-bold text-foreground">{formatCurrency(total)}</p>
+            <p className="text-xs text-muted-foreground">Total do período &mdash; {myDespesas.length} lançamento{myDespesas.length !== 1 ? "s" : ""}</p>
+          </div>
+        </div>
+
+        {/* 5 cards de status */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {statusCards.map(({ key, value }) => {
+            const cfg = statusGeralConfig[key as keyof typeof statusGeralConfig];
+            const isAguardando = key === "aguardando_aprovacao";
+            const isAdminGestor = perfil === "administrador" || perfil === "gestor";
+            const tooltip = isAguardando && isAdminGestor
+              ? "Ir para Aprovações"
+              : perfil === "tecnico"
+              ? "Ver em Minhas Despesas"
+              : "Ver em Todas as Despesas";
+            return (
+              <button
+                key={key}
+                onClick={() => handleCardClick(key)}
+                title={tooltip}
+                className="bg-white rounded-xl p-4 border border-border shadow-sm flex flex-col gap-2 text-left hover:border-primary/40 hover:shadow-md active:scale-[0.98] transition-all group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${cfg.color}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                    {cfg.label}
+                  </span>
+                  <ArrowRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <p className="text-3xl font-bold text-foreground">{value}</p>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

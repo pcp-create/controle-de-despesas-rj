@@ -12,14 +12,18 @@ import {
   Users,
 } from "lucide-react";
 
-export default function TodasDespesasPage() {
+interface Props {
+  initialStatus?: string;
+}
+
+export default function TodasDespesasPage({ initialStatus }: Props) {
   const { currentUser } = useAppStore();
   const { despesas, isLoading } = useDespesas(undefined, currentUser?.perfil);
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
 
   const [search, setSearch]           = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("todos");
+  const [filterStatus, setFilterStatus] = useState<string>(initialStatus ?? "todos");
   const [filterTecnico, setFilterTecnico] = useState<string>("todos");
   const [expandedId, setExpandedId]   = useState<string | null>(null);
 

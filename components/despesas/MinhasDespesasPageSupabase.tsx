@@ -18,16 +18,17 @@ import {
 interface Props {
   onNova: () => void;
   onEditar: (despesa: Despesa) => void;
+  initialStatus?: string;
 }
 
-export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) {
+export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialStatus }: Props) {
   const { currentUser, loadSupabaseData } = useAppStore();
   const { despesas, isLoading, deleteDespesa, enviarDespesa } = useDespesas(currentUser?.id);
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
   
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("todos");
+  const [filterStatus, setFilterStatus] = useState<string>(initialStatus ?? "todos");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
