@@ -71,26 +71,20 @@ export default function Sidebar({
       <div className="flex items-center justify-between h-14 px-3 border-b border-sidebar-border">
         {/* Logo — oculta quando colapsado no desktop */}
         <div className={`flex items-center gap-2.5 overflow-hidden transition-all duration-300 ${collapsed && !mobile ? "w-0 opacity-0" : "w-auto opacity-100"}`}>
-          <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
-              <path d="M12 2L3 7v10l9 5 9-5V7z" fill="white" fillOpacity="0.9" />
-              <circle cx="12" cy="12" r="3" fill="white" fillOpacity="0.5" />
-            </svg>
-          </div>
-          <div className="shrink-0">
-            <p className="text-xs font-bold text-white leading-tight">Controle de</p>
-            <p className="text-xs font-bold text-white/70 leading-tight">Despesas RJ</p>
-          </div>
+          <img 
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/RJ%20Branco%202-Pn9QBwHse0Kjls3Cpbdg4mGuwo47pg.png" 
+            alt="RJ Compressores" 
+            className="h-10 w-auto shrink-0"
+          />
         </div>
 
         {/* Ícone isolado quando colapsado */}
         {collapsed && !mobile && (
-          <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center mx-auto">
-            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
-              <path d="M12 2L3 7v10l9 5 9-5V7z" fill="white" fillOpacity="0.9" />
-              <circle cx="12" cy="12" r="3" fill="white" fillOpacity="0.5" />
-            </svg>
-          </div>
+          <img 
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/RJ%20Branco%202-Pn9QBwHse0Kjls3Cpbdg4mGuwo47pg.png" 
+            alt="RJ" 
+            className="h-8 w-auto mx-auto shrink-0"
+          />
         )}
 
         {/* Fechar (mobile) ou colapsar (desktop) */}
