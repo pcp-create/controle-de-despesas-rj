@@ -24,7 +24,7 @@ const statusAprovacaoConfig = {
 
 export default function AprovacaoPageSupabase() {
   const { currentUser, loadSupabaseData } = useAppStore();
-  const { despesas, isLoading } = useDespesas(undefined, currentUser?.perfil);
+  const { despesas, isLoading, mutate } = useDespesas(undefined, currentUser?.perfil);
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
   
@@ -101,7 +101,7 @@ export default function AprovacaoPageSupabase() {
       });
       
       setFeedback({ type: "success", msg: "Despesa aprovada!" });
-      await loadSupabaseData();
+      await mutate();
       setTimeout(() => setFeedback(null), 3000);
     }
   };
@@ -144,7 +144,7 @@ export default function AprovacaoPageSupabase() {
       setFeedback({ type: "success", msg: "Despesa reprovada" });
       setReprovandoId(null);
       setJustificativa("");
-      await loadSupabaseData();
+      await mutate();
       setTimeout(() => setFeedback(null), 3000);
     }
   };
