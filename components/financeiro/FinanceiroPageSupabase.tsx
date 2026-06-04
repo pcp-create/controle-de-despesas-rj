@@ -108,9 +108,9 @@ export default function FinanceiroPageSupabase() {
         Cliente: d.cliente,
         "Número OS": d.numero_os || "-",
         Valor: Number(d.valor),
-        "Status Aprovação": d.status_aprovacao === "AprovadoGestor" ? "Aprovado" :
+        "Status": d.status_aprovacao === "AprovadoGestor"   ? "Aprovado"   :
           d.status_aprovacao === "AguardandoGestor" ? "Aguardando" :
-          d.status_aprovacao === "Reprovado" ? "Reprovado" : "-",
+          d.status_aprovacao === "Reprovado"        ? "Reprovado"  : "-",
         Comprovante: d.comprovante_url ? "Sim" : "Não",
         "Status ERP": d.status_erp || "Não enviado",
         "Data Envio": d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "-",
@@ -171,7 +171,7 @@ export default function FinanceiroPageSupabase() {
 
     autoTable(doc, {
       startY: 36,
-      head: [["Data", "Técnico", "Tipo", "Cliente", "OS", "Valor", "Aprovação", "Comprovante", "Status ERP", "Envio", "ERP ID"]],
+      head: [["Data", "Técnico", "Tipo", "Cliente", "OS", "Valor", "Status", "Comprovante", "Status ERP", "Envio", "ERP ID"]],
       body: rows,
       styles: { fontSize: 7.5, cellPadding: 2, overflow: "linebreak" },
       headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: "bold", fontSize: 8 },
@@ -399,7 +399,7 @@ export default function FinanceiroPageSupabase() {
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Cliente</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">OS</th>
                 <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Valor</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Aprovação</th>
+                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Status</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Comprovante</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Status ERP</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Envio</th>
