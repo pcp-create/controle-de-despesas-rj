@@ -6,7 +6,43 @@ import type {
   AuditoriaEntry,
 } from "./types";
 
-// ─── Dados mockados ───────────────────────────────────────────────────────────
+
+// ─── Dados ERP (Empresas, Fornecedores, etc) ───────────────────────────────
+
+export const mockEmpresas = [
+  { id: "1", nome: "RJ Compressores - São Paulo" },
+  { id: "2", nome: "RJ Compressores - Rio de Janeiro" },
+  { id: "3", nome: "RJ Compressores - Belo Horizonte" },
+];
+
+export const mockFornecedores = [
+  { id: "101", nome: "Fornecedor A - Compressor" },
+  { id: "102", nome: "Fornecedor B - Peças" },
+  { id: "103", nome: "Fornecedor C - Serviços" },
+  { id: "104", nome: "Fornecedor D - Manutenção" },
+];
+
+export const mockCondicoesPagamento = [
+  { id: "1", nome: "À Vista" },
+  { id: "2", nome: "30 dias" },
+  { id: "3", nome: "60 dias" },
+  { id: "4", nome: "90 dias" },
+];
+
+export const mockOperacoesFinanceiras = [
+  { id: "1", nome: "Venda" },
+  { id: "2", nome: "Devolução" },
+  { id: "3", nome: "Ajuste" },
+  { id: "4", nome: "Crédito" },
+  { id: "5", nome: "Débito" },
+];
+
+export const mockMoedas = [
+  { id: "1", nome: "Real (BRL)", codigo: "BRL" },
+  { id: "2", nome: "Dólar (USD)", codigo: "USD" },
+  { id: "3", nome: "Euro (EUR)", codigo: "EUR" },
+];
+
 
 export const mockUsers: User[] = [
   {

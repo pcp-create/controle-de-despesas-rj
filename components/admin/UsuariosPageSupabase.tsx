@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useProfiles, type Profile } from "@/lib/supabase/hooks";
-import { useAuth, type Perfil } from "@/lib/supabase/auth-context";
-import { createClient } from "@/lib/supabase/client";
+import { useAppStore } from "@/lib/store";
 import {
   Search,
   PlusCircle,
@@ -18,9 +16,10 @@ import {
   Trash2,
   Loader2,
 } from "lucide-react";
+import { mockEmpresas, mockFornecedores, mockCondicoesPagamento, mockOperacoesFinanceiras, mockMoedas } from "@/lib/mock-data";
 
 const perfilConfig = {
-  tecnico: { label: "Tecnico", color: "bg-primary/10 text-primary", icon: Briefcase },
+  tecnico: { label: "Técnico", color: "bg-primary/10 text-primary", icon: Briefcase },
   gestor: { label: "Gestor", color: "bg-accent/10 text-accent", icon: Users },
   financeiro: { label: "Financeiro", color: "bg-success/10 text-success", icon: Shield },
   administrador: { label: "Admin", color: "bg-warning/10 text-warning", icon: Shield },
@@ -30,9 +29,15 @@ interface UsuarioForm {
   nome: string;
   email: string;
   usuario: string;
-  perfil: Perfil;
+  perfil: "tecnico" | "gestor" | "financeiro" | "administrador";
   gestor_id: string | null;
   senha?: string;
+  telefone?: string;
+  empresaId?: string;
+  fornecedorId?: string;
+  condicaoPagamentoId?: string;
+  operacaoFinanceiraId?: string;
+  moedaId?: string;
 }
 
 const initialForm: UsuarioForm = {
@@ -42,11 +47,16 @@ const initialForm: UsuarioForm = {
   perfil: "tecnico",
   gestor_id: null,
   senha: "",
+  telefone: "",
+  empresaId: "",
+  fornecedorId: "",
+  condicaoPagamentoId: "",
+  operacaoFinanceiraId: "",
+  moedaId: "",
 };
 
 export default function UsuariosPageSupabase() {
-  const { profile: currentProfile } = useAuth();
-  const { profiles, isLoading, mutate, toggleProfileStatus } = useProfiles();
+  const { currentUser, users, login, logout, addUser, updateUser, deleteUser } = useAppStore();
   
   const [search, setSearch] = useState("");
   const [filterPerfil, setFilterPerfil] = useState<string>("todos");
@@ -54,15 +64,16 @@ export default function UsuariosPageSupabase() {
   
   // Modal states
   const [showModal, setShowModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<Profile | null>(null);
+  const [editingUser, setEditingUser] = useState<any | null>(null);
   const [form, setForm] = useState<UsuarioForm>(initialForm);
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState("");
+  const [activeTab, setActiveTab] = useState("basico");
   
   // Delete confirmation
-  const [deleteConfirm, setDeleteConfirm] = useState<Profile | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<any | null>(null);
 
-  const usuariosFiltrados = profiles
+  const usuariosFiltrados = users
     .filter((u) => {
       if (filterPerfil !== "todos" && u.perfil !== filterPerfil) return false;
       if (search) {
@@ -77,17 +88,7 @@ export default function UsuariosPageSupabase() {
     })
     .sort((a, b) => a.nome.localeCompare(b.nome));
 
-  const handleToggleStatus = async (id: string, ativo: boolean) => {
-    const result = await toggleProfileStatus(id, !ativo);
-    if (result.error) {
-      setFeedback({ type: "error", msg: result.error });
-    } else {
-      setFeedback({ type: "success", msg: ativo ? "Usuario desativado" : "Usuario ativado" });
-      setTimeout(() => setFeedback(null), 3000);
-    }
-  };
-
-  const handleOpenModal = (user?: Profile) => {
+  const handleOpenModal = (user?: any) => {
     if (user) {
       setEditingUser(user);
       setForm({
@@ -95,14 +96,21 @@ export default function UsuariosPageSupabase() {
         email: user.email,
         usuario: user.usuario,
         perfil: user.perfil,
-        gestor_id: user.gestor_id,
+        gestor_id: user.gestor_id || null,
         senha: "",
+        telefone: user.telefone || "",
+        empresaId: user.empresaId || "",
+        fornecedorId: user.fornecedorId || "",
+        condicaoPagamentoId: user.condicaoPagamentoId || "",
+        operacaoFinanceiraId: user.operacaoFinanceiraId || "",
+        moedaId: user.moedaId || "",
       });
     } else {
       setEditingUser(null);
       setForm(initialForm);
     }
     setFormError("");
+    setActiveTab("basico");
     setShowModal(true);
   };
 
@@ -120,114 +128,51 @@ export default function UsuariosPageSupabase() {
 
     try {
       if (editingUser) {
-        // Editar usuario existente
-        const supabase = createClient();
-        const { error } = await supabase
-          .from("profiles")
-          .update({
-            nome: form.nome,
-            usuario: form.usuario,
-            perfil: form.perfil,
-            gestor_id: form.gestor_id || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", editingUser.id);
-
-        if (error) {
-          setFormError(error.message);
-          setFormLoading(false);
-          return;
-        }
-
-        setFeedback({ type: "success", msg: "Usuario atualizado com sucesso!" });
+        updateUser(editingUser.id, form);
+        setFeedback({ type: "success", msg: "Usuário atualizado com sucesso!" });
       } else {
-        // Criar novo usuario via API
-        const response = await fetch("/api/create-user", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: form.email,
-            password: form.senha,
-            nome: form.nome,
-            usuario: form.usuario,
-            perfil: form.perfil,
-            gestor_id: form.gestor_id,
-          }),
+        addUser({
+          ...form,
+          id: "u" + Date.now(),
+          ativo: true,
+          primeiroAcesso: false,
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          setFormError(data.error || "Erro ao criar usuario");
-          setFormLoading(false);
-          return;
-        }
-
-        setFeedback({ type: "success", msg: "Usuario criado com sucesso!" });
+        setFeedback({ type: "success", msg: "Usuário criado com sucesso!" });
       }
 
-      await mutate();
       handleCloseModal();
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
-      setFormError("Erro ao processar solicitacao");
+      setFormError("Erro ao processar solicitação");
     }
 
     setFormLoading(false);
   };
 
-  const handleDelete = async (user: Profile) => {
-    setFormLoading(true);
-    
-    try {
-      const response = await fetch("/api/delete-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setFeedback({ type: "error", msg: data.error || "Erro ao remover usuario" });
-      } else {
-        setFeedback({ type: "success", msg: "Usuario removido com sucesso!" });
-        await mutate();
-      }
-    } catch (err) {
-      setFeedback({ type: "error", msg: "Erro ao processar solicitacao" });
-    }
-
+  const handleDelete = (user: any) => {
+    deleteUser(user.id);
     setDeleteConfirm(null);
-    setFormLoading(false);
+    setFeedback({ type: "success", msg: "Usuário removido com sucesso!" });
     setTimeout(() => setFeedback(null), 3000);
   };
 
-  const gestores = profiles.filter((p) => p.perfil === "gestor" || p.perfil === "administrador");
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
+  const gestores = users.filter((p) => p.perfil === "gestor" || p.perfil === "administrador");
 
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Usuarios</h1>
-          <p className="text-sm text-muted-foreground">{profiles.length} usuario(s) cadastrado(s)</p>
+          <h1 className="text-xl font-bold text-foreground">Usuários</h1>
+          <p className="text-sm text-muted-foreground">{users.length} usuário(s) cadastrado(s)</p>
         </div>
-        {currentProfile?.perfil === "administrador" && (
+        {currentUser?.perfil === "administrador" && (
           <button
             onClick={() => handleOpenModal()}
             className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition"
           >
             <PlusCircle className="w-4 h-4" />
-            Novo Usuario
+            Novo Usuário
           </button>
         )}
       </div>
@@ -251,7 +196,7 @@ export default function UsuariosPageSupabase() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome, email ou usuario..."
+            placeholder="Buscar por nome, email ou usuário..."
             className="w-full pl-9 pr-4 py-2 rounded-lg border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
@@ -263,7 +208,7 @@ export default function UsuariosPageSupabase() {
             className="pl-9 pr-8 py-2 rounded-lg border border-input bg-white text-sm appearance-none"
           >
             <option value="todos">Todos os perfis</option>
-            <option value="tecnico">Tecnicos</option>
+            <option value="tecnico">Técnicos</option>
             <option value="gestor">Gestores</option>
             <option value="financeiro">Financeiro</option>
             <option value="administrador">Administradores</option>
@@ -275,7 +220,7 @@ export default function UsuariosPageSupabase() {
       {/* Lista */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {usuariosFiltrados.map((u) => {
-          const perfil = perfilConfig[u.perfil];
+          const perfil = perfilConfig[u.perfil as keyof typeof perfilConfig];
           const PerfilIcon = perfil.icon;
           const gestor = gestores.find((g) => g.id === u.gestor_id);
 
@@ -287,7 +232,7 @@ export default function UsuariosPageSupabase() {
               <div className="flex items-start gap-3">
                 <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
                   <span className="text-lg font-bold">
-                    {u.nome.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()}
+                    {u.nome.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase()}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
@@ -312,7 +257,7 @@ export default function UsuariosPageSupabase() {
                 </div>
               </div>
 
-              {currentProfile?.perfil === "administrador" && u.id !== currentProfile.id && (
+              {currentUser?.perfil === "administrador" && u.id !== currentUser.id && (
                 <div className="flex gap-2 mt-4 pt-4 border-t border-border">
                   <button
                     onClick={() => handleOpenModal(u)}
@@ -320,17 +265,6 @@ export default function UsuariosPageSupabase() {
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                     Editar
-                  </button>
-                  <button
-                    onClick={() => handleToggleStatus(u.id, u.ativo)}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-sm transition ${
-                      u.ativo
-                        ? "border border-destructive/30 text-destructive hover:bg-destructive/10"
-                        : "border border-success/30 text-success hover:bg-success/10"
-                    }`}
-                  >
-                    <Power className="w-3.5 h-3.5" />
-                    {u.ativo ? "Desativar" : "Ativar"}
                   </button>
                   <button
                     onClick={() => setDeleteConfirm(u)}
@@ -350,18 +284,19 @@ export default function UsuariosPageSupabase() {
           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
             <Users className="w-8 h-8 text-muted-foreground" />
           </div>
-          <h3 className="text-lg font-semibold text-foreground">Nenhum usuario encontrado</h3>
-          <p className="text-sm text-muted-foreground mt-1">Ajuste os filtros ou cadastre novos usuarios</p>
+          <h3 className="text-lg font-semibold text-foreground">Nenhum usuário encontrado</h3>
+          <p className="text-sm text-muted-foreground mt-1">Ajuste os filtros ou cadastre novos usuários</p>
         </div>
       )}
 
-      {/* Modal de Criar/Editar Usuario */}
+      {/* Modal de Criar/Editar Usuário */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="text-lg font-semibold text-foreground">
-                {editingUser ? "Editar Usuario" : "Novo Usuario"}
+                {editingUser ? "Editar Usuário" : "Novo Usuário"}
               </h2>
               <button
                 onClick={handleCloseModal}
@@ -371,97 +306,216 @@ export default function UsuariosPageSupabase() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-4 flex flex-col gap-4">
-              {/* Nome */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">Nome completo</label>
-                <input
-                  type="text"
-                  value={form.nome}
-                  onChange={(e) => setForm({ ...form, nome: e.target.value })}
-                  placeholder="Digite o nome completo"
-                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  required
-                />
-              </div>
+            {/* Tabs */}
+            <div className="flex gap-0 border-b border-border bg-muted/30">
+              <button
+                onClick={() => setActiveTab("basico")}
+                className={`flex-1 px-4 py-2 text-sm font-medium transition border-b-2 ${
+                  activeTab === "basico"
+                    ? "border-b-accent text-foreground"
+                    : "border-b-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Informações Básicas
+              </button>
+              <button
+                onClick={() => setActiveTab("erp")}
+                className={`flex-1 px-4 py-2 text-sm font-medium transition border-b-2 ${
+                  activeTab === "erp"
+                    ? "border-b-accent text-foreground"
+                    : "border-b-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Configurações ERP
+              </button>
+            </div>
 
-              {/* Email - apenas para novo usuario */}
-              {!editingUser && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-foreground">Email</label>
-                  <input
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
-                    placeholder="Digite o email"
-                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    required
-                  />
-                </div>
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+              {/* Tab: Básico */}
+              {activeTab === "basico" && (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Nome completo</label>
+                    <input
+                      type="text"
+                      value={form.nome}
+                      onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                      placeholder="Digite o nome completo"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Email</label>
+                    <input
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => setForm({ ...form, email: e.target.value })}
+                      placeholder="Digite o email"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      required={!editingUser}
+                      disabled={!!editingUser}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Usuário</label>
+                    <input
+                      type="text"
+                      value={form.usuario}
+                      onChange={(e) => setForm({ ...form, usuario: e.target.value })}
+                      placeholder="Digite o nome de usuário"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Telefone</label>
+                    <input
+                      type="tel"
+                      value={form.telefone}
+                      onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+                      placeholder="(21) 9999-9999"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+
+                  {!editingUser && (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-foreground">Senha</label>
+                      <input
+                        type="password"
+                        value={form.senha}
+                        onChange={(e) => setForm({ ...form, senha: e.target.value })}
+                        placeholder="Digite a senha"
+                        className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        required
+                        minLength={6}
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Perfil</label>
+                    <select
+                      value={form.perfil}
+                      onChange={(e) => setForm({ ...form, perfil: e.target.value as any })}
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      required
+                    >
+                      <option value="tecnico">Técnico</option>
+                      <option value="gestor">Gestor</option>
+                      <option value="financeiro">Financeiro</option>
+                      <option value="administrador">Administrador</option>
+                    </select>
+                  </div>
+
+                  {form.perfil === "tecnico" && (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-foreground">Gestor responsável</label>
+                      <select
+                        value={form.gestor_id || ""}
+                        onChange={(e) => setForm({ ...form, gestor_id: e.target.value || null })}
+                        className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        <option value="">Selecione um gestor</option>
+                        {gestores.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </>
               )}
 
-              {/* Usuario */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">Usuario</label>
-                <input
-                  type="text"
-                  value={form.usuario}
-                  onChange={(e) => setForm({ ...form, usuario: e.target.value })}
-                  placeholder="Digite o nome de usuario"
-                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  required
-                />
-              </div>
+              {/* Tab: ERP */}
+              {activeTab === "erp" && (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Empresa</label>
+                    <select
+                      value={form.empresaId || ""}
+                      onChange={(e) => setForm({ ...form, empresaId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Selecione uma empresa</option>
+                      {mockEmpresas.map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              {/* Senha - apenas para novo usuario */}
-              {!editingUser && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-foreground">Senha</label>
-                  <input
-                    type="password"
-                    value={form.senha}
-                    onChange={(e) => setForm({ ...form, senha: e.target.value })}
-                    placeholder="Digite a senha (min. 6 caracteres)"
-                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    required
-                    minLength={6}
-                  />
-                </div>
-              )}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Fornecedor</label>
+                    <select
+                      value={form.fornecedorId || ""}
+                      onChange={(e) => setForm({ ...form, fornecedorId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Selecione um fornecedor</option>
+                      {mockFornecedores.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              {/* Perfil */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">Perfil</label>
-                <select
-                  value={form.perfil}
-                  onChange={(e) => setForm({ ...form, perfil: e.target.value as Perfil })}
-                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  required
-                >
-                  <option value="tecnico">Tecnico</option>
-                  <option value="gestor">Gestor</option>
-                  <option value="financeiro">Financeiro</option>
-                  <option value="administrador">Administrador</option>
-                </select>
-              </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Condição de Pagamento</label>
+                    <select
+                      value={form.condicaoPagamentoId || ""}
+                      onChange={(e) => setForm({ ...form, condicaoPagamentoId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Selecione uma condição</option>
+                      {mockCondicoesPagamento.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              {/* Gestor (apenas para tecnicos) */}
-              {form.perfil === "tecnico" && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-foreground">Gestor responsavel</label>
-                  <select
-                    value={form.gestor_id || ""}
-                    onChange={(e) => setForm({ ...form, gestor_id: e.target.value || null })}
-                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="">Selecione um gestor</option>
-                    {gestores.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.nome}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Operação Financeira</label>
+                    <select
+                      value={form.operacaoFinanceiraId || ""}
+                      onChange={(e) => setForm({ ...form, operacaoFinanceiraId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Selecione uma operação</option>
+                      {mockOperacoesFinanceiras.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Moeda</label>
+                    <select
+                      value={form.moedaId || ""}
+                      onChange={(e) => setForm({ ...form, moedaId: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Selecione uma moeda</option>
+                      {mockMoedas.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
               )}
 
               {/* Erro */}
@@ -470,38 +524,39 @@ export default function UsuariosPageSupabase() {
                   {formError}
                 </div>
               )}
-
-              {/* Botoes */}
-              <div className="flex gap-3 mt-2">
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  className="flex-1 py-2 rounded-lg border border-input text-sm font-medium hover:bg-muted transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={formLoading}
-                  className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 disabled:opacity-60 transition flex items-center justify-center gap-2"
-                >
-                  {formLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {editingUser ? "Salvar" : "Criar"}
-                </button>
-              </div>
             </form>
+
+            {/* Footer */}
+            <div className="flex gap-3 p-4 border-t border-border bg-muted/30">
+              <button
+                type="button"
+                onClick={handleCloseModal}
+                className="flex-1 py-2 rounded-lg border border-input text-sm font-medium hover:bg-muted transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                onClick={handleSubmit}
+                disabled={formLoading}
+                className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 disabled:opacity-60 transition flex items-center justify-center gap-2"
+              >
+                {formLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                {editingUser ? "Salvar" : "Criar"}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Modal de Confirmacao de Exclusao */}
+      {/* Modal de Confirmação de Exclusão */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-2">Confirmar exclusao</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-2">Confirmar exclusão</h2>
             <p className="text-sm text-muted-foreground mb-6">
-              Tem certeza que deseja remover o usuario <strong>{deleteConfirm.nome}</strong>? 
-              Esta acao nao pode ser desfeita.
+              Tem certeza que deseja remover o usuário <strong>{deleteConfirm.nome}</strong>? 
+              Esta ação não pode ser desfeita.
             </p>
             <div className="flex gap-3">
               <button
@@ -512,10 +567,8 @@ export default function UsuariosPageSupabase() {
               </button>
               <button
                 onClick={() => handleDelete(deleteConfirm)}
-                disabled={formLoading}
-                className="flex-1 py-2 rounded-lg bg-destructive text-white text-sm font-medium hover:bg-destructive/90 disabled:opacity-60 transition flex items-center justify-center gap-2"
+                className="flex-1 py-2 rounded-lg bg-destructive text-white text-sm font-medium hover:bg-destructive/90 transition"
               >
-                {formLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                 Remover
               </button>
             </div>
