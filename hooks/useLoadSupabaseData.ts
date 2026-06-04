@@ -4,9 +4,9 @@ import { useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 
 export function useLoadSupabaseData() {
-  const loadUsersFromSupabase = useAppStore((state) => state.loadUsersFromSupabase);
+  const loadSupabaseData = useAppStore((state) => state.loadSupabaseData);
 
   useEffect(() => {
-    loadUsersFromSupabase();
-  }, [loadUsersFromSupabase]);
+    loadSupabaseData();
+  }, [loadSupabaseData]);
 }

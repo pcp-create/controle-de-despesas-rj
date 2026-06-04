@@ -43,7 +43,7 @@ interface AppState {
   auditoria: AuditoriaEntry[];
 
   // Load data from Supabase
-  loadUsersFromSupabase: () => Promise<void>;
+  loadSupabaseData: () => Promise<void>;
 
   // Users CRUD
   addUser: (user: Omit<User, "id">) => void;
@@ -89,21 +89,21 @@ export const useAppStore = create<AppState>()(
 
       setCurrentUser: (user) => set({ currentUser: user }),
 
-      loadUsersFromSupabase: async () => {
+      loadSupabaseData: async () => {
         try {
           const { createClient } = await import("@/lib/supabase/client");
           const supabase = createClient();
-          
-          const { data: profiles, error } = await supabase
+
+          // Carregar Profiles (Users)
+          const { data: profiles, error: profilesError } = await supabase
             .from("profiles")
             .select("*");
 
-          if (error) {
-            console.error("[v0] Error loading profiles:", error);
+          if (profilesError) {
+            console.error("[v0] Error loading profiles:", profilesError);
             return;
           }
 
-          // Converter profiles do Supabase para o formato de User
           const users = (profiles || []).map((profile: any) => ({
             id: profile.id,
             nome: profile.nome,
@@ -123,9 +123,107 @@ export const useAppStore = create<AppState>()(
             centroCustoId: profile.centro_custo_id || "",
           }));
 
-          set({ users });
+          // Carregar Tipos de Despesa
+          const { data: tipos, error: tiposError } = await supabase
+            .from("tipos_despesa")
+            .select("*");
+
+          if (tiposError) {
+            console.error("[v0] Error loading tipos_despesa:", tiposError);
+          }
+
+          const tiposDespesa = (tipos || []).map((tipo: any) => ({
+            id: tipo.id,
+            nome: tipo.nome,
+            descricao: tipo.descricao || "",
+            limiteMaximo: tipo.limite_maximo || 0,
+            exigeComprovante: tipo.exige_comprovante !== false,
+            documentoPadrao: tipo.documento_padrao || "",
+            ativo: tipo.ativo !== false,
+          }));
+
+          // Carregar Cartões
+          const { data: cartoes, error: cartoesError } = await supabase
+            .from("cartoes")
+            .select("*");
+
+          if (cartoesError) {
+            console.error("[v0] Error loading cartoes:", cartoesError);
+          }
+
+          const cartoesData = (cartoes || []).map((cartao: any) => ({
+            id: cartao.id,
+            userId: cartao.user_id,
+            banco: cartao.banco,
+            bandeira: cartao.bandeira,
+            ultimosDigitos: cartao.ultimos_digitos,
+            apelido: cartao.apelido || "",
+            isPadrao: cartao.is_padrao || false,
+            ativo: cartao.ativo !== false,
+          }));
+
+          // Carregar Despesas
+          const { data: despesas, error: despesasError } = await supabase
+            .from("despesas")
+            .select("*");
+
+          if (despesasError) {
+            console.error("[v0] Error loading despesas:", despesasError);
+          }
+
+          const despesasData = (despesas || []).map((despesa: any) => ({
+            id: despesa.id,
+            tecnicoId: despesa.tecnico_id,
+            tipoDespesaId: despesa.tipo_despesa_id,
+            cartaoId: despesa.cartao_id,
+            cliente: despesa.cliente,
+            numeroOS: despesa.numero_os,
+            valor: despesa.valor || 0,
+            documento: despesa.documento || "",
+            observacao: despesa.observacao || "",
+            comprovante: despesa.comprovante_url ? { nome: despesa.comprovante_nome, url: despesa.comprovante_url } : null,
+            dataDespesa: despesa.data_despesa,
+            statusAprovacao: despesa.status_aprovacao || "AguardandoGestor",
+            statusERP: despesa.status_erp || "Rascunho",
+            gestorAprovadorId: despesa.gestor_aprovador_id,
+            justificativaReprovacao: despesa.justificativa_reprovacao,
+            dataEnvio: despesa.data_envio,
+            dataAprovacao: despesa.data_aprovacao,
+            erpId: despesa.erp_id,
+            erpPayload: despesa.erp_payload,
+            erpResposta: despesa.erp_resposta,
+            dataCriacao: despesa.created_at,
+            dataAtualizacao: despesa.updated_at,
+          }));
+
+          // Carregar Auditoria
+          const { data: auditoria, error: auditoriaError } = await supabase
+            .from("auditoria")
+            .select("*");
+
+          if (auditoriaError) {
+            console.error("[v0] Error loading auditoria:", auditoriaError);
+          }
+
+          const auditoriaData = (auditoria || []).map((entry: any) => ({
+            id: entry.id,
+            userId: entry.user_id,
+            acao: entry.acao,
+            entidade: entry.entidade,
+            entidadeId: entry.entidade_id,
+            detalhes: entry.detalhes,
+            dataCriacao: entry.created_at,
+          }));
+
+          set({
+            users,
+            tiposDespesa,
+            cartoes: cartoesData,
+            despesas: despesasData,
+            auditoria: auditoriaData,
+          });
         } catch (err) {
-          console.error("[v0] Failed to load users:", err);
+          console.error("[v0] Failed to load data from Supabase:", err);
         }
       },
 
