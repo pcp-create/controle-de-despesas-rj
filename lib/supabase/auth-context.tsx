@@ -61,9 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Verificar sessão atual
     const getSession = async () => {
       try {
-        console.log("[v0] Checking session...");
-        const { data: { session }, error } = await supabase.auth.getSession();
-        console.log("[v0] Session result:", session ? "found" : "none", error ? `error: ${error.message}` : "");
+        const { data: { session } } = await supabase.auth.getSession();
         
         if (!mounted) return;
         
@@ -73,10 +71,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (mounted) setProfile(profileData);
         }
       } catch (err) {
-        console.error("[v0] Erro ao obter sessão:", err);
+        console.error("Erro ao obter sessão:", err);
       } finally {
         if (mounted) {
-          console.log("[v0] Setting loading to false");
           setLoading(false);
         }
       }
@@ -86,8 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Timeout de segurança para evitar loading infinito
     const timeout = setTimeout(() => {
-      if (mounted && loading) {
-        console.log("[v0] Timeout - forcing loading to false");
+      if (mounted) {
         setLoading(false);
       }
     }, 5000);
@@ -95,7 +91,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Escutar mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log("[v0] Auth state changed:", event);
         if (event === "SIGNED_IN" && session?.user) {
           setUser(session.user);
           const profileData = await fetchProfile(session.user.id);
