@@ -80,7 +80,8 @@ export default function AppShellSupabase() {
       case "relatorios": return <RelatoriosPageSupabase />;
       case "usuarios": return <UsuariosPageSupabase />;
       case "tipos-despesa": return <TiposDespesaPageSupabase />;
-      case "auditoria": return <DashboardSupabase onNavigate={navigate} />; // Placeholder
+      case "todas-despesas": return <TodasDespesasPage />;
+      case "auditoria": return <AuditoriaPageSupabase />;
       default: return <DashboardSupabase onNavigate={navigate} />;
     }
   };
