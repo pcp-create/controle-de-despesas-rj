@@ -6,7 +6,6 @@ import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import {
   DollarSign,
-  TrendingUp,
   ArrowRight,
   CalendarDays,
   PlusCircle,
@@ -16,7 +15,7 @@ import {
   CircleX,
   FileClock,
 } from "lucide-react";
-import { formatCurrency, getStatusGeral, statusGeralConfig } from "@/lib/helpers";
+import { formatCurrency, getStatusGeral } from "@/lib/helpers";
 import type { PageKey, NavigateFn } from "@/components/layout/AppShellSupabase";
 import {
   BarChart,
@@ -147,46 +146,67 @@ export default function DashboardSupabase({ onNavigate }: Props) {
 
   const totalGeral = byUsuario.reduce((s, u) => s + u.total, 0);
 
-  const statusCards: { key: string; value: number; icon: React.ReactNode; iconBg: string; iconColor: string; hint: string }[] = [
+  const allCards: {
+    key?: string;
+    label: string;
+    value: string | number;
+    icon: React.ReactNode;
+    iconColor: string;
+    hint: string;
+    onClick: () => void;
+  }[] = [
+    {
+      label: "Total no período",
+      value: formatCurrency(total),
+      icon: <DollarSign className="w-4 h-4" />,
+      iconColor: "text-primary",
+      hint: "Ver todas as despesas",
+      onClick: () => perfil === "tecnico" ? onNavigate("minhas-despesas") : onNavigate("todas-despesas"),
+    },
     {
       key: "nao_enviado",
+      label: "Não enviadas",
       value: naoEnviadas,
-      icon: <FileClock className="w-5 h-5" />,
-      iconBg: "bg-slate-100",
-      iconColor: "text-slate-500",
-      hint: "Rascunhos ainda não enviados para aprovação",
+      icon: <FileClock className="w-4 h-4" />,
+      iconColor: "text-slate-400",
+      hint: "Rascunhos ainda não enviados",
+      onClick: () => handleCardClick("nao_enviado"),
     },
     {
       key: "enviado",
+      label: "Enviadas",
       value: enviadas,
-      icon: <SendHorizonal className="w-5 h-5" />,
-      iconBg: "bg-primary/10",
+      icon: <SendHorizonal className="w-4 h-4" />,
       iconColor: "text-primary",
       hint: "Enviadas, aguardando processamento",
+      onClick: () => handleCardClick("enviado"),
     },
     {
       key: "aguardando_aprovacao",
+      label: "Aguardando aprovação",
       value: aguardando,
-      icon: <Clock className="w-5 h-5" />,
-      iconBg: "bg-warning/10",
+      icon: <Clock className="w-4 h-4" />,
       iconColor: "text-warning",
       hint: perfil === "administrador" || perfil === "gestor" ? "Ir para Aprovações" : "Aguardando análise do gestor",
+      onClick: () => handleCardClick("aguardando_aprovacao"),
     },
     {
       key: "aprovado",
+      label: "Aprovadas",
       value: aprovadas,
-      icon: <CircleCheck className="w-5 h-5" />,
-      iconBg: "bg-success/10",
+      icon: <CircleCheck className="w-4 h-4" />,
       iconColor: "text-success",
-      hint: "Despesas aprovadas pelo gestor",
+      hint: "Despesas aprovadas",
+      onClick: () => handleCardClick("aprovado"),
     },
     {
       key: "reprovado",
+      label: "Reprovadas",
       value: reprovadas,
-      icon: <CircleX className="w-5 h-5" />,
-      iconBg: "bg-destructive/10",
+      icon: <CircleX className="w-4 h-4" />,
       iconColor: "text-destructive",
       hint: "Despesas reprovadas",
+      onClick: () => handleCardClick("reprovado"),
     },
   ];
 
@@ -285,55 +305,23 @@ export default function DashboardSupabase({ onNavigate }: Props) {
         )}
       </div>
 
-      {/* Card total + 5 cards de status clicáveis */}
-      <div className="flex flex-col gap-3">
-        {/* Card total */}
-        <div className="bg-white rounded-xl p-5 border border-border shadow-sm flex items-center gap-4">
-          <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-            <DollarSign className="w-5 h-5" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-2xl font-bold text-foreground">{formatCurrency(total)}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Total no período &mdash; <span className="font-medium text-foreground">{myDespesas.length} lançamento{myDespesas.length !== 1 ? "s" : ""}</span>
-            </p>
-          </div>
-          <TrendingUp className="w-5 h-5 text-muted-foreground/40 shrink-0 hidden sm:block" />
-        </div>
-
-        {/* 5 cards de status clicáveis */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {statusCards.map(({ key, value, icon, iconBg, iconColor, hint }) => {
-            const cfg = statusGeralConfig[key as keyof typeof statusGeralConfig];
-            return (
-              <button
-                key={key}
-                onClick={() => handleCardClick(key)}
-                title={hint}
-                className="group bg-white rounded-xl p-4 border border-border shadow-sm flex flex-col gap-3 text-left hover:shadow-md hover:border-primary/30 active:scale-[0.98] transition-all"
-              >
-                {/* Ícone + seta */}
-                <div className="flex items-center justify-between">
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${iconBg} ${iconColor}`}>
-                    {icon}
-                  </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 translate-x-0 group-hover:translate-x-0.5 transition-all" />
-                </div>
-
-                {/* Contador */}
-                <div>
-                  <p className="text-3xl font-bold text-foreground leading-none">{value}</p>
-                </div>
-
-                {/* Badge de status */}
-                <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full w-fit ${cfg.color}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
-                  {cfg.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+      {/* 6 cards em grid único */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {allCards.map(({ label, value, icon, iconColor, hint, onClick }) => (
+          <button
+            key={label}
+            onClick={onClick}
+            title={hint}
+            className="group bg-white rounded-xl p-4 border border-border shadow-sm flex flex-col gap-2 text-left hover:shadow-md hover:border-primary/30 active:scale-[0.98] transition-all"
+          >
+            <div className="flex items-center justify-between">
+              <span className={iconColor}>{icon}</span>
+              <ArrowRight className="w-3 h-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+            </div>
+            <p className="text-2xl font-bold text-foreground leading-none tracking-tight">{value}</p>
+            <p className="text-xs text-muted-foreground leading-tight">{label}</p>
+          </button>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
