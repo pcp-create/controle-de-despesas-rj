@@ -219,7 +219,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) 
                           <span className="ml-2 text-foreground">{d.observacao}</span>
                         </div>
                       )}
-                      {d.justificativa_reprovacao && (
+                      {d.status_aprovacao === "Reprovado" && d.justificativa_reprovacao && (
                         <div className="col-span-2 p-2 rounded-lg bg-destructive/10 text-destructive">
                           <span className="font-medium">Motivo da reprovação:</span>
                           <span className="ml-2">{d.justificativa_reprovacao}</span>
@@ -249,7 +249,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) 
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-sm hover:bg-accent/90 transition"
                           >
                             <Send className="w-4 h-4" />
-                            Enviar para Aprovação
+                            Enviar Despesa
                           </button>
                         </>
                       )}

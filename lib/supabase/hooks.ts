@@ -105,7 +105,7 @@ const fetchCartoes = async (userId: string): Promise<Cartao[]> => {
   return data || [];
 };
 
-const fetchDespesas = async (userId: string, perfil: string): Promise<Despesa[]> => {
+const fetchDespesas = async (userId?: string, perfil?: string): Promise<Despesa[]> => {
   const supabase = getSupabase();
   if (!supabase) return [];
   
@@ -120,7 +120,7 @@ const fetchDespesas = async (userId: string, perfil: string): Promise<Despesa[]>
     .order("created_at", { ascending: false });
 
   // Filtrar por perfil
-  if (perfil === "tecnico") {
+  if (perfil === "tecnico" && userId) {
     query = query.eq("tecnico_id", userId);
   }
   // Gestores, financeiros e admins veem tudo (RLS cuida da permissão)
@@ -219,10 +219,12 @@ export function useCartoes() {
   };
 }
 
-export function useDespesas(userId?: string) {
-  const { data, error, isLoading, mutate } = useSWR(userId ? `despesas_${userId}` : null, userId ? () => fetchDespesas(userId) : null, {
-    revalidateOnFocus: false,
-  });
+export function useDespesas(userId?: string, perfil?: string) {
+  const { data, error, isLoading, mutate } = useSWR(
+    `despesas_${userId || "all"}_${perfil || ""}`,
+    userId ? () => fetchDespesas(userId, perfil || "tecnico") : () => fetchDespesas("", perfil || "gestor"),
+    { revalidateOnFocus: false }
+  );
 
   const addDespesa = async (despesa: Omit<Despesa, "id" | "tecnico_id" | "created_at" | "updated_at" | "tipo_despesa" | "cartao" | "tecnico">) => {
     if (!userId) return { error: "Não autenticado" };

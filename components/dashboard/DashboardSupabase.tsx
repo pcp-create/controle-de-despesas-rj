@@ -43,7 +43,10 @@ type ModoFiltro = "mes" | "periodo";
 
 export default function DashboardSupabase({ onNavigate }: Props) {
   const { currentUser } = useAppStore();
-  const { despesas, isLoading: loadingDespesas } = useDespesas();
+  const { despesas, isLoading: loadingDespesas } = useDespesas(
+    currentUser?.perfil === "tecnico" ? currentUser.id : undefined,
+    currentUser?.perfil
+  );
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
   const perfil = currentUser?.perfil;
@@ -64,7 +67,14 @@ export default function DashboardSupabase({ onNavigate }: Props) {
 
   // Filtra despesas por data
   const myDespesas = useMemo(() => {
-    return despesas.filter((d) => {
+    let filtered = despesas;
+    
+    // Se for gestor ou admin, mostrar todas. Se for técnico, mostrar só suas
+    if (perfil === "tecnico") {
+      filtered = despesas.filter((d) => d.tecnico_id === currentUser?.id);
+    }
+    
+    return filtered.filter((d) => {
       const dataStr = (d.data_despesa || d.created_at || "").slice(0, 10);
       if (modoFiltro === "mes") {
         const dt = new Date(dataStr + "T00:00:00");
@@ -75,7 +85,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
         return true;
       }
     });
-  }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
+  }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, perfil, currentUser?.id]);
 
   const labelPeriodo = modoFiltro === "mes"
     ? `${MESES[mesSelecionado]} ${anoSelecionado}`
