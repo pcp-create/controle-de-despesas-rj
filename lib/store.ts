@@ -42,10 +42,14 @@ interface AppState {
   despesas: Despesa[];
   auditoria: AuditoriaEntry[];
 
+  // Load data from Supabase
+  loadUsersFromSupabase: () => Promise<void>;
+
   // Users CRUD
   addUser: (user: Omit<User, "id">) => void;
   updateUser: (id: string, data: Partial<User>) => void;
   toggleUserAtivo: (id: string) => void;
+  deleteUser: (id: string) => void;
 
   // Cartoes CRUD
   addCartao: (cartao: Omit<Cartao, "id">) => void;
@@ -84,6 +88,46 @@ export const useAppStore = create<AppState>()(
       auditoria: mockAuditoria,
 
       setCurrentUser: (user) => set({ currentUser: user }),
+
+      loadUsersFromSupabase: async () => {
+        try {
+          const { createClient } = await import("@/lib/supabase/client");
+          const supabase = createClient();
+          
+          const { data: profiles, error } = await supabase
+            .from("profiles")
+            .select("*");
+
+          if (error) {
+            console.error("[v0] Error loading profiles:", error);
+            return;
+          }
+
+          // Converter profiles do Supabase para o formato de User
+          const users = (profiles || []).map((profile: any) => ({
+            id: profile.id,
+            nome: profile.nome,
+            email: profile.email,
+            usuario: profile.usuario,
+            perfil: profile.perfil,
+            ativo: profile.ativo,
+            gestor_id: profile.gestor_id,
+            primeiro_acesso: profile.primeiro_acesso,
+            senha: profile.senha,
+            telefone: profile.telefone || "",
+            empresaId: profile.empresa_id || "",
+            fornecedorId: profile.fornecedor_id || "",
+            condicaoPagamentoId: profile.condicao_pagamento_id || "",
+            operacaoFinanceiraId: profile.operacao_financeira_id || "",
+            moedaId: profile.moeda_id || "",
+            centroCustoId: profile.centro_custo_id || "",
+          }));
+
+          set({ users });
+        } catch (err) {
+          console.error("[v0] Failed to load users:", err);
+        }
+      },
 
       login: (usuario, senha) => {
         const user = get().users.find(

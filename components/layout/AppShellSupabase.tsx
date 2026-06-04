@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useDespesas } from "@/lib/supabase/hooks";
 import type { Despesa } from "@/lib/supabase/hooks";
+import { useLoadSupabaseData } from "@/hooks/useLoadSupabaseData";
 import Sidebar from "./Sidebar";
 import BottomNav from "./BottomNav";
 import HeaderSupabase from "./HeaderSupabase";
@@ -33,6 +34,8 @@ export type PageKey =
 
 export default function AppShellSupabase() {
   const { currentUser } = useAppStore();
+  useLoadSupabaseData();
+  
   const [page, setPage] = useState<PageKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
