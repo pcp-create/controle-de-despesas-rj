@@ -13,7 +13,7 @@ import FinanceiroPage from "@/components/financeiro/FinanceiroPage";
 import RelatoriosPage from "@/components/relatorios/RelatoriosPage";
 import UsuariosPage from "@/components/admin/UsuariosPage";
 import TiposDespesaPage from "@/components/admin/TiposDespesaPage";
-import AuditoriaPage from "@/components/admin/AuditoriaPage";
+import AuditoriaPageSupabase from "@/components/admin/AuditoriaPageSupabase";
 import IntegracoesERPPage from "@/components/integracoes/IntegracoesERPPage";
 import AlterarSenhaModal from "@/components/auth/AlterarSenhaModal";
 import type { Despesa } from "@/lib/types";
@@ -75,7 +75,7 @@ export default function AppShell() {
       case "relatorios": return <RelatoriosPage />;
       case "usuarios": return <UsuariosPage />;
       case "tipos-despesa": return <TiposDespesaPage />;
-      case "auditoria": return <AuditoriaPage />;
+      case "auditoria": return <AuditoriaPageSupabase />;
       default: return <Dashboard onNavigate={navigate} />;
     }
   };
