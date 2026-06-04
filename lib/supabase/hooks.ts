@@ -3,6 +3,7 @@
 import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
 import { registrarAuditoria } from "@/lib/supabase/audit";
+import { useAuth } from "@/lib/supabase/auth-context";
 
 // Helper to get supabase client - MUST be called inside functions, not at module level
 const getSupabase = () => createClient();
@@ -226,6 +227,7 @@ export function useCartoes() {
 }
 
 export function useDespesas(userId?: string, perfil?: string) {
+  const { profile } = useAuth();
   const { data, error, isLoading, mutate } = useSWR(
     `despesas_${userId || "all"}_${perfil || ""}`,
     userId ? () => fetchDespesas(userId, perfil || "tecnico") : () => fetchDespesas("", perfil || "gestor"),
