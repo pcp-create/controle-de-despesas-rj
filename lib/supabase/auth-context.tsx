@@ -56,41 +56,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const supabase = createClient();
+    let mounted = true;
 
     // Verificar sessão atual
     const getSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        console.log("[v0] Checking session...");
+        const { data: { session }, error } = await supabase.auth.getSession();
+        console.log("[v0] Session result:", session ? "found" : "none", error ? `error: ${error.message}` : "");
+        
+        if (!mounted) return;
         
         if (session?.user) {
           setUser(session.user);
           const profileData = await fetchProfile(session.user.id);
-          setProfile(profileData);
+          if (mounted) setProfile(profileData);
         }
       } catch (err) {
-        console.error("Erro ao obter sessão:", err);
+        console.error("[v0] Erro ao obter sessão:", err);
       } finally {
-        setLoading(false);
+        if (mounted) {
+          console.log("[v0] Setting loading to false");
+          setLoading(false);
+        }
       }
     };
 
     getSession();
 
+    // Timeout de segurança para evitar loading infinito
+    const timeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.log("[v0] Timeout - forcing loading to false");
+        setLoading(false);
+      }
+    }, 5000);
+
     // Escutar mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log("[v0] Auth state changed:", event);
         if (event === "SIGNED_IN" && session?.user) {
           setUser(session.user);
           const profileData = await fetchProfile(session.user.id);
           setProfile(profileData);
+          setLoading(false);
         } else if (event === "SIGNED_OUT") {
           setUser(null);
           setProfile(null);
+          setLoading(false);
         }
       }
     );
 
     return () => {
+      mounted = false;
+      clearTimeout(timeout);
       subscription.unsubscribe();
     };
   }, [fetchProfile]);
