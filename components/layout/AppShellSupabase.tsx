@@ -10,6 +10,7 @@ import HeaderSupabase from "./HeaderSupabase";
 import DashboardSupabase from "@/components/dashboard/DashboardSupabase";
 import NovaDespesaPageSupabase from "@/components/despesas/NovaDespesaPageSupabase";
 import MinhasDespesasPageSupabase from "@/components/despesas/MinhasDespesasPageSupabase";
+import TodasDespesasPage from "@/components/despesas/TodasDespesasPage";
 import AprovacaoPageSupabase from "@/components/aprovacao/AprovacaoPageSupabase";
 import FinanceiroPageSupabase from "@/components/financeiro/FinanceiroPageSupabase";
 import RelatoriosPageSupabase from "@/components/relatorios/RelatoriosPageSupabase";
@@ -17,6 +18,7 @@ import IntegracoesERPPageSupabase from "@/components/integracoes/IntegracoesERPP
 import UsuariosPageSupabase from "@/components/admin/UsuariosPageSupabase";
 import TiposDespesaPageSupabase from "@/components/admin/TiposDespesaPageSupabase";
 import AlterarSenhaModalSupabase from "@/components/auth/AlterarSenhaModalSupabase";
+import AuditoriaPageSupabase from "@/components/admin/AuditoriaPageSupabase";
 import { useAppStore } from "@/lib/store";
 
 export type PageKey =
