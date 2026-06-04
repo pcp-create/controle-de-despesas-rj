@@ -3,8 +3,10 @@
 import { useState, useMemo } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { formatCurrency } from "@/lib/helpers";
-import { DollarSign, TrendingUp, Search, Download, Eye } from "lucide-react";
+import { DollarSign, TrendingUp, Search, Eye } from "lucide-react";
 import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import {
   BarChart,
   Bar,
@@ -95,7 +97,7 @@ export default function FinanceiroPageSupabase() {
     );
   });
 
-  const handleExportar = () => {
+  const handleExportarXLSX = () => {
     const dados = despesasFiltradas.map((d) => {
       const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
       const tecnico = profiles.find((p) => p.id === d.tecnico_id);
@@ -125,6 +127,80 @@ export default function FinanceiroPageSupabase() {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Despesas");
     const nomeArquivo = `Despesas_${new Date().toLocaleDateString("pt-BR").replace(/\//g, "-")}.xlsx`;
     XLSX.writeFile(workbook, nomeArquivo);
+  };
+
+  const handleExportarPDF = () => {
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+    const periodoLabel = modoFiltro === "mes"
+      ? `${MESES_FULL[mesSelecionado]} / ${anoSelecionado}`
+      : `${dataInicial} a ${dataFinal}`;
+
+    // Cabeçalho
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Relatório Financeiro — Despesas", 14, 16);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100);
+    doc.text(`Período: ${periodoLabel}`, 14, 22);
+    doc.text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, 14, 27);
+    doc.text(`Total aprovado: ${formatCurrency(totalAprovado)}   Lançamentos: ${qtdLancamentos}`, 14, 32);
+    doc.setTextColor(0);
+
+    const rows = despesasFiltradas.map((d) => {
+      const tipo    = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
+      const tecnico = profiles.find((p) => p.id === d.tecnico_id);
+      const statusAprov = d.status_aprovacao === "AprovadoGestor"   ? "Aprovado"   :
+                          d.status_aprovacao === "AguardandoGestor" ? "Aguardando" :
+                          d.status_aprovacao === "Reprovado"        ? "Reprovado"  : "-";
+      return [
+        new Date(d.data_despesa).toLocaleDateString("pt-BR"),
+        tecnico?.nome.split(" ").slice(0, 2).join(" ") || "-",
+        tipo?.nome || "-",
+        d.cliente,
+        d.numero_os || "-",
+        formatCurrency(Number(d.valor)),
+        statusAprov,
+        d.comprovante_url ? "Sim" : "Não",
+        d.status_erp || "-",
+        d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "-",
+        d.erp_id || "-",
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 36,
+      head: [["Data", "Técnico", "Tipo", "Cliente", "OS", "Valor", "Aprovação", "Comprovante", "Status ERP", "Envio", "ERP ID"]],
+      body: rows,
+      styles: { fontSize: 7.5, cellPadding: 2, overflow: "linebreak" },
+      headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: "bold", fontSize: 8 },
+      alternateRowStyles: { fillColor: [245, 247, 255] },
+      columnStyles: {
+        0: { cellWidth: 18 },
+        1: { cellWidth: 28 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 38 },
+        4: { cellWidth: 18 },
+        5: { cellWidth: 22, halign: "right" },
+        6: { cellWidth: 20 },
+        7: { cellWidth: 24 },
+        8: { cellWidth: 38 },
+        9: { cellWidth: 18 },
+        10: { cellWidth: 28 },
+      },
+      didParseCell: (data) => {
+        if (data.section === "body" && data.column.index === 6) {
+          const v = data.cell.raw as string;
+          if (v === "Aprovado")   { data.cell.styles.textColor = [22, 163, 74]; data.cell.styles.fontStyle = "bold"; }
+          if (v === "Aguardando") { data.cell.styles.textColor = [202, 138, 4]; }
+          if (v === "Reprovado")  { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = "bold"; }
+        }
+      },
+    });
+
+    const nomeArquivo = `Despesas_${new Date().toLocaleDateString("pt-BR").replace(/\//g, "-")}.pdf`;
+    doc.save(nomeArquivo);
   };
 
   if (isLoading) {
@@ -288,11 +364,26 @@ export default function FinanceiroPageSupabase() {
               />
             </div>
             <button
-              onClick={handleExportar}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-input bg-white text-sm font-medium hover:bg-muted transition shrink-0"
+              onClick={handleExportarXLSX}
+              title="Exportar XLSX"
+              className="flex items-center justify-center w-8 h-8 rounded-lg border border-input bg-white hover:bg-muted transition shrink-0"
             >
-              <Download className="w-4 h-4" />
-              <span>Exportar XLSX</span>
+              {/* Excel icon */}
+              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="24" height="24" rx="3" fill="#1D6F42"/>
+                <path d="M7 7h4l1.5 3L14 7h4l-3.5 5 3.5 5h-4l-1.5-3L11 17H7l3.5-5L7 7z" fill="white"/>
+              </svg>
+            </button>
+            <button
+              onClick={handleExportarPDF}
+              title="Exportar PDF"
+              className="flex items-center justify-center w-8 h-8 rounded-lg border border-input bg-white hover:bg-muted transition shrink-0"
+            >
+              {/* PDF icon */}
+              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect width="24" height="24" rx="3" fill="#DC2626"/>
+                <text x="3.5" y="16" fontFamily="Arial" fontWeight="bold" fontSize="9" fill="white">PDF</text>
+              </svg>
             </button>
           </div>
         </div>
