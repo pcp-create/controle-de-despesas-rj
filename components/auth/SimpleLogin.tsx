@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
-import { Eye, EyeOff, LogIn } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function SimpleLogin() {
   const { setCurrentUser } = useAppStore();
@@ -69,9 +69,11 @@ export default function SimpleLogin() {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-500 rounded-xl mb-4">
-            <LogIn className="w-8 h-8 text-white" />
-          </div>
+          <img 
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/RJ%20Branco%202-Pn9QBwHse0Kjls3Cpbdg4mGuwo47pg.png" 
+            alt="RJ Compressores" 
+            className="h-20 w-auto mx-auto mb-4"
+          />
           <h1 className="text-3xl font-bold text-white mb-2">Controle de Despesas</h1>
           <p className="text-slate-400">RJ Compressores</p>
         </div>
