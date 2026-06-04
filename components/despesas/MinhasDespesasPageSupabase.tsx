@@ -25,7 +25,7 @@ interface Props {
 }
 
 const statusAprovacaoConfig = {
-  AguardandoGestor: { label: "Aguardando", color: "bg-warning/10 text-warning", icon: Clock },
+  AguardandoGestor: { label: "Aguardando Aprovação", color: "bg-warning/10 text-warning", icon: Clock },
   AprovadoGestor: { label: "Aprovado", color: "bg-success/10 text-success", icon: CheckCircle },
   Reprovado: { label: "Reprovado", color: "bg-destructive/10 text-destructive", icon: XCircle },
 };
@@ -146,7 +146,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) 
             className="pl-9 pr-8 py-2 rounded-lg border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
           >
             <option value="todos">Todos</option>
-            <option value="AguardandoGestor">Aguardando</option>
+            <option value="AguardandoGestor">Aguardando Aprovação</option>
             <option value="AprovadoGestor">Aprovados</option>
             <option value="Reprovado">Reprovados</option>
           </select>
@@ -181,11 +181,11 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-foreground">{tipo?.nome || "Despesa"}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${statusAprov.color}`}>
-                        {statusAprov.label}
-                      </span>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${statusERP.color}`}>
                         {statusERP.label}
+                      </span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${statusAprov.color}`}>
+                        {statusAprov.label}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
