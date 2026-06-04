@@ -27,14 +27,6 @@ export default function RelatoriosPage() {
     // Fallback para dataCriacao se dataDespesa não existir (dados antigos do mock)
     const dataStr = (d.dataDespesa || d.dataCriacao || "").slice(0, 10);
     
-    // Debug: verificar valores
-    if (filtros.dataInicial || filtros.dataFinal) {
-      console.log("[v0] Filtro data:", { dataStr, dataInicial: filtros.dataInicial, dataFinal: filtros.dataFinal, 
-        passaInicial: !filtros.dataInicial || dataStr >= filtros.dataInicial,
-        passaFinal: !filtros.dataFinal || dataStr <= filtros.dataFinal
-      });
-    }
-    
     // Usa >= e <= para incluir as datas de inicio e fim no intervalo
     if (filtros.dataInicial && dataStr < filtros.dataInicial) return false;
     if (filtros.dataFinal && dataStr > filtros.dataFinal) return false;
