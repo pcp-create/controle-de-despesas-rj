@@ -82,6 +82,7 @@ export default function AprovacaoPageSupabase() {
       .from("despesas")
       .update({
         status_aprovacao: "AprovadoGestor",
+        status_erp: "AprovadoGestor",
         gestor_aprovador_id: currentUser?.id,
         data_aprovacao: new Date().toISOString(),
       })
@@ -121,6 +122,7 @@ export default function AprovacaoPageSupabase() {
       .from("despesas")
       .update({
         status_aprovacao: "Reprovado",
+        status_erp: "Reprovado",
         gestor_aprovador_id: currentUser?.id,
         justificativa_reprovacao: justificativa,
         data_aprovacao: new Date().toISOString(),
