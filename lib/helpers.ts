@@ -16,8 +16,27 @@ export function formatDateTime(dateStr: string): string {
   return d.toLocaleString("pt-BR");
 }
 
+// Status geral unificado — combina status_erp + status_aprovacao numa sequência lógica
+export type StatusGeral = "nao_enviado" | "enviado" | "aguardando_aprovacao" | "aprovado" | "reprovado";
+
+export function getStatusGeral(statusErp: string, statusAprovacao: string): StatusGeral {
+  if (statusAprovacao === "Reprovado") return "reprovado";
+  if (statusAprovacao === "AprovadoGestor") return "aprovado";
+  if (statusErp === "EnviadoAguardandoGestor" && statusAprovacao === "AguardandoGestor") return "aguardando_aprovacao";
+  if (statusErp === "EnviadoAguardandoGestor") return "enviado";
+  return "nao_enviado";
+}
+
+export const statusGeralConfig: Record<StatusGeral, { label: string; color: string; dot: string }> = {
+  nao_enviado:         { label: "Não enviado",        color: "bg-destructive/10 text-destructive border border-destructive/20",  dot: "bg-destructive" },
+  enviado:             { label: "Enviado",             color: "bg-primary/10 text-primary border border-primary/20",              dot: "bg-primary" },
+  aguardando_aprovacao:{ label: "Aguardando Aprovação",color: "bg-warning/10 text-warning border border-warning/20",              dot: "bg-warning" },
+  aprovado:            { label: "Aprovado",            color: "bg-success/10 text-success border border-success/20",              dot: "bg-success" },
+  reprovado:           { label: "Reprovado",           color: "bg-destructive/10 text-destructive border border-destructive/20",  dot: "bg-destructive" },
+};
+
 export const erpStatusLabel: Record<ERPStatus, string> = {
-  Rascunho: "Rascunho",
+  Rascunho: "Não enviado",
   EnviadoAguardandoGestor: "Aguardando Gestor",
   ErroEnvioERP: "Erro ao Enviar ERP",
   AprovadoGestor: "Aprovado pelo Gestor",
@@ -28,7 +47,7 @@ export const erpStatusLabel: Record<ERPStatus, string> = {
 };
 
 export const erpStatusColor: Record<ERPStatus, string> = {
-  Rascunho: "bg-muted text-muted-foreground",
+  Rascunho: "bg-destructive/15 text-destructive",
   EnviadoAguardandoGestor: "bg-warning/15 text-warning",
   ErroEnvioERP: "bg-destructive/15 text-destructive",
   AprovadoGestor: "bg-success/15 text-success",

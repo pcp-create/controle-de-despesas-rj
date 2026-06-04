@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   PlusCircle,
   FileText,
+  Files,
   CheckSquare,
   BarChart3,
   TrendingUp,
@@ -29,7 +30,8 @@ interface NavItem {
 const NAV: NavItem[] = [
   { key: "dashboard",       label: "Dashboard",        icon: <LayoutDashboard className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro","tecnico"] },
   { key: "nova-despesa",    label: "Nova Despesa",      icon: <PlusCircle      className="w-5 h-5 shrink-0" />, profiles: ["tecnico","gestor","administrador"] },
-  { key: "minhas-despesas", label: "Minhas Despesas",   icon: <FileText        className="w-5 h-5 shrink-0" />, profiles: ["tecnico","gestor","administrador"] },
+  { key: "minhas-despesas",  label: "Minhas Despesas",    icon: <FileText className="w-5 h-5 shrink-0" />, profiles: ["tecnico","gestor","administrador"] },
+  { key: "todas-despesas",   label: "Todas as Despesas",  icon: <Files    className="w-5 h-5 shrink-0" />, profiles: ["gestor","financeiro","administrador"] },
   { key: "aprovacao",       label: "Aprovações",        icon: <CheckSquare     className="w-5 h-5 shrink-0" />, profiles: ["gestor","administrador"] },
   { key: "financeiro",      label: "Financeiro / ERP",  icon: <TrendingUp      className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador","gestor"] },
   { key: "integracoes-erp", label: "Integrações ERP",   icon: <Server          className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador"] },

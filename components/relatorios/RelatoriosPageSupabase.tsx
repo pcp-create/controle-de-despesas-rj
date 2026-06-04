@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
+import { useAppStore } from "@/lib/store";
 import { formatCurrency } from "@/lib/helpers";
 import {
   BarChart,
@@ -25,7 +26,10 @@ const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
 type ModoFiltro = "mes" | "periodo";
 
 export default function RelatoriosPageSupabase() {
-  const { despesas, isLoading } = useDespesas();
+  const { currentUser } = useAppStore();
+  const isTecnico = currentUser?.perfil === "tecnico";
+
+  const { despesas, isLoading } = useDespesas(isTecnico ? currentUser?.id : undefined);
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
   
@@ -41,7 +45,12 @@ export default function RelatoriosPageSupabase() {
 
   const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
 
-  // Despesas aprovadas (filtradas por modo)
+  // Todas as despesas aprovadas — sem filtro de período (usado no gráfico de evolução)
+  const despesasAprovadas = useMemo(() => {
+    return despesas.filter((d) => d.status_aprovacao === "AprovadoGestor");
+  }, [despesas]);
+
+  // Despesas aprovadas filtradas pelo período selecionado (métricas, por tipo, top técnicos)
   const despesasAno = useMemo(() => {
     return despesas.filter((d) => {
       if (d.status_aprovacao !== "AprovadoGestor") return false;
@@ -64,14 +73,19 @@ export default function RelatoriosPageSupabase() {
   const ticketMedio = totalLancamentos > 0 ? totalAno / totalLancamentos : 0;
   const tecnicosAtivos = new Set(despesasAno.map((d) => d.tecnico_id)).size;
 
-  // Por mês (sempre mostra os 12 meses para visibilidade)
-  const byMes = MESES.map((m, i) => ({
-    mes: m,
-    valor: despesasAno
-      .filter((d) => new Date(d.data_despesa).getMonth() === i)
-      .reduce((s, d) => s + Number(d.valor), 0),
-    qtd: despesasAno.filter((d) => new Date(d.data_despesa).getMonth() === i).length,
-  }));
+  // Por mês — usa todas as despesas aprovadas, sem filtro de período
+  const byMes = useMemo(() => {
+    const anoAtual = now.getFullYear();
+    return MESES.map((m, i) => ({
+      mes: m,
+      valor: despesasAprovadas
+        .filter((d) => {
+          const dt = new Date(d.data_despesa + "T12:00:00");
+          return dt.getMonth() === i && dt.getFullYear() === anoAtual;
+        })
+        .reduce((s, d) => s + Number(d.valor), 0),
+    }));
+  }, [despesasAprovadas]);
 
   // Por tipo
   const byTipo = tiposDespesa.map((t) => ({
@@ -112,7 +126,9 @@ export default function RelatoriosPageSupabase() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-foreground">Relatórios</h1>
-          <p className="text-sm text-muted-foreground">Análise de despesas aprovadas</p>
+          <p className="text-sm text-muted-foreground">
+            {isTecnico ? "Suas despesas aprovadas no período" : "Análise de despesas aprovadas"}
+          </p>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-3">
           {/* Modo filtro */}
@@ -193,7 +209,7 @@ export default function RelatoriosPageSupabase() {
             <DollarSign className="w-5 h-5" />
           </div>
           <p className="text-2xl font-bold text-foreground">{formatCurrency(totalAno)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Total do Ano</p>
+          <p className="text-xs text-muted-foreground mt-1">Total do Período</p>
         </div>
         <div className="bg-white rounded-xl border border-border shadow-sm p-4">
           <div className="w-9 h-9 rounded-lg bg-accent/10 text-accent flex items-center justify-center mb-3">
@@ -209,18 +225,23 @@ export default function RelatoriosPageSupabase() {
           <p className="text-2xl font-bold text-foreground">{formatCurrency(ticketMedio)}</p>
           <p className="text-xs text-muted-foreground mt-1">Ticket Médio</p>
         </div>
-        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
-          <div className="w-9 h-9 rounded-lg bg-warning/10 text-warning flex items-center justify-center mb-3">
-            <Users className="w-5 h-5" />
+        {!isTecnico && (
+          <div className="bg-white rounded-xl border border-border shadow-sm p-4">
+            <div className="w-9 h-9 rounded-lg bg-warning/10 text-warning flex items-center justify-center mb-3">
+              <Users className="w-5 h-5" />
+            </div>
+            <p className="text-2xl font-bold text-foreground">{tecnicosAtivos}</p>
+            <p className="text-xs text-muted-foreground mt-1">Técnicos Ativos</p>
           </div>
-          <p className="text-2xl font-bold text-foreground">{tecnicosAtivos}</p>
-          <p className="text-xs text-muted-foreground mt-1">Técnicos Ativos</p>
-        </div>
+        )}
       </div>
 
       {/* Gráfico evolução mensal */}
       <div className="bg-white rounded-xl border border-border shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-foreground mb-4">Evolução Mensal</h2>
+        <h2 className="text-sm font-semibold text-foreground mb-4">
+          Evolução Mensal — {now.getFullYear()}
+          <span className="ml-2 text-xs font-normal text-muted-foreground">(todos os meses, independente do filtro)</span>
+        </h2>
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={byMes}>
             <XAxis dataKey="mes" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -255,8 +276,8 @@ export default function RelatoriosPageSupabase() {
           </div>
         )}
 
-        {/* Por técnico */}
-        {byTecnico.length > 0 && (
+        {/* Top Técnicos — apenas para gestor/admin */}
+        {!isTecnico && byTecnico.length > 0 && (
           <div className="bg-white rounded-xl border border-border shadow-sm p-5">
             <h2 className="text-sm font-semibold text-foreground mb-4">Top Técnicos</h2>
             <ResponsiveContainer width="100%" height={220}>

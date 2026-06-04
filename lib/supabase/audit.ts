@@ -32,9 +32,8 @@ export async function registrarAuditoria({
     acao,
     entidade,
     entidade_id: entidadeId,
-    usuario_id: usuarioId,
+    user_id: usuarioId,
     detalhes: detalhes || null,
-    data: new Date().toISOString(),
   });
 
   if (error) {

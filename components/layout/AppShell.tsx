@@ -8,6 +8,7 @@ import Header from "./Header";
 import Dashboard from "@/components/dashboard/Dashboard";
 import NovaDespesaPage from "@/components/despesas/NovaDespesaPage";
 import MinhasDespesasPage from "@/components/despesas/MinhasDespesasPage";
+import TodasDespesasPage from "@/components/despesas/TodasDespesasPage";
 import AprovacaoPage from "@/components/aprovacao/AprovacaoPage";
 import FinanceiroPage from "@/components/financeiro/FinanceiroPage";
 import RelatoriosPage from "@/components/relatorios/RelatoriosPage";
@@ -22,6 +23,7 @@ export type PageKey =
   | "dashboard"
   | "nova-despesa"
   | "minhas-despesas"
+  | "todas-despesas"
   | "aprovacao"
   | "financeiro"
   | "integracoes-erp"
@@ -69,6 +71,7 @@ export default function AppShell() {
           onEditar={handleEditDespesa}
         />
       );
+      case "todas-despesas": return <TodasDespesasPage />;
       case "aprovacao": return <AprovacaoPage />;
       case "financeiro": return <FinanceiroPage />;
       case "integracoes-erp": return <IntegracoesERPPage />;

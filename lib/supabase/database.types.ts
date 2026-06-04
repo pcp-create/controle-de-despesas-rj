@@ -53,6 +53,8 @@ export interface Database {
           nome: string
           descricao: string | null
           limite_maximo: number | null
+          limite_ocorrencias_diarias: number | null
+          calcula_diarias: boolean
           exige_comprovante: boolean
           documento_padrao: string | null
           ativo: boolean
@@ -64,6 +66,8 @@ export interface Database {
           nome: string
           descricao?: string | null
           limite_maximo?: number | null
+          limite_ocorrencias_diarias?: number | null
+          calcula_diarias?: boolean
           exige_comprovante?: boolean
           documento_padrao?: string | null
           ativo?: boolean
@@ -75,6 +79,8 @@ export interface Database {
           nome?: string
           descricao?: string | null
           limite_maximo?: number | null
+          limite_ocorrencias_diarias?: number | null
+          calcula_diarias?: boolean
           exige_comprovante?: boolean
           documento_padrao?: string | null
           ativo?: boolean
@@ -134,6 +140,9 @@ export interface Database {
           comprovante_nome: string | null
           comprovante_url: string | null
           data_despesa: string
+          data_checkin: string | null
+          data_checkout: string | null
+          numero_diarias: number | null
           status_aprovacao: 'AguardandoGestor' | 'AprovadoGestor' | 'Reprovado'
           status_erp: 'Rascunho' | 'EnviadoAguardandoGestor' | 'AprovadoGestorERPAtualizado' | 'ErroEnvioERP' | 'ErroAtualizarERP'
           gestor_aprovador_id: string | null
@@ -159,6 +168,9 @@ export interface Database {
           comprovante_nome?: string | null
           comprovante_url?: string | null
           data_despesa: string
+          data_checkin?: string | null
+          data_checkout?: string | null
+          numero_diarias?: number | null
           status_aprovacao?: 'AguardandoGestor' | 'AprovadoGestor' | 'Reprovado'
           status_erp?: 'Rascunho' | 'EnviadoAguardandoGestor' | 'AprovadoGestorERPAtualizado' | 'ErroEnvioERP' | 'ErroAtualizarERP'
           gestor_aprovador_id?: string | null
@@ -184,6 +196,9 @@ export interface Database {
           comprovante_nome?: string | null
           comprovante_url?: string | null
           data_despesa?: string
+          data_checkin?: string | null
+          data_checkout?: string | null
+          numero_diarias?: number | null
           status_aprovacao?: 'AguardandoGestor' | 'AprovadoGestor' | 'Reprovado'
           status_erp?: 'Rascunho' | 'EnviadoAguardandoGestor' | 'AprovadoGestorERPAtualizado' | 'ErroEnvioERP' | 'ErroAtualizarERP'
           gestor_aprovador_id?: string | null

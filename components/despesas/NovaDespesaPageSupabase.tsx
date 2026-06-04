@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
-import { useDespesas, useTiposDespesa, type Despesa } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useCartoes, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
-import { ArrowLeft, Upload, X, Info, Save, Loader2 } from "lucide-react";
+import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { formatCurrency } from "@/lib/helpers";
 
 interface Props {
   onBack: () => void;
@@ -12,8 +13,9 @@ interface Props {
 }
 
 export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) {
-  const { currentUser, cartoes } = useAppStore();
+  const { currentUser } = useAppStore();
   const { tiposDespesa } = useTiposDespesa();
+  const { cartoes } = useCartoes(currentUser?.id);
   const { addDespesa, updateDespesa } = useDespesas(currentUser?.id);
 
   const [form, setForm] = useState({
@@ -25,8 +27,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     documento: editDespesa?.documento || "",
     observacao: editDespesa?.observacao || "",
     dataDespesa: editDespesa?.data_despesa || new Date().toISOString().slice(0, 10),
+    // Campos de hospedagem
+    dataCheckin:  editDespesa?.data_checkin  || "",
+    dataCheckout: editDespesa?.data_checkout || "",
   });
-  
+
   const [comprovante, setComprovante] = useState<{ nome: string; url: string; path?: string } | null>(
     editDespesa?.comprovante_nome ? { nome: editDespesa.comprovante_nome, url: editDespesa.comprovante_url || "" } : null
   );
@@ -36,6 +41,35 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   const [uploading, setUploading] = useState(false);
 
   const tipoSelecionado = tiposDespesa.find((t) => t.id === form.tipoDespesaId);
+  const calculaDiarias = (tipoSelecionado as any)?.calculaDiarias === true || tipoSelecionado?.calcula_diarias === true;
+
+  // Calcula número de diárias em tempo real
+  const numeroDiarias = useMemo(() => {
+    if (!calculaDiarias || !form.dataCheckin || !form.dataCheckout) return null;
+    const checkin  = new Date(form.dataCheckin);
+    const checkout = new Date(form.dataCheckout);
+    const diff = Math.floor((checkout.getTime() - checkin.getTime()) / (1000 * 60 * 60 * 24));
+    return diff > 0 ? diff : null;
+  }, [calculaDiarias, form.dataCheckin, form.dataCheckout]);
+
+  // Valor por diária
+  const valorPorDiaria = useMemo(() => {
+    if (!numeroDiarias || !form.valor || isNaN(Number(form.valor))) return null;
+    return Number(form.valor) / numeroDiarias;
+  }, [numeroDiarias, form.valor]);
+
+  // Status do valor em relação ao limite
+  const statusLimite = useMemo(() => {
+    const limite = tipoSelecionado?.limite_maximo;
+    if (!limite) return null;
+    if (calculaDiarias) {
+      if (!valorPorDiaria) return null;
+      return valorPorDiaria <= limite ? "ok" : "excede";
+    }
+    const valor = Number(form.valor);
+    if (!valor) return null;
+    return valor <= limite ? "ok" : "excede";
+  }, [tipoSelecionado, calculaDiarias, valorPorDiaria, form.valor]);
 
   const validate = () => {
     const errs: Record<string, string> = {};
@@ -44,9 +78,15 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     if (!form.numeroOS.trim()) errs.numeroOS = "Informe o número da OS";
     if (!form.valor || isNaN(Number(form.valor)) || Number(form.valor) <= 0) errs.valor = "Valor inválido";
     if (!form.dataDespesa) errs.dataDespesa = "Informe a data";
-    
     if (tipoSelecionado?.exige_comprovante && !comprovante) {
       errs.comprovante = "Este tipo de despesa exige comprovante";
+    }
+    if (calculaDiarias) {
+      if (!form.dataCheckin) errs.dataCheckin = "Informe o check-in";
+      if (!form.dataCheckout) errs.dataCheckout = "Informe o check-out";
+      if (form.dataCheckin && form.dataCheckout && !numeroDiarias) {
+        errs.dataCheckout = "Check-out deve ser posterior ao check-in";
+      }
     }
     return errs;
   };
@@ -62,11 +102,6 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     setLoading(true);
     setErrors({});
 
-    // Verificar se o valor excede o limite
-    const excedeLimite = tipoSelecionado?.limite_maximo !== null && 
-                         tipoSelecionado?.limite_maximo !== undefined && 
-                         Number(form.valor) > tipoSelecionado.limite_maximo;
-
     const despesaData = {
       tipo_despesa_id: form.tipoDespesaId,
       cartao_id: form.cartaoId || null,
@@ -76,12 +111,15 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       documento: form.documento || null,
       observacao: form.observacao || null,
       data_despesa: form.dataDespesa,
+      data_checkin:  calculaDiarias && form.dataCheckin  ? form.dataCheckin  : null,
+      data_checkout: calculaDiarias && form.dataCheckout ? form.dataCheckout : null,
+      numero_diarias: numeroDiarias ?? null,
       comprovante_nome: comprovante?.nome || null,
       comprovante_url: comprovante?.url || null,
       status_aprovacao: "AguardandoGestor" as const,
       status_erp: "Rascunho" as const,
       gestor_aprovador_id: null,
-      justificativa_reprovacao: excedeLimite ? `Valor (R$ ${Number(form.valor).toFixed(2)}) excede o limite de R$ ${tipoSelecionado?.limite_maximo?.toFixed(2)}` : null,
+      justificativa_reprovacao: null,
       data_envio: null,
       data_aprovacao: null,
       erp_id: null,
@@ -99,13 +137,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     if (result.error) {
       setFeedback({ type: "error", msg: result.error });
     } else {
-      const mensagem = excedeLimite 
-        ? "Despesa salva! Valor excede o limite e será enviado para aprovação de gestor."
-        : "Despesa salva! Redirecionando...";
-      setFeedback({ type: "success", msg: mensagem });
+      setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
       setTimeout(() => onBack(), 1500);
     }
-    
+
     setLoading(false);
   };
 
@@ -113,31 +148,25 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     const file = e.target.files?.[0];
     if (!file || !currentUser?.id) return;
 
-    // Validar tamanho (5MB)
     if (file.size > 5 * 1024 * 1024) {
       setErrors({ ...errors, comprovante: "Arquivo deve ter no máximo 5MB" });
       return;
     }
 
-    // Validar tipo
     const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
     if (!allowedTypes.includes(file.type)) {
-      setErrors({ ...errors, comprovante: "Tipo de arquivo não permitido. Use JPG, PNG, GIF, WebP ou PDF." });
+      setErrors({ ...errors, comprovante: "Use JPG, PNG, GIF, WebP ou PDF." });
       return;
     }
 
     setUploading(true);
     setErrors({ ...errors, comprovante: "" });
-
     const result = await uploadComprovante(currentUser.id, file);
-
     if ("error" in result) {
       setErrors({ ...errors, comprovante: result.error });
-      setUploading(false);
-      return;
+    } else {
+      setComprovante({ nome: result.nome, url: result.url, path: result.path });
     }
-
-    setComprovante({ nome: result.nome, url: result.url, path: result.path });
     setUploading(false);
   };
 
@@ -145,26 +174,21 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     <div className="max-w-2xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button
-          onClick={onBack}
-          className="p-2 rounded-lg hover:bg-muted transition text-muted-foreground"
-        >
+        <button onClick={onBack} className="p-2 rounded-lg hover:bg-muted transition text-muted-foreground">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
           <h1 className="text-xl font-bold text-foreground">
             {editDespesa ? "Editar Despesa" : "Nova Despesa"}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            Preencha os dados do lançamento
-          </p>
+          <p className="text-sm text-muted-foreground">Preencha os dados do lançamento</p>
         </div>
       </div>
 
       {/* Feedback */}
       {feedback && (
         <div className={`mb-4 rounded-lg px-4 py-3 text-sm ${
-          feedback.type === "success" 
+          feedback.type === "success"
             ? "bg-success/10 border border-success/20 text-success"
             : "bg-destructive/10 border border-destructive/20 text-destructive"
         }`}>
@@ -172,15 +196,15 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         </div>
       )}
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-border shadow-sm p-5 flex flex-col gap-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
           {/* Tipo */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-foreground">Tipo de Despesa *</label>
             <select
               value={form.tipoDespesaId}
-              onChange={(e) => setForm({ ...form, tipoDespesaId: e.target.value })}
+              onChange={(e) => setForm({ ...form, tipoDespesaId: e.target.value, dataCheckin: "", dataCheckout: "" })}
               className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Selecione...</option>
@@ -200,13 +224,12 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Nenhum</option>
-              {cartoes.map((c) => {
-                const digitos = c.ultimos_digitos || c.ultimosDigitos || "****";
-                const apelido = c.apelido || c.apelido_cartao || "";
+              {cartoes.filter((c) => c.ativo).map((c) => {
+                const label = c.apelido
+                  ? `${c.apelido} — ${c.banco} ${c.bandeira} *${c.ultimos_digitos}`
+                  : `${c.banco} ${c.bandeira} *${c.ultimos_digitos}`;
                 return (
-                  <option key={c.id} value={c.id}>
-                    {apelido ? `${apelido} - ${c.banco} ${c.bandeira} *${digitos}` : `${c.banco} ${c.bandeira} *${digitos}`}
-                  </option>
+                  <option key={c.id} value={c.id}>{label}</option>
                 );
               })}
             </select>
@@ -238,15 +261,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             {errors.numeroOS && <span className="text-xs text-destructive">{errors.numeroOS}</span>}
           </div>
 
-          {/* Valor */}
+          {/* Valor total */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-foreground">
-              Valor (R$) *
-              {tipoSelecionado?.limite_maximo && (
-                <span className="ml-2 text-xs text-muted-foreground">
-                  Limite: R$ {tipoSelecionado.limite_maximo.toFixed(2)}
-                </span>
-              )}
+              {calculaDiarias ? "Valor total da nota (R$) *" : "Valor (R$) *"}
             </label>
             <input
               type="number"
@@ -259,7 +277,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             {errors.valor && <span className="text-xs text-destructive">{errors.valor}</span>}
           </div>
 
-          {/* Data */}
+          {/* Data da despesa — sempre visível, seja hospedagem ou não */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-foreground">Data da Despesa *</label>
             <input
@@ -272,14 +290,93 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           </div>
         </div>
 
+        {/* -------- Bloco de Hospedagem -------- */}
+        {calculaDiarias && (
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 flex flex-col gap-4">
+            <div className="flex items-center gap-2 text-primary">
+              <BedDouble className="w-5 h-5 shrink-0" />
+              <span className="font-semibold text-sm">Período de Hospedagem</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Check-in */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Check-in *</label>
+                <input
+                  type="date"
+                  value={form.dataCheckin}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setForm((f) => ({ ...f, dataCheckin: v }));
+                  }}
+                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                {errors.dataCheckin && <span className="text-xs text-destructive">{errors.dataCheckin}</span>}
+              </div>
+
+              {/* Check-out */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Check-out *</label>
+                <input
+                  type="date"
+                  value={form.dataCheckout}
+                  min={form.dataCheckin || undefined}
+                  onChange={(e) => setForm((f) => ({ ...f, dataCheckout: e.target.value }))}
+                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                {errors.dataCheckout && <span className="text-xs text-destructive">{errors.dataCheckout}</span>}
+              </div>
+            </div>
+
+            {/* Resumo diárias */}
+            {numeroDiarias && (
+              <div className="flex flex-col gap-2">
+                {/* Linha de resumo */}
+                <div className="flex items-center justify-between flex-wrap gap-3 p-3 rounded-lg bg-white border border-border text-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <CalendarRange className="w-4 h-4" />
+                    <span>
+                      <strong className="text-foreground">{numeroDiarias}</strong> diária{numeroDiarias > 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  {valorPorDiaria !== null && (
+                    <div className="text-muted-foreground">
+                      <strong className="text-foreground">{formatCurrency(valorPorDiaria)}</strong> / diária
+                    </div>
+                  )}
+                </div>
+
+                {/* Indicador de limite */}
+                {tipoSelecionado?.limite_maximo && valorPorDiaria !== null && (
+                  <div className={`flex items-start gap-2 p-3 rounded-lg text-sm ${
+                    statusLimite === "ok"
+                      ? "bg-success/10 border border-success/20 text-success"
+                      : "bg-destructive/10 border border-destructive/20 text-destructive"
+                  }`}>
+                    {statusLimite === "ok" ? (
+                      <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                    )}
+                    <span>
+                      {statusLimite === "ok"
+                        ? `Valor por diária (${formatCurrency(valorPorDiaria)}) dentro do limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — aprovação automática.`
+                        : `Valor por diária (${formatCurrency(valorPorDiaria)}) excede o limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — será enviado para aprovação do gestor.`
+                      }
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Documento */}
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-foreground">
             Documento
             {tipoSelecionado?.documento_padrao && (
-              <span className="ml-2 text-xs text-muted-foreground">
-                Sugestão: {tipoSelecionado.documento_padrao}
-              </span>
+              <span className="ml-2 text-xs text-muted-foreground">Sugestão: {tipoSelecionado.documento_padrao}</span>
             )}
           </label>
           <input
@@ -307,31 +404,19 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-foreground">
             Comprovante
-            {tipoSelecionado?.exige_comprovante && (
-              <span className="text-destructive ml-1">*</span>
-            )}
+            {tipoSelecionado?.exige_comprovante && <span className="text-destructive ml-1">*</span>}
           </label>
-          
           {comprovante ? (
             <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">{comprovante.nome}</p>
                 {comprovante.url && (
-                  <a 
-                    href={comprovante.url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-xs text-accent hover:underline"
-                  >
+                  <a href={comprovante.url} target="_blank" rel="noopener noreferrer" className="text-xs text-accent hover:underline">
                     Visualizar arquivo
                   </a>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => setComprovante(null)}
-                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"
-              >
+              <button type="button" onClick={() => setComprovante(null)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -344,28 +429,33 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             <label className="flex flex-col items-center justify-center gap-2 p-6 rounded-lg border-2 border-dashed border-border hover:border-accent/50 hover:bg-accent/5 cursor-pointer transition">
               <Upload className="w-8 h-8 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">Clique para anexar comprovante</span>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                onChange={handleFileChange}
-                className="hidden"
-              />
+              <input type="file" accept="image/*,.pdf" onChange={handleFileChange} className="hidden" />
             </label>
           )}
           {errors.comprovante && <span className="text-xs text-destructive">{errors.comprovante}</span>}
         </div>
 
         {/* Info tipo */}
-        {tipoSelecionado && (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-accent/5 border border-accent/20">
-            <Info className="w-4 h-4 text-accent mt-0.5 shrink-0" />
-            <div className="text-xs text-muted-foreground">
-              <strong className="text-foreground">{tipoSelecionado.nome}</strong>
-              {tipoSelecionado.descricao && <span> — {tipoSelecionado.descricao}</span>}
-              {tipoSelecionado.limite_maximo && (
-                <span className="block mt-1">Limite máximo: R$ {tipoSelecionado.limite_maximo.toFixed(2)}</span>
-              )}
-            </div>
+        {tipoSelecionado && !calculaDiarias && tipoSelecionado.limite_maximo && (
+          <div className={`flex items-start gap-2 p-3 rounded-lg text-xs border ${
+            statusLimite === "ok"
+              ? "bg-success/5 border-success/20 text-success"
+              : statusLimite === "excede"
+              ? "bg-destructive/5 border-destructive/20 text-destructive"
+              : "bg-accent/5 border-accent/20 text-muted-foreground"
+          }`}>
+            {statusLimite === "ok" ? (
+              <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-success" />
+            ) : statusLimite === "excede" ? (
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            ) : (
+              <Info className="w-4 h-4 mt-0.5 shrink-0 text-accent" />
+            )}
+            <span>
+              {statusLimite === "ok" && `Valor dentro do limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — aprovação automática.`}
+              {statusLimite === "excede" && `Valor excede o limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — será enviado para aprovação do gestor.`}
+              {!statusLimite && <>Limite máximo: {formatCurrency(tipoSelecionado.limite_maximo)}</>}
+            </span>
           </div>
         )}
 

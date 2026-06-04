@@ -3,6 +3,7 @@
 import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
 import { registrarAuditoria } from "@/lib/supabase/audit";
+import { useAuth } from "@/lib/supabase/auth-context";
 
 // Helper to get supabase client - MUST be called inside functions, not at module level
 const getSupabase = () => createClient();
@@ -13,6 +14,8 @@ export interface TipoDespesa {
   nome: string;
   descricao: string | null;
   limite_maximo: number | null;
+  limite_ocorrencias_diarias: number | null;
+  calcula_diarias: boolean;
   exige_comprovante: boolean;
   documento_padrao: string | null;
   ativo: boolean;
@@ -42,6 +45,9 @@ export interface Despesa {
   comprovante_nome: string | null;
   comprovante_url: string | null;
   data_despesa: string;
+  data_checkin: string | null;
+  data_checkout: string | null;
+  numero_diarias: number | null;
   status_aprovacao: "AguardandoGestor" | "AprovadoGestor" | "Reprovado";
   status_erp: "Rascunho" | "EnviadoAguardandoGestor" | "AprovadoGestorERPAtualizado" | "ErroEnvioERP" | "ErroAtualizarERP";
   gestor_aprovador_id: string | null;
@@ -157,22 +163,23 @@ export function useTiposDespesa() {
   };
 }
 
-export function useCartoes() {
+export function useCartoes(userId?: string) {
   const { profile } = useAuth();
+  const effectiveId = userId || profile?.id;
   const { data, error, isLoading, mutate } = useSWR(
-    profile ? `cartoes-${profile.id}` : null,
-    () => fetchCartoes(profile!.id),
+    effectiveId ? `cartoes-${effectiveId}` : null,
+    () => fetchCartoes(effectiveId!),
     { revalidateOnFocus: false }
   );
 
   const addCartao = async (cartao: Omit<Cartao, "id" | "user_id" | "ativo">) => {
     const supabase = getSupabase();
-    if (!profile) return { error: "Não autenticado" };
+    if (!effectiveId) return { error: "Não autenticado" };
     if (!supabase) return { error: "Supabase não disponível" };
 
     const { data, error } = await supabase
       .from("cartoes")
-      .insert({ ...cartao, user_id: profile.id })
+      .insert({ ...cartao, user_id: effectiveId })
       .select()
       .single();
 
@@ -221,6 +228,7 @@ export function useCartoes() {
 }
 
 export function useDespesas(userId?: string, perfil?: string) {
+  const { profile } = useAuth();
   const { data, error, isLoading, mutate } = useSWR(
     `despesas_${userId || "all"}_${perfil || ""}`,
     userId ? () => fetchDespesas(userId, perfil || "tecnico") : () => fetchDespesas("", perfil || "gestor"),
@@ -307,25 +315,89 @@ export function useDespesas(userId?: string, perfil?: string) {
   const enviarDespesa = async (id: string) => {
     const supabase = getSupabase();
     if (!supabase) return { ok: false, msg: "Supabase não disponível" };
-    
-    // Simulação de envio ao ERP
+
+    // Buscar despesa + tipo para verificar limites
+    const { data: despesaData } = await supabase
+      .from("despesas")
+      .select("*, tipo_despesa:tipos_despesa(*)")
+      .eq("id", id)
+      .single();
+
+    const tipoDespesa = despesaData?.tipo_despesa as TipoDespesa | null;
+    const valor = Number(despesaData?.valor ?? 0);
+    const limite = tipoDespesa?.limite_maximo;
+
+    // --- Lógica de diárias (ex: Hotel) ---
+    // Se o tipo calcula por diária, compara (valor / diárias) com o limite
+    let valorParaComparacao = valor;
+    if (tipoDespesa?.calcula_diarias && despesaData?.numero_diarias && despesaData.numero_diarias > 0) {
+      valorParaComparacao = valor / despesaData.numero_diarias;
+    }
+
+    const dentroDoValorLimite = limite !== null && limite !== undefined && valorParaComparacao <= limite;
+
+    // Verificar limite de ocorrências diárias
+    let dentroDoLimiteDiario = true;
+    if (dentroDoValorLimite && tipoDespesa?.limite_ocorrencias_diarias) {
+      const dataDespesa = despesaData?.data_despesa as string;
+      const inicioDia = dataDespesa.split("T")[0] + "T00:00:00.000Z";
+      const fimDia    = dataDespesa.split("T")[0] + "T23:59:59.999Z";
+
+      const { count } = await supabase
+        .from("despesas")
+        .select("id", { count: "exact", head: true })
+        .eq("tecnico_id", despesaData?.tecnico_id)
+        .eq("tipo_despesa_id", despesaData?.tipo_despesa_id)
+        .eq("status_aprovacao", "AprovadoGestor")
+        .gte("data_despesa", inicioDia)
+        .lte("data_despesa", fimDia)
+        .neq("id", id);
+
+      const ocorrenciasHoje = count ?? 0;
+      dentroDoLimiteDiario = ocorrenciasHoje < tipoDespesa.limite_ocorrencias_diarias;
+    }
+
+    const aprovacaoAutomatica = dentroDoValorLimite && dentroDoLimiteDiario;
+
     const erpPayload = { despesa_id: id, timestamp: new Date().toISOString() };
     const erpResposta = { success: true, erp_id: `ERP-${Date.now()}`, message: "Enviado com sucesso" };
+    const now = new Date().toISOString();
+
+    const updateData: Record<string, unknown> = {
+      status_erp: aprovacaoAutomatica ? "AprovadoGestorERPAtualizado" : "EnviadoAguardandoGestor",
+      status_aprovacao: aprovacaoAutomatica ? "AprovadoGestor" : "AguardandoGestor",
+      erp_id: erpResposta.erp_id,
+      erp_payload: erpPayload,
+      erp_resposta: erpResposta,
+      data_envio: now,
+      updated_at: now,
+    };
+
+    if (aprovacaoAutomatica) {
+      updateData.data_aprovacao = now;
+      updateData.gestor_aprovador_id = null;
+    }
 
     const { error } = await supabase
       .from("despesas")
-      .update({
-        status_erp: "EnviadoAguardandoGestor",
-        erp_id: erpResposta.erp_id,
-        erp_payload: erpPayload,
-        erp_resposta: erpResposta,
-        data_envio: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq("id", id);
 
     if (error) return { ok: false, msg: error.message };
     mutate();
+
+    if (aprovacaoAutomatica) {
+      if (tipoDespesa?.calcula_diarias && despesaData?.numero_diarias) {
+        return { ok: true, msg: `Despesa aprovada automaticamente — ${despesaData.numero_diarias} diária(s) dentro do limite!` };
+      }
+      return { ok: true, msg: "Despesa enviada e aprovada automaticamente (dentro do limite)!" };
+    }
+    if (dentroDoValorLimite && !dentroDoLimiteDiario) {
+      return { ok: true, msg: "Despesa enviada para aprovação — limite diário de ocorrências atingido." };
+    }
+    if (tipoDespesa?.calcula_diarias && !dentroDoValorLimite) {
+      return { ok: true, msg: "Despesa enviada para aprovação — valor por diária acima do limite." };
+    }
     return { ok: true, msg: "Despesa enviada com sucesso!" };
   };
 
