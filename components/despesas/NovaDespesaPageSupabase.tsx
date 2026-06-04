@@ -196,7 +196,9 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             >
               <option value="">Nenhum</option>
               {cartoes.map((c) => (
-                <option key={c.id} value={c.id}>{c.apelido || `${c.bandeira} *${c.ultimos_digitos}`}</option>
+                <option key={c.id} value={c.id}>
+                  {c.apelido ? `${c.apelido} - ${c.banco} ${c.bandeira} *${c.ultimos_digitos}` : `${c.banco} ${c.bandeira} *${c.ultimos_digitos}`}
+                </option>
               ))}
             </select>
           </div>
