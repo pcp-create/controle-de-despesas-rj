@@ -153,16 +153,6 @@ export default function SimpleLogin() {
               )}
             </button>
           </form>
-
-          {/* Info */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-xs text-blue-800">
-              <strong>Usuários de teste:</strong> admin, carlos, marcos, gestor, financeiro
-            </p>
-            <p className="text-xs text-blue-800 mt-1">
-              <strong>Senha padrão:</strong> 12345
-            </p>
-          </div>
         </div>
 
         {/* Footer */}
