@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useAppStore } from "@/lib/store";
-import { Eye, EyeOff, Lock, User } from "lucide-react";
+import { useAuth } from "@/lib/supabase/auth-context";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 
 export default function LoginPage() {
-  const login = useAppStore((s) => s.login);
-  const [usuario, setUsuario] = useState("");
+  const { signIn } = useAuth();
+  const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [showSenha, setShowSenha] = useState(false);
   const [lembrar, setLembrar] = useState(false);
@@ -17,9 +17,17 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 400));
-    const result = login(usuario, senha);
-    if (!result.ok) setError(result.msg);
+    
+    const result = await signIn(email, senha);
+    
+    if (result.error) {
+      if (result.error.includes("Invalid login")) {
+        setError("Email ou senha incorretos");
+      } else {
+        setError(result.error);
+      }
+    }
+    
     setLoading(false);
   };
 
@@ -46,22 +54,22 @@ export default function LoginPage() {
           <h2 className="text-lg font-semibold text-foreground mb-6">Entrar na sua conta</h2>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {/* Usuário */}
+            {/* Email */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-foreground" htmlFor="usuario">
-                Usuário
+              <label className="text-sm font-medium text-foreground" htmlFor="email">
+                Email
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
-                  id="usuario"
-                  type="text"
-                  value={usuario}
-                  onChange={(e) => setUsuario(e.target.value)}
-                  placeholder="Digite seu usuário"
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Digite seu email"
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring transition"
                   required
-                  autoComplete="username"
+                  autoComplete="email"
                 />
               </div>
             </div>
@@ -103,7 +111,7 @@ export default function LoginPage() {
                   onChange={(e) => setLembrar(e.target.checked)}
                   className="w-4 h-4 rounded accent-primary"
                 />
-                <span className="text-sm text-muted-foreground">Lembrar usuário</span>
+                <span className="text-sm text-muted-foreground">Lembrar email</span>
               </label>
               <button
                 type="button"
