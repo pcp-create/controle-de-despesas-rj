@@ -101,16 +101,17 @@ export default function NovaDespesaPage({ onBack, editDespesa }: Props) {
     if (savedId) {
       // Atualizar despesa existente
       updateDespesa(savedId, data);
-      setFeedback({ type: "success", msg: "Despesa atualizada! Você pode continuar editando ou enviar." });
+      setFeedback({ type: "success", msg: "Despesa salva! Redirecionando para Despesas..." });
     } else {
       // Criar nova despesa como rascunho
       const newId = addDespesa(data);
       setSavedId(newId);
-      setFeedback({ type: "success", msg: "Despesa salva como rascunho! Você pode continuar editando ou enviar." });
+      setFeedback({ type: "success", msg: "Despesa salva! Redirecionando para Despesas..." });
     }
 
     setErrors({});
-    setTimeout(() => setFeedback(null), 4000);
+    // Redirecionar para Minhas Despesas após 1.5s
+    setTimeout(() => onBack(), 1500);
   };
 
   const fieldClass = (key: string) =>
@@ -301,7 +302,7 @@ export default function NovaDespesaPage({ onBack, editDespesa }: Props) {
           <button type="submit"
             className="flex-1 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent/90 transition flex items-center justify-center gap-2">
             <Save className="w-4 h-4" />
-            Salvar Rascunho
+            Salvar Despesa
           </button>
         </div>
       </form>
