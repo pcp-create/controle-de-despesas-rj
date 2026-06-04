@@ -45,7 +45,12 @@ export default function RelatoriosPageSupabase() {
 
   const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
 
-  // Despesas aprovadas (filtradas por modo)
+  // Todas as despesas aprovadas — sem filtro de período (usado no gráfico de evolução)
+  const despesasAprovadas = useMemo(() => {
+    return despesas.filter((d) => d.status_aprovacao === "AprovadoGestor");
+  }, [despesas]);
+
+  // Despesas aprovadas filtradas pelo período selecionado (métricas, por tipo, top técnicos)
   const despesasAno = useMemo(() => {
     return despesas.filter((d) => {
       if (d.status_aprovacao !== "AprovadoGestor") return false;
@@ -68,14 +73,19 @@ export default function RelatoriosPageSupabase() {
   const ticketMedio = totalLancamentos > 0 ? totalAno / totalLancamentos : 0;
   const tecnicosAtivos = new Set(despesasAno.map((d) => d.tecnico_id)).size;
 
-  // Por mês (sempre mostra os 12 meses para visibilidade)
-  const byMes = MESES.map((m, i) => ({
-    mes: m,
-    valor: despesasAno
-      .filter((d) => new Date(d.data_despesa).getMonth() === i)
-      .reduce((s, d) => s + Number(d.valor), 0),
-    qtd: despesasAno.filter((d) => new Date(d.data_despesa).getMonth() === i).length,
-  }));
+  // Por mês — usa todas as despesas aprovadas, sem filtro de período
+  const byMes = useMemo(() => {
+    const anoAtual = now.getFullYear();
+    return MESES.map((m, i) => ({
+      mes: m,
+      valor: despesasAprovadas
+        .filter((d) => {
+          const dt = new Date(d.data_despesa + "T12:00:00");
+          return dt.getMonth() === i && dt.getFullYear() === anoAtual;
+        })
+        .reduce((s, d) => s + Number(d.valor), 0),
+    }));
+  }, [despesasAprovadas]);
 
   // Por tipo
   const byTipo = tiposDespesa.map((t) => ({
@@ -228,7 +238,10 @@ export default function RelatoriosPageSupabase() {
 
       {/* Gráfico evolução mensal */}
       <div className="bg-white rounded-xl border border-border shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-foreground mb-4">Evolução Mensal</h2>
+        <h2 className="text-sm font-semibold text-foreground mb-4">
+          Evolução Mensal — {now.getFullYear()}
+          <span className="ml-2 text-xs font-normal text-muted-foreground">(todos os meses, independente do filtro)</span>
+        </h2>
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={byMes}>
             <XAxis dataKey="mes" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
