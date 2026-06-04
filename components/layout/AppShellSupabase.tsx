@@ -35,6 +35,8 @@ export type PageKey =
   | "alterar-senha";
 
 export type NavigateFn = (page: PageKey, statusFilter?: string) => void;
+
+export default function AppShellSupabase() {
   const { currentUser } = useAppStore();
   useLoadSupabaseData();
   
