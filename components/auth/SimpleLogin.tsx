@@ -34,7 +34,11 @@ export default function SimpleLogin() {
         .eq("usuario", usuario)
         .single();
 
+      console.log("[v0] Profile data:", profile);
+      console.log("[v0] Profile error:", fetchError);
+
       if (fetchError || !profile) {
+        console.log("[v0] Login failed - user not found or error:", fetchError);
         setError("Usuário ou senha inválidos");
         setLoading(false);
         return;
