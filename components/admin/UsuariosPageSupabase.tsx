@@ -77,6 +77,18 @@ export default function UsuariosPageSupabase() {
   // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState<any | null>(null);
 
+  // Cartões state
+  const [userCartoes, setUserCartoes] = useState<any[]>([]);
+  const [showNovoCartao, setShowNovoCartao] = useState(false);
+  const [novoCartao, setNovoCartao] = useState({
+    banco: "",
+    bandeira: "VISA",
+    ultimosDigitos: "",
+    apelido: "",
+    isPadrao: false,
+  });
+  const [cartoesLoading, setCartoesLoading] = useState(false);
+
   const usuariosFiltrados = users
     .filter((u) => {
       if (filterPerfil !== "todos" && u.perfil !== filterPerfil) return false;
@@ -95,6 +107,7 @@ export default function UsuariosPageSupabase() {
   const handleOpenModal = (user?: any) => {
     if (user) {
       setEditingUser(user);
+      loadUserCartoes(user.id);
       setForm({
         nome: user.nome,
         email: user.email,
@@ -112,6 +125,7 @@ export default function UsuariosPageSupabase() {
       });
     } else {
       setEditingUser(null);
+      setUserCartoes([]);
       setForm(initialForm);
     }
     setFormError("");
@@ -166,6 +180,108 @@ export default function UsuariosPageSupabase() {
     updateUser(user.id, { ...user, senha: novaSenh });
     setFeedback({ type: "success", msg: `Senha de ${user.nome} resetada para: ${novaSenh}` });
     setTimeout(() => setFeedback(null), 5000);
+  };
+
+  const loadUserCartoes = async (userId: string) => {
+    try {
+      setCartoesLoading(true);
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+
+      const { data: cartoes, error } = await supabase
+        .from("cartoes")
+        .select("*")
+        .eq("user_id", userId);
+
+      if (error) {
+        console.error("[v0] Error loading cartoes:", error);
+        return;
+      }
+
+      setUserCartoes(cartoes || []);
+    } catch (err) {
+      console.error("[v0] Failed to load cartoes:", err);
+    } finally {
+      setCartoesLoading(false);
+    }
+  };
+
+  const handleAddCartao = async () => {
+    if (!novoCartao.banco || !novoCartao.ultimosDigitos) {
+      setFeedback({ type: "error", msg: "Banco e últimos dígitos são obrigatórios" });
+      return;
+    }
+
+    if (!editingUser) return;
+
+    try {
+      setCartoesLoading(true);
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+
+      const { data, error } = await supabase
+        .from("cartoes")
+        .insert([
+          {
+            user_id: editingUser.id,
+            banco: novoCartao.banco,
+            bandeira: novoCartao.bandeira,
+            ultimos_digitos: novoCartao.ultimosDigitos,
+            apelido: novoCartao.apelido,
+            is_padrao: novoCartao.isPadrao,
+            ativo: true,
+          },
+        ])
+        .select();
+
+      if (error) {
+        setFeedback({ type: "error", msg: "Erro ao adicionar cartão" });
+        console.error("[v0] Error adding cartao:", error);
+        return;
+      }
+
+      setUserCartoes([...userCartoes, data[0]]);
+      setNovoCartao({
+        banco: "",
+        bandeira: "VISA",
+        ultimosDigitos: "",
+        apelido: "",
+        isPadrao: false,
+      });
+      setShowNovoCartao(false);
+      setFeedback({ type: "success", msg: "Cartão adicionado com sucesso!" });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      setFeedback({ type: "error", msg: "Erro ao adicionar cartão" });
+      console.error("[v0] Failed to add cartao:", err);
+    } finally {
+      setCartoesLoading(false);
+    }
+  };
+
+  const handleDeleteCartao = async (cartaoId: string) => {
+    try {
+      setCartoesLoading(true);
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+
+      const { error } = await supabase.from("cartoes").delete().eq("id", cartaoId);
+
+      if (error) {
+        setFeedback({ type: "error", msg: "Erro ao deletar cartão" });
+        console.error("[v0] Error deleting cartao:", error);
+        return;
+      }
+
+      setUserCartoes(userCartoes.filter((c) => c.id !== cartaoId));
+      setFeedback({ type: "success", msg: "Cartão removido com sucesso!" });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      setFeedback({ type: "error", msg: "Erro ao deletar cartão" });
+      console.error("[v0] Failed to delete cartao:", err);
+    } finally {
+      setCartoesLoading(false);
+    }
   };
 
   const gestores = users.filter((p) => p.perfil === "gestor" || p.perfil === "administrador");
@@ -467,35 +583,147 @@ export default function UsuariosPageSupabase() {
                 <>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-medium text-foreground">Cartões de Crédito</h3>
-                    <button
-                      type="button"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-sm hover:bg-accent/90 transition"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5" />
-                      Adicionar
-                    </button>
+                    {!showNovoCartao && (
+                      <button
+                        type="button"
+                        onClick={() => setShowNovoCartao(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-sm hover:bg-accent/90 transition"
+                        disabled={cartoesLoading}
+                      >
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        Adicionar
+                      </button>
+                    )}
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="bg-muted/50 border border-border rounded-lg p-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <CreditCard className="w-6 h-6 text-accent" />
-                        <div className="flex-1">
-                          <h4 className="font-medium text-foreground">Exemplo - Apelido do Cartão</h4>
-                          <p className="text-xs text-muted-foreground">Banco - Bandeira - **** 1234</p>
+                  {/* Formulário novo cartão */}
+                  {showNovoCartao && (
+                    <div className="bg-muted/30 border border-border rounded-lg p-4 mb-4 space-y-3">
+                      <h4 className="font-medium text-foreground text-sm">Novo Cartão</h4>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-sm font-medium text-foreground">Banco *</label>
+                          <input
+                            type="text"
+                            value={novoCartao.banco}
+                            onChange={(e) => setNovoCartao({ ...novoCartao, banco: e.target.value })}
+                            placeholder="Ex: Itaú, Bradesco"
+                            className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                          />
                         </div>
-                        <button type="button" className="p-1.5 rounded-lg hover:bg-muted/60 transition">
-                          <Trash2 className="w-4 h-4 text-destructive" />
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-sm font-medium text-foreground">Bandeira</label>
+                          <select
+                            value={novoCartao.bandeira}
+                            onChange={(e) => setNovoCartao({ ...novoCartao, bandeira: e.target.value })}
+                            className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                          >
+                            <option value="VISA">VISA</option>
+                            <option value="MASTERCARD">Mastercard</option>
+                            <option value="AMEX">American Express</option>
+                            <option value="ELO">Elo</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-sm font-medium text-foreground">Últimos 4 dígitos *</label>
+                          <input
+                            type="text"
+                            value={novoCartao.ultimosDigitos}
+                            onChange={(e) => setNovoCartao({ ...novoCartao, ultimosDigitos: e.target.value.slice(0, 4) })}
+                            placeholder="Ex: 1234"
+                            maxLength={4}
+                            className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-sm font-medium text-foreground">Apelido</label>
+                          <input
+                            type="text"
+                            value={novoCartao.apelido}
+                            onChange={(e) => setNovoCartao({ ...novoCartao, apelido: e.target.value })}
+                            placeholder="Ex: Cartão Principal"
+                            className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                          />
+                        </div>
+                      </div>
+
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={novoCartao.isPadrao}
+                          onChange={(e) => setNovoCartao({ ...novoCartao, isPadrao: e.target.checked })}
+                          className="w-4 h-4 rounded border-input"
+                        />
+                        <span className="text-sm text-foreground">Definir como padrão</span>
+                      </label>
+
+                      <div className="flex gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={handleAddCartao}
+                          disabled={cartoesLoading}
+                          className="flex-1 px-3 py-2 rounded-lg bg-accent text-white text-sm hover:bg-accent/90 disabled:bg-accent/50 transition flex items-center justify-center gap-2"
+                        >
+                          {cartoesLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                          Salvar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowNovoCartao(false)}
+                          className="flex-1 px-3 py-2 rounded-lg border border-input text-sm hover:bg-muted transition"
+                        >
+                          Cancelar
                         </button>
                       </div>
-                      <div className="text-xs text-muted-foreground">Padrão</div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="text-sm text-muted-foreground text-center py-8">
-                    <CreditCard className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
-                    Nenhum cartão cadastrado
-                  </div>
+                  {/* Lista de cartões */}
+                  {userCartoes.length > 0 ? (
+                    <div className="space-y-2">
+                      {userCartoes.map((cartao) => (
+                        <div key={cartao.id} className="bg-muted/50 border border-border rounded-lg p-3 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <CreditCard className="w-6 h-6 text-accent" />
+                            <div>
+                              <h4 className="font-medium text-foreground text-sm">
+                                {cartao.apelido || `${cartao.banco}`}
+                              </h4>
+                              <p className="text-xs text-muted-foreground">
+                                {cartao.banco} - {cartao.bandeira} - **** {cartao.ultimos_digitos}
+                              </p>
+                              {cartao.is_padrao && (
+                                <span className="inline-block mt-1 text-xs bg-accent/20 text-accent px-2 py-0.5 rounded">
+                                  Padrão
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCartao(cartao.id)}
+                            disabled={cartoesLoading}
+                            className="p-1.5 rounded-lg hover:bg-destructive/10 transition disabled:opacity-50"
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    !showNovoCartao && (
+                      <div className="text-sm text-muted-foreground text-center py-8">
+                        <CreditCard className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
+                        <p>Nenhum cartão cadastrado</p>
+                      </div>
+                    )
+                  )}
                 </>
               )}
 
