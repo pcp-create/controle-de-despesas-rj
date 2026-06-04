@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { Download, FileSpreadsheet } from "lucide-react";
 import { formatCurrency, formatDate, erpStatusLabel, approvalStatusLabel } from "@/lib/helpers";
@@ -22,14 +22,20 @@ export default function RelatoriosPage() {
 
   const tecnicos = users.filter((u) => u.perfil === "tecnico");
 
-  const filtered = despesas.filter((d) => {
-    // Normaliza a data da despesa para YYYY-MM-DD para comparação correta
-    // Fallback para dataCriacao se dataDespesa não existir (dados antigos do mock)
-    const dataStr = (d.dataDespesa || d.dataCriacao || "").slice(0, 10);
-    
-    // Usa >= e <= para incluir as datas de inicio e fim no intervalo
-    if (filtros.dataInicial && dataStr < filtros.dataInicial) return false;
-    if (filtros.dataFinal && dataStr > filtros.dataFinal) return false;
+  // Normaliza a data de qualquer formato para YYYY-MM-DD
+  const toDateStr = (d: { dataDespesa?: string; dataCriacao: string }) =>
+    (d.dataDespesa || d.dataCriacao || "").slice(0, 10);
+
+  const filtered = useMemo(() => despesas.filter((d) => {
+    const dataStr = toDateStr(d);
+    if (filtros.dataInicial && filtros.dataFinal) {
+      // Range inclusivo: dataInicial <= dataStr <= dataFinal
+      if (dataStr < filtros.dataInicial || dataStr > filtros.dataFinal) return false;
+    } else if (filtros.dataInicial) {
+      if (dataStr < filtros.dataInicial) return false;
+    } else if (filtros.dataFinal) {
+      if (dataStr > filtros.dataFinal) return false;
+    }
     if (filtros.tecnicoId && d.tecnicoId !== filtros.tecnicoId) return false;
     if (filtros.cliente && !d.cliente.toLowerCase().includes(filtros.cliente.toLowerCase())) return false;
     if (filtros.numeroOS && !d.numeroOS.toLowerCase().includes(filtros.numeroOS.toLowerCase())) return false;
@@ -38,11 +44,7 @@ export default function RelatoriosPage() {
     if (filtros.statusERP && d.statusERP !== filtros.statusERP) return false;
     if (filtros.statusAprovacao && d.statusAprovacao !== filtros.statusAprovacao) return false;
     return true;
-  }).sort((a, b) => {
-    const dataA = (a.dataDespesa || a.dataCriacao || "").slice(0, 10);
-    const dataB = (b.dataDespesa || b.dataCriacao || "").slice(0, 10);
-    return dataB.localeCompare(dataA);
-  });
+  }).sort((a, b) => toDateStr(b).localeCompare(toDateStr(a))), [despesas, filtros]);
 
   const totalValor = filtered.reduce((s, d) => s + d.valor, 0);
 

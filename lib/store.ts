@@ -296,6 +296,18 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: "rj-compressores-store",
+      version: 2,
+      migrate: () => {
+        // Ao mudar a versao, descarta tudo do localStorage e recarrega os dados mock
+        return {
+          currentUser: null,
+          users: mockUsers,
+          cartoes: mockCartoes,
+          tiposDespesa: mockTiposDespesa,
+          despesas: mockDespesas,
+          auditoria: mockAuditoria,
+        };
+      },
       partialize: (state) => ({
         currentUser: state.currentUser,
         users: state.users,
