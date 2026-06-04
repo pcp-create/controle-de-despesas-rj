@@ -180,8 +180,8 @@ export default function UsuariosPageSupabase() {
         updateUser(editingUser.id, form);
         setFeedback({ type: "success", msg: "Usuário atualizado com sucesso!" });
       } else {
-        // Criar novo usuário
-        const novoId = "u" + Date.now();
+        // Criar novo usuário com UUID válido
+        const novoId = crypto.randomUUID();
         const { error } = await supabase
           .from("profiles")
           .insert({
