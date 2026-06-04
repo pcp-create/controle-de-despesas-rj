@@ -34,7 +34,6 @@ interface UsuarioForm {
   perfil: "tecnico" | "gestor" | "financeiro" | "administrador";
   gestor_id: string | null;
   senha?: string;
-  telefone?: string;
   empresaId?: string;
   fornecedorId?: string;
   condicaoPagamentoId?: string;
@@ -50,7 +49,6 @@ const initialForm: UsuarioForm = {
   perfil: "tecnico",
   gestor_id: null,
   senha: "",
-  telefone: "",
   empresaId: "",
   fornecedorId: "",
   condicaoPagamentoId: "",
@@ -115,7 +113,6 @@ export default function UsuariosPageSupabase() {
         perfil: user.perfil,
         gestor_id: user.gestor_id || null,
         senha: "",
-        telefone: user.telefone || "",
         empresaId: user.empresaId || "",
         fornecedorId: user.fornecedorId || "",
         condicaoPagamentoId: user.condicaoPagamentoId || "",
@@ -164,8 +161,7 @@ export default function UsuariosPageSupabase() {
             email: form.email,
             usuario: form.usuario,
             perfil: form.perfil,
-            gestor_id: form.gestor_id,
-            telefone: form.telefone || null,
+            gestor_id: form.gestor_id || null,
             empresa_id: form.empresaId || null,
             fornecedor_id: form.fornecedorId || null,
             condicao_pagamento_id: form.condicaoPagamentoId || null,
@@ -194,8 +190,7 @@ export default function UsuariosPageSupabase() {
             email: form.email,
             usuario: form.usuario,
             perfil: form.perfil,
-            gestor_id: form.gestor_id,
-            telefone: form.telefone || null,
+            gestor_id: form.gestor_id || null,
             empresa_id: form.empresaId || null,
             fornecedor_id: form.fornecedorId || null,
             condicao_pagamento_id: form.condicaoPagamentoId || null,
