@@ -176,37 +176,82 @@ export default function TodasDespesasPage() {
                 </button>
 
                 {isExpanded && (
-                  <div className="px-4 pb-4 border-t border-border pt-4">
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm mb-4">
+                  <div className="px-4 pb-4 border-t border-border pt-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                       <div>
-                        <span className="text-muted-foreground">Técnico:</span>
-                        <span className="ml-2 text-foreground">{tecnico?.nome ?? "-"}</span>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Criado em</p>
+                        <p className="text-foreground">{new Date(d.created_at).toLocaleString("pt-BR")}</p>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">Documento:</span>
-                        <span className="ml-2 text-foreground">{d.documento || "-"}</span>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Técnico</p>
+                        <p className="text-foreground">{tecnico?.nome ?? "-"}</p>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">Comprovante:</span>
-                        <span className="ml-2 text-foreground">{d.comprovante_nome || "Não anexado"}</span>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Documento</p>
+                        <p className="text-foreground">{d.documento || "-"}</p>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">ERP ID:</span>
-                        <span className="ml-2 font-mono text-foreground">{d.erp_id || "-"}</span>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Comprovante</p>
+                        <p className="text-foreground">{d.comprovante_nome || "Não anexado"}</p>
                       </div>
-                      {d.observacao && (
-                        <div className="col-span-2">
-                          <span className="text-muted-foreground">Observação:</span>
-                          <span className="ml-2 text-foreground">{d.observacao}</span>
+                      {d.data_envio && (
+                        <div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Enviado em</p>
+                          <p className="text-foreground">{new Date(d.data_envio).toLocaleString("pt-BR")}</p>
                         </div>
                       )}
-                      {d.status_aprovacao === "Reprovado" && d.justificativa_reprovacao && (
-                        <div className="col-span-2 p-2 rounded-lg bg-destructive/10 text-destructive text-sm">
-                          <span className="font-medium">Motivo da reprovação:</span>
-                          <span className="ml-2">{d.justificativa_reprovacao}</span>
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">ERP ID</p>
+                        <p className="font-mono text-foreground">{d.erp_id || "-"}</p>
+                      </div>
+
+                      {/* Aprovação/Reprovação */}
+                      {d.status_aprovacao === "AprovadoGestor" && d.data_aprovacao && (
+                        <>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Aprovado em</p>
+                            <p className="text-success font-medium">{new Date(d.data_aprovacao).toLocaleString("pt-BR")}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Aprovado por</p>
+                            <p className="text-success font-medium">
+                              {d.gestor_aprovador_id
+                                ? (profiles.find((p) => p.id === d.gestor_aprovador_id)?.nome ?? d.gestor_aprovador_id)
+                                : "Aprovação automática"}
+                            </p>
+                          </div>
+                        </>
+                      )}
+                      {d.status_aprovacao === "Reprovado" && d.data_aprovacao && (
+                        <>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Reprovado em</p>
+                            <p className="text-destructive font-medium">{new Date(d.data_aprovacao).toLocaleString("pt-BR")}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Reprovado por</p>
+                            <p className="text-destructive font-medium">
+                              {profiles.find((p) => p.id === d.gestor_aprovador_id)?.nome ?? d.gestor_aprovador_id ?? "-"}
+                            </p>
+                          </div>
+                        </>
+                      )}
+
+                      {d.observacao && (
+                        <div className="col-span-2">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Observação</p>
+                          <p className="text-foreground">{d.observacao}</p>
                         </div>
                       )}
                     </div>
+
+                    {/* Motivo reprovação */}
+                    {d.status_aprovacao === "Reprovado" && d.justificativa_reprovacao && (
+                      <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
+                        <p className="font-semibold mb-0.5">Motivo da reprovação</p>
+                        <p>{d.justificativa_reprovacao}</p>
+                      </div>
+                    )}
 
                     {d.comprovante_url && (
                       <button

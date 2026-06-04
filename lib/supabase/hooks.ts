@@ -307,26 +307,53 @@ export function useDespesas(userId?: string, perfil?: string) {
   const enviarDespesa = async (id: string) => {
     const supabase = getSupabase();
     if (!supabase) return { ok: false, msg: "Supabase não disponível" };
-    
-    // Simulação de envio ao ERP
+
+    // Buscar despesa + tipo para verificar limite
+    const { data: despesaData } = await supabase
+      .from("despesas")
+      .select("*, tipo_despesa:tipos_despesa(*)")
+      .eq("id", id)
+      .single();
+
+    const tipoDespesa = despesaData?.tipo_despesa as TipoDespesa | null;
+    const valor = Number(despesaData?.valor ?? 0);
+    const limite = tipoDespesa?.limite_maximo;
+    const dentroDoLimite = limite !== null && limite !== undefined && valor <= limite;
+
     const erpPayload = { despesa_id: id, timestamp: new Date().toISOString() };
     const erpResposta = { success: true, erp_id: `ERP-${Date.now()}`, message: "Enviado com sucesso" };
+    const now = new Date().toISOString();
+
+    const updateData: Record<string, unknown> = {
+      status_erp: dentroDoLimite ? "AprovadoGestorERPAtualizado" : "EnviadoAguardandoGestor",
+      status_aprovacao: dentroDoLimite ? "AprovadoGestor" : "AguardandoGestor",
+      erp_id: erpResposta.erp_id,
+      erp_payload: erpPayload,
+      erp_resposta: erpResposta,
+      data_envio: now,
+      updated_at: now,
+    };
+
+    // Aprovação automática: preenche gestor_aprovador_id e data_aprovacao como sistema
+    if (dentroDoLimite) {
+      updateData.data_aprovacao = now;
+      updateData.gestor_aprovador_id = null; // aprovado automaticamente pelo sistema
+    }
 
     const { error } = await supabase
       .from("despesas")
-      .update({
-        status_erp: "EnviadoAguardandoGestor",
-        erp_id: erpResposta.erp_id,
-        erp_payload: erpPayload,
-        erp_resposta: erpResposta,
-        data_envio: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq("id", id);
 
     if (error) return { ok: false, msg: error.message };
     mutate();
-    return { ok: true, msg: "Despesa enviada com sucesso!" };
+
+    return {
+      ok: true,
+      msg: dentroDoLimite
+        ? "Despesa enviada e aprovada automaticamente (dentro do limite)!"
+        : "Despesa enviada com sucesso!",
+    };
   };
 
   const aprovarDespesa = async (id: string) => {
