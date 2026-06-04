@@ -19,8 +19,16 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    console.log("[v0] handleSubmit called - email:", email, "senha:", senha ? "***" : "empty");
     setError("");
     setLoading(true);
+    
+    if (!email || !senha) {
+      setError("Preencha email e senha");
+      setLoading(false);
+      return;
+    }
     
     try {
       if (isSignUp) {
