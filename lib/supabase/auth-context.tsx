@@ -38,7 +38,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchProfile = useCallback(async (userId: string) => {
     const supabase = createClient();
-    if (!supabase) return null;
     
     const { data, error } = await supabase
       .from("profiles")
@@ -56,12 +55,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const supabase = createClient();
-    
-    if (!supabase) {
-      // Se Supabase não estiver disponível, não mostrar loading infinito
-      setLoading(false);
-      return;
-    }
 
     // Verificar sessão atual
     const getSession = async () => {
@@ -103,8 +96,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     const supabase = createClient();
-    if (!supabase) return { error: "Supabase não está disponível" };
-    
     setLoading(true);
     
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -138,7 +129,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     const supabase = createClient();
-    if (!supabase) return;
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
@@ -147,7 +137,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile = async (data: Partial<Profile>) => {
     const supabase = createClient();
     if (!user) return { error: "Usuário não autenticado" };
-    if (!supabase) return { error: "Supabase não está disponível" };
 
     const { error } = await supabase
       .from("profiles")
@@ -167,7 +156,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const changePassword = async (newPassword: string) => {
     const supabase = createClient();
-    if (!supabase) return { error: "Supabase não está disponível" };
     
     const { error } = await supabase.auth.updateUser({
       password: newPassword,
