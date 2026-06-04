@@ -24,7 +24,6 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, userData: { nome: string; usuario: string; perfil: Perfil }) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<{ error: string | null }>;
   changePassword: (newPassword: string) => Promise<{ error: string | null }>;
@@ -32,71 +31,109 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async (userId: string) => {
-    const supabase = createClient();
-    
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
 
-    if (error) {
-      console.error("Erro ao buscar perfil:", error);
+      if (error) {
+        console.error("[v0] Erro ao buscar perfil:", error);
+        return null;
+      }
+
+      return data as Profile;
+    } catch (err) {
+      console.error("[v0] Erro ao buscar perfil:", err);
       return null;
     }
-
-    return data as Profile;
   }, []);
 
+  // Inicializar autenticação
   useEffect(() => {
     const supabase = createClient();
-    let mounted = true;
+    let isMounted = true;
 
-    // Verificar sessão atual
-    const getSession = async () => {
+    const initAuth = async () => {
       try {
+        // Tentar obter sessão existente
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (!mounted) return;
-        
+        if (!isMounted) return;
+
         if (session?.user) {
           setUser(session.user);
           const profileData = await fetchProfile(session.user.id);
-          if (mounted) setProfile(profileData);
+          if (isMounted && profileData) {
+            setProfile(profileData);
+          }
         }
       } catch (err) {
-        console.error("Erro ao obter sessão:", err);
+        console.error("[v0] Erro ao inicializar auth:", err);
       } finally {
-        if (mounted) {
+        if (isMounted) {
           setLoading(false);
         }
       }
     };
 
-    getSession();
-
-    // Timeout de segurança para evitar loading infinito
+    // Timeout de segurança
     const timeout = setTimeout(() => {
-      if (mounted) {
+      if (isMounted) {
         setLoading(false);
       }
     }, 5000);
 
-    // Escutar mudanças de autenticação
+    initAuth();
+
+    // Listener para mudanças de auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log("[v0] onAuthStateChange - event:", event, "user:", session?.user?.id);
+        
+        if (!isMounted) return;
+
         if (event === "SIGNED_IN" && session?.user) {
+          console.log("[v0] SIGNED_IN - fetching profile for:", session.user.id);
           setUser(session.user);
           const profileData = await fetchProfile(session.user.id);
-          setProfile(profileData);
+          console.log("[v0] Profile data:", profileData ? "found" : "null");
+          
+          if (!isMounted) return;
+          
+          if (profileData) {
+            if (profileData.ativo) {
+              console.log("[v0] User active, setting profile");
+              setProfile(profileData);
+            } else {
+              console.log("[v0] User inactive, signing out");
+              // Inativo - fazer logout
+              await supabase.auth.signOut();
+              setUser(null);
+              setProfile(null);
+            }
+          } else {
+            console.log("[v0] Profile is null after fetch");
+          }
           setLoading(false);
-        } else if (event === "SIGNED_OUT") {
+        } else if (event === "SIGNED_OUT" || !session?.user) {
+          console.log("[v0] SIGNED_OUT");
           setUser(null);
           setProfile(null);
           setLoading(false);
@@ -105,123 +142,90 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     return () => {
-      mounted = false;
+      isMounted = false;
       clearTimeout(timeout);
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, [fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
     const supabase = createClient();
     
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      return { error: error.message };
-    }
-
-    if (data.user) {
-      setLoading(true);
-      setUser(data.user);
-      const profileData = await fetchProfile(data.user.id);
-      
-      if (!profileData?.ativo) {
-        await supabase.auth.signOut();
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
-        return { error: "Usuário inativo. Contate o administrador." };
+      if (error) {
+        if (error.message.includes("Email not confirmed")) {
+          return { error: "Email não confirmado" };
+        }
+        if (error.message.includes("Invalid login") || error.message.includes("Invalid credentials")) {
+          return { error: "Email ou senha incorretos" };
+        }
+        return { error: error.message };
       }
-      
-      setProfile(profileData);
-      setLoading(false);
+
+      // Listener vai carregar perfil e atualizar estado
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Erro ao fazer login" };
     }
-
-    return { error: null };
-  };
-
-  const signUp = async (email: string, password: string, userData: { nome: string; usuario: string; perfil: Perfil }) => {
-    const supabase = createClient();
-    setLoading(true);
-    
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          nome: userData.nome,
-          usuario: userData.usuario,
-          perfil: userData.perfil,
-        },
-      },
-    });
-
-    if (error) {
-      setLoading(false);
-      return { error: error.message };
-    }
-
-    if (data.user) {
-      setUser(data.user);
-      
-      // Aguardar um momento para o trigger criar o profile
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const profileData = await fetchProfile(data.user.id);
-      setProfile(profileData);
-    }
-
-    setLoading(false);
-    return { error: null };
   };
 
   const signOut = async () => {
     const supabase = createClient();
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setProfile(null);
+    } catch (err) {
+      console.error("[v0] Erro ao fazer logout:", err);
+    }
   };
 
   const updateProfile = async (data: Partial<Profile>) => {
     const supabase = createClient();
     if (!user) return { error: "Usuário não autenticado" };
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ ...data, updated_at: new Date().toISOString() })
-      .eq("id", user.id);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update(data)
+        .eq("id", user.id);
 
-    if (error) {
-      return { error: error.message };
+      if (error) {
+        return { error: error.message };
+      }
+
+      const updated = await fetchProfile(user.id);
+      if (updated) {
+        setProfile(updated);
+      }
+
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Erro ao atualizar perfil" };
     }
-
-    // Atualizar estado local
-    const profileData = await fetchProfile(user.id);
-    setProfile(profileData);
-
-    return { error: null };
   };
 
   const changePassword = async (newPassword: string) => {
     const supabase = createClient();
     
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
 
-    if (error) {
-      return { error: error.message };
+      if (error) {
+        return { error: error.message };
+      }
+
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Erro ao mudar senha" };
     }
-
-    // Marcar primeiro_acesso como false
-    if (profile?.primeiro_acesso) {
-      await updateProfile({ primeiro_acesso: false });
-    }
-
-    return { error: null };
   };
 
   return (
@@ -231,7 +235,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         loading,
         signIn,
-        signUp,
         signOut,
         updateProfile,
         changePassword,
@@ -242,10 +245,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
-}

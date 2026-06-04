@@ -27,18 +27,19 @@ export default function LoginPage() {
     
     try {
       const result = await signIn(email, senha);
+      console.log("[v0] signIn result:", result);
+      
       if (result.error) {
-        if (result.error.includes("Invalid login") || result.error.includes("Email not confirmed")) {
-          setError("Email ou senha incorretos");
-        } else {
-          setError(result.error);
-        }
+        console.log("[v0] Login error:", result.error);
+        setError(result.error);
+        setLoading(false);
       }
+      // Se não há erro, o listener do auth-context vai atualizar o loading
     } catch (err) {
+      console.log("[v0] Exception in signIn:", err);
       setError("Erro ao processar solicitacao");
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   return (
