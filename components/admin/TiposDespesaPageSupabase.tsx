@@ -314,88 +314,145 @@ export default function TiposDespesaPageSupabase() {
         />
       </div>
 
-      {/* Lista em Tabela */}
+      {/* Lista — cards no mobile, tabela no desktop */}
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         {tiposFiltrados.length > 0 ? (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border bg-muted/50">
-                <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Nome</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Descrição</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Limite Máximo</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Comprovante</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Status</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Cards — mobile */}
+            <ul className="sm:hidden divide-y divide-border">
               {tiposFiltrados.map((t) => (
-                <tr key={t.id} className={`border-b border-border hover:bg-muted/30 transition ${!t.ativo ? "opacity-60" : ""}`}>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                        <FileText className="w-4 h-4" />
-                      </div>
-                      <span className="font-medium text-foreground text-sm">{t.nome}</span>
+                <li key={t.id} className={`p-4 space-y-3 ${!t.ativo ? "opacity-60" : ""}`}>
+                  {/* Linha 1: ícone + nome + badges */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <FileText className="w-4 h-4" />
                     </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-sm text-muted-foreground">{t.descricao || "—"}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {t.limiteMaximo !== null && t.limiteMaximo !== undefined ? (
-                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${
-                        t.limiteMaximo === 0 
-                          ? "bg-destructive/10 text-destructive" 
-                          : "bg-warning/10 text-warning"
-                      }`}>
-                        <DollarSign className="w-3 h-3" />
-                        {formatCurrency(t.limiteMaximo)}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${
-                      t.exigeComprovante ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
-                    }`}>
-                      {t.exigeComprovante ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex text-xs px-2 py-0.5 rounded ${
-                      t.ativo 
-                        ? "bg-success/10 text-success" 
-                        : "bg-muted text-muted-foreground"
-                    }`}>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-foreground text-sm">{t.nome}</p>
+                      {t.descricao && (
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{t.descricao}</p>
+                      )}
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${t.ativo ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
                       {t.ativo ? "Ativo" : "Inativo"}
                     </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-center gap-2">
-                      <button
-                        onClick={() => startEdit(t)}
-                        disabled={loading}
-                        className="p-1.5 rounded-lg border border-input hover:bg-muted disabled:opacity-50 transition"
-                        title="Editar"
-                      >
-                        <Edit2 className="w-4 h-4 text-foreground" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(t.id)}
-                        disabled={loading}
-                        className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 disabled:opacity-50 transition"
-                        title="Excluir"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                  </div>
+
+                  {/* Linha 2: atributos */}
+                  <div className="flex flex-wrap gap-2">
+                    {t.limiteMaximo !== null && t.limiteMaximo !== undefined ? (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-warning/10 text-warning">
+                        <DollarSign className="w-3 h-3" />
+                        Limite: {formatCurrency(t.limiteMaximo)}
+                      </span>
+                    ) : (
+                      <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">Sem limite</span>
+                    )}
+                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${t.exigeComprovante ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
+                      {t.exigeComprovante ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                      {t.exigeComprovante ? "Exige comprovante" : "Sem comprovante"}
+                    </span>
+                    {t.documentoPadrao && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">{t.documentoPadrao}</span>
+                    )}
+                  </div>
+
+                  {/* Linha 3: ações */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => startEdit(t)}
+                      disabled={loading}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-input text-sm hover:bg-muted disabled:opacity-50 transition"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => handleDelete(t.id)}
+                      disabled={loading}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-destructive/30 text-destructive text-sm hover:bg-destructive/10 disabled:opacity-50 transition"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Excluir
+                    </button>
+                  </div>
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+
+            {/* Tabela — desktop */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Nome</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Descrição</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Limite Máximo</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Comprovante</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Status</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tiposFiltrados.map((t) => (
+                    <tr key={t.id} className={`border-b border-border hover:bg-muted/30 transition ${!t.ativo ? "opacity-60" : ""}`}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <span className="font-medium text-foreground text-sm">{t.nome}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-muted-foreground">{t.descricao || "—"}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {t.limiteMaximo !== null && t.limiteMaximo !== undefined ? (
+                          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-warning/10 text-warning">
+                            <DollarSign className="w-3 h-3" />
+                            {formatCurrency(t.limiteMaximo)}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${t.exigeComprovante ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
+                          {t.exigeComprovante ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex text-xs px-2 py-0.5 rounded ${t.ativo ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
+                          {t.ativo ? "Ativo" : "Inativo"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => startEdit(t)}
+                            disabled={loading}
+                            className="p-1.5 rounded-lg border border-input hover:bg-muted disabled:opacity-50 transition"
+                            title="Editar"
+                          >
+                            <Edit2 className="w-4 h-4 text-foreground" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(t.id)}
+                            disabled={loading}
+                            className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 disabled:opacity-50 transition"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
