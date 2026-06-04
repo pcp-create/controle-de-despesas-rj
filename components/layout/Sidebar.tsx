@@ -144,7 +144,7 @@ export default function Sidebar({
       {/* Footer */}
       <div className="p-2 border-t border-sidebar-border">
         <button
-          onClick={() => window.location.reload()}
+          onClick={() => logout()}
           title={collapsed && !mobile ? "Sair" : undefined}
           className={`flex items-center gap-2 w-full rounded-lg text-sm text-sidebar-foreground/60 hover:text-white hover:bg-sidebar-accent transition py-2 ${
             collapsed && !mobile ? "justify-center px-0" : "px-3"
