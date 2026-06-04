@@ -41,6 +41,8 @@ export default function AprovacaoPageSupabase() {
     
     return despesas
       .filter((d) => {
+        // Exclui despesas não enviadas — não devem aparecer em aprovações
+        if (!d.status_erp || d.status_erp === "Rascunho") return false;
         // Se for admin ou financeiro, vê tudo
         if (currentUser.perfil === "administrador" || currentUser.perfil === "financeiro") {
           return true;
