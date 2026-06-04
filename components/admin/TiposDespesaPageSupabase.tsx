@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useAppStore } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/helpers";
@@ -18,6 +18,7 @@ import {
 
 export default function TiposDespesaPageSupabase() {
   const { tiposDespesa, loadSupabaseData } = useAppStore();
+  const formRef = useRef<HTMLDivElement>(null);
 
   const [search, setSearch] = useState("");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
@@ -168,6 +169,9 @@ export default function TiposDespesaPageSupabase() {
     });
     setEditingId(tipo.id);
     setShowNew(false);
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
   };
 
   const cancelEdit = () => {
@@ -212,7 +216,7 @@ export default function TiposDespesaPageSupabase() {
 
       {/* Formulário */}
       {(showNew || editingId) && (
-        <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+        <div ref={formRef} className="bg-white rounded-xl border border-border shadow-sm p-5">
           <h2 className="font-semibold text-foreground mb-4">{editingId ? "Editar Tipo" : "Novo Tipo"}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
