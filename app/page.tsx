@@ -1,27 +1,34 @@
 "use client";
 
 import { useAuth } from "@/lib/supabase/auth-context";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import LoginPage from "@/components/auth/LoginPage";
 import AppShellSupabase from "@/components/layout/AppShellSupabase";
 import AlterarSenhaModalSupabase from "@/components/auth/AlterarSenhaModalSupabase";
 
 export default function Home() {
   const { user, profile, loading, signIn } = useAuth();
+  const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
 
   // Auto-login ao carregar a página
   useEffect(() => {
-    if (loading || user) return;
+    // Se já temos usuário ou tentamos auto-login, não fazer novamente
+    if (user || autoLoginAttempted || loading) return;
+    
+    // Marcar que tentamos auto-login
+    setAutoLoginAttempted(true);
     
     const autoLogin = async () => {
       console.log("[v0] Tentando auto-login com administrador...");
       await signIn("administrador@rjcompressores.com.br", "317622");
+      // Aguardar o listener processar
+      await new Promise(resolve => setTimeout(resolve, 2000));
     };
 
     autoLogin();
-  }, [loading, user, signIn]);
+  }, [loading, user, signIn, autoLoginAttempted]);
 
-  if (loading) {
+  if (loading || (!user && !autoLoginAttempted)) {
     return (
       <div className="min-h-screen bg-sidebar flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -45,4 +52,5 @@ export default function Home() {
     </>
   );
 }
+
 
