@@ -1,14 +1,20 @@
 "use client";
 
-import { useAuth } from "@/lib/supabase/auth-context";
-import LoginPage from "@/components/auth/LoginPage";
+import { useAppStore } from "@/lib/store";
+import { useEffect, useState } from "react";
+import SimpleLogin from "@/components/auth/SimpleLogin";
 import AppShellSupabase from "@/components/layout/AppShellSupabase";
-import AlterarSenhaModalSupabase from "@/components/auth/AlterarSenhaModalSupabase";
 
 export default function Home() {
-  const { user, profile, loading } = useAuth();
+  const currentUser = useAppStore((state) => state.currentUser);
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  if (loading) {
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  // Mostrar loading enquanto hydrata o localStorage
+  if (!isHydrated) {
     return (
       <div className="min-h-screen bg-sidebar flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -19,16 +25,13 @@ export default function Home() {
     );
   }
 
-  if (!user || !profile) {
-    return <LoginPage />;
+  if (!currentUser) {
+    return <SimpleLogin />;
   }
 
-  return (
-    <>
-      {profile.primeiro_acesso && (
-        <AlterarSenhaModalSupabase forced />
-      )}
-      <AppShellSupabase />
-    </>
-  );
+  return <AppShellSupabase />;
 }
+
+
+
+

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/lib/supabase/auth-context";
-import { useDespesas, useTiposDespesa, useCartoes, type Despesa } from "@/lib/supabase/hooks";
+import { useAppStore } from "@/lib/store";
+import { useDespesas, useTiposDespesa, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
 import { ArrowLeft, Upload, X, Info, Save, Loader2 } from "lucide-react";
 
@@ -12,10 +12,9 @@ interface Props {
 }
 
 export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) {
-  const { profile } = useAuth();
+  const { currentUser, cartoes } = useAppStore();
   const { tiposDespesa } = useTiposDespesa();
-  const { cartoes } = useCartoes();
-  const { addDespesa, updateDespesa } = useDespesas();
+  const { addDespesa, updateDespesa } = useDespesas(currentUser?.id);
 
   const [form, setForm] = useState({
     tipoDespesaId: editDespesa?.tipo_despesa_id || "",
@@ -46,9 +45,6 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     if (!form.valor || isNaN(Number(form.valor)) || Number(form.valor) <= 0) errs.valor = "Valor inválido";
     if (!form.dataDespesa) errs.dataDespesa = "Informe a data";
     
-    if (tipoSelecionado?.limite_maximo && Number(form.valor) > tipoSelecionado.limite_maximo) {
-      errs.valor = `Valor excede o limite de R$ ${tipoSelecionado.limite_maximo.toFixed(2)}`;
-    }
     if (tipoSelecionado?.exige_comprovante && !comprovante) {
       errs.comprovante = "Este tipo de despesa exige comprovante";
     }
@@ -66,6 +62,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     setLoading(true);
     setErrors({});
 
+    // Verificar se o valor excede o limite
+    const excedeLimite = tipoSelecionado?.limite_maximo !== null && 
+                         tipoSelecionado?.limite_maximo !== undefined && 
+                         Number(form.valor) > tipoSelecionado.limite_maximo;
+
     const despesaData = {
       tipo_despesa_id: form.tipoDespesaId,
       cartao_id: form.cartaoId || null,
@@ -80,7 +81,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       status_aprovacao: "AguardandoGestor" as const,
       status_erp: "Rascunho" as const,
       gestor_aprovador_id: null,
-      justificativa_reprovacao: null,
+      justificativa_reprovacao: excedeLimite ? `Valor (R$ ${Number(form.valor).toFixed(2)}) excede o limite de R$ ${tipoSelecionado?.limite_maximo?.toFixed(2)}` : null,
       data_envio: null,
       data_aprovacao: null,
       erp_id: null,
@@ -98,7 +99,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     if (result.error) {
       setFeedback({ type: "error", msg: result.error });
     } else {
-      setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
+      const mensagem = excedeLimite 
+        ? "Despesa salva! Valor excede o limite e será enviado para aprovação de gestor."
+        : "Despesa salva! Redirecionando...";
+      setFeedback({ type: "success", msg: mensagem });
       setTimeout(() => onBack(), 1500);
     }
     
@@ -107,7 +111,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !profile?.id) return;
+    if (!file || !currentUser?.id) return;
 
     // Validar tamanho (5MB)
     if (file.size > 5 * 1024 * 1024) {
@@ -125,7 +129,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     setUploading(true);
     setErrors({ ...errors, comprovante: "" });
 
-    const result = await uploadComprovante(profile.id, file);
+    const result = await uploadComprovante(currentUser.id, file);
 
     if ("error" in result) {
       setErrors({ ...errors, comprovante: result.error });
@@ -196,9 +200,15 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Nenhum</option>
-              {cartoes.map((c) => (
-                <option key={c.id} value={c.id}>{c.apelido || `${c.bandeira} *${c.ultimos_digitos}`}</option>
-              ))}
+              {cartoes.map((c) => {
+                const digitos = c.ultimos_digitos || c.ultimosDigitos || "****";
+                const apelido = c.apelido || c.apelido_cartao || "";
+                return (
+                  <option key={c.id} value={c.id}>
+                    {apelido ? `${apelido} - ${c.banco} ${c.bandeira} *${digitos}` : `${c.banco} ${c.bandeira} *${digitos}`}
+                  </option>
+                );
+              })}
             </select>
           </div>
 

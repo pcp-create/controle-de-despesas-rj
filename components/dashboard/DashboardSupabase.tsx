@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useAuth } from "@/lib/supabase/auth-context";
+import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import {
   DollarSign,
@@ -42,11 +42,14 @@ const MESES = [
 type ModoFiltro = "mes" | "periodo";
 
 export default function DashboardSupabase({ onNavigate }: Props) {
-  const { profile } = useAuth();
-  const { despesas, isLoading: loadingDespesas } = useDespesas();
+  const { currentUser } = useAppStore();
+  const { despesas, isLoading: loadingDespesas } = useDespesas(
+    currentUser?.perfil === "tecnico" ? currentUser.id : undefined,
+    currentUser?.perfil
+  );
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
-  const perfil = profile?.perfil;
+  const perfil = currentUser?.perfil;
 
   const now = new Date();
 
@@ -64,7 +67,14 @@ export default function DashboardSupabase({ onNavigate }: Props) {
 
   // Filtra despesas por data
   const myDespesas = useMemo(() => {
-    return despesas.filter((d) => {
+    let filtered = despesas;
+    
+    // Se for gestor ou admin, mostrar todas. Se for técnico, mostrar só suas
+    if (perfil === "tecnico") {
+      filtered = despesas.filter((d) => d.tecnico_id === currentUser?.id);
+    }
+    
+    return filtered.filter((d) => {
       const dataStr = (d.data_despesa || d.created_at || "").slice(0, 10);
       if (modoFiltro === "mes") {
         const dt = new Date(dataStr + "T00:00:00");
@@ -75,7 +85,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
         return true;
       }
     });
-  }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
+  }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, perfil, currentUser?.id]);
 
   const labelPeriodo = modoFiltro === "mes"
     ? `${MESES[mesSelecionado]} ${anoSelecionado}`
@@ -151,7 +161,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
         <div className="flex-1">
           <h1 className="text-xl font-bold text-foreground">
-            Olá, {profile?.nome.split(" ")[0]}
+            Olá, {currentUser?.nome.split(" ")[0]}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Visão geral das despesas &mdash; <span className="text-accent font-medium">{labelPeriodo}</span>

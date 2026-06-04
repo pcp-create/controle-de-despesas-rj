@@ -6,7 +6,49 @@ import type {
   AuditoriaEntry,
 } from "./types";
 
-// ─── Dados mockados ───────────────────────────────────────────────────────────
+
+// ─── Dados ERP (Empresas, Fornecedores, etc) ───────────────────────────────
+
+export const mockEmpresas = [
+  { id: "1", nome: "RJ Compressores - São Paulo" },
+  { id: "2", nome: "RJ Compressores - Rio de Janeiro" },
+  { id: "3", nome: "RJ Compressores - Belo Horizonte" },
+];
+
+export const mockFornecedores = [
+  { id: "101", nome: "Fornecedor A - Compressor" },
+  { id: "102", nome: "Fornecedor B - Peças" },
+  { id: "103", nome: "Fornecedor C - Serviços" },
+  { id: "104", nome: "Fornecedor D - Manutenção" },
+];
+
+export const mockCondicoesPagamento = [
+  { id: "1", nome: "À Vista" },
+  { id: "2", nome: "30 dias" },
+  { id: "3", nome: "60 dias" },
+  { id: "4", nome: "90 dias" },
+];
+
+export const mockOperacoesFinanceiras = [
+  { id: "1", nome: "Venda" },
+  { id: "2", nome: "Devolução" },
+  { id: "3", nome: "Ajuste" },
+  { id: "4", nome: "Crédito" },
+  { id: "5", nome: "Débito" },
+];
+
+export const mockMoedas = [
+  { id: "1", nome: "Real (BRL)", codigo: "BRL" },
+  { id: "2", nome: "Dólar (USD)", codigo: "USD" },
+  { id: "3", nome: "Euro (EUR)", codigo: "EUR" },
+];
+
+export const mockCentrosCusto = [
+  { id: "1", nome: "Centro de Custo 1" },
+  { id: "2", nome: "Centro de Custo 2" },
+  { id: "3", nome: "Centro de Custo 3" },
+  { id: "4", nome: "Centro de Custo 4" },
+];
 
 export const mockUsers: User[] = [
   {
@@ -14,7 +56,7 @@ export const mockUsers: User[] = [
     nome: "Administrador do Sistema",
     email: "admin@rjcompressores.com.br",
     telefone: "(21) 99999-0001",
-    usuario: "Administrador",
+    usuario: "admin",
     perfil: "administrador",
     ativo: true,
     senha: "12345",
@@ -30,11 +72,11 @@ export const mockUsers: User[] = [
     nome: "Carlos Eduardo Silva",
     email: "carlos.silva@rjcompressores.com.br",
     telefone: "(21) 99999-0002",
-    usuario: "carlos.silva",
+    usuario: "carlos",
     perfil: "tecnico",
     ativo: true,
     gestorId: "u4",
-    senha: "senha123",
+    senha: "12345",
     primeiroAcesso: false,
     empresaId: "1",
     fornecedorId: "102",
@@ -47,11 +89,11 @@ export const mockUsers: User[] = [
     nome: "Marcos Antônio Pereira",
     email: "marcos.pereira@rjcompressores.com.br",
     telefone: "(21) 99999-0003",
-    usuario: "marcos.pereira",
+    usuario: "marcos",
     perfil: "tecnico",
     ativo: true,
     gestorId: "u4",
-    senha: "senha123",
+    senha: "12345",
     primeiroAcesso: false,
     empresaId: "1",
     fornecedorId: "103",
@@ -64,10 +106,10 @@ export const mockUsers: User[] = [
     nome: "Roberto Mendes",
     email: "roberto.mendes@rjcompressores.com.br",
     telefone: "(21) 99999-0004",
-    usuario: "roberto.mendes",
+    usuario: "gestor",
     perfil: "gestor",
     ativo: true,
-    senha: "senha123",
+    senha: "12345",
     primeiroAcesso: false,
   },
   {
@@ -75,10 +117,10 @@ export const mockUsers: User[] = [
     nome: "Ana Paula Financeiro",
     email: "ana.financeiro@rjcompressores.com.br",
     telefone: "(21) 99999-0005",
-    usuario: "ana.financeiro",
+    usuario: "financeiro",
     perfil: "financeiro",
     ativo: true,
-    senha: "senha123",
+    senha: "12345",
     primeiroAcesso: false,
   },
 ];

@@ -21,7 +21,6 @@ export async function uploadComprovante(
     });
 
   if (error) {
-    console.error("Error uploading comprovante:", error);
     return { error: error.message };
   }
 

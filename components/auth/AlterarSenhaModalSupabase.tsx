@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/lib/supabase/auth-context";
+import { useAppStore } from "@/lib/store";
+import { createClient } from "@/lib/supabase/client";
 import { X, Lock } from "lucide-react";
 
 interface Props {
@@ -10,7 +11,7 @@ interface Props {
 }
 
 export default function AlterarSenhaModalSupabase({ forced, onClose }: Props) {
-  const { changePassword, updateProfile } = useAuth();
+  const { currentUser, loadSupabaseData } = useAppStore();
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [error, setError] = useState("");
@@ -33,17 +34,31 @@ export default function AlterarSenhaModalSupabase({ forced, onClose }: Props) {
       return;
     }
 
-    const result = await changePassword(novaSenha);
-    
-    if (result.error) {
-      setError(result.error);
-    } else {
-      // Marcar primeiro_acesso como false
-      await updateProfile({ primeiro_acesso: false });
-      setSuccess("Senha alterada com sucesso!");
-      setTimeout(() => {
-        onClose?.();
-      }, 1500);
+    try {
+      const supabase = createClient();
+
+      // Atualizar senha na tabela profiles
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ 
+          senha: novaSenha,
+          primeiro_acesso: false 
+        })
+        .eq("id", currentUser?.id);
+
+      if (updateError) {
+        console.error("[v0] Erro ao atualizar senha:", updateError);
+        setError("Erro ao alterar senha: " + updateError.message);
+      } else {
+        setSuccess("Senha alterada com sucesso!");
+        await loadSupabaseData();
+        setTimeout(() => {
+          onClose?.();
+        }, 1500);
+      }
+    } catch (err) {
+      console.error("[v0] Erro ao alterar senha:", err);
+      setError(err instanceof Error ? err.message : "Erro ao alterar senha");
     }
     
     setLoading(false);

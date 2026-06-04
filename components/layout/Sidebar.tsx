@@ -30,13 +30,13 @@ const NAV: NavItem[] = [
   { key: "dashboard",       label: "Dashboard",        icon: <LayoutDashboard className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro","tecnico"] },
   { key: "nova-despesa",    label: "Nova Despesa",      icon: <PlusCircle      className="w-5 h-5 shrink-0" />, profiles: ["tecnico"] },
   { key: "minhas-despesas", label: "Minhas Despesas",   icon: <FileText        className="w-5 h-5 shrink-0" />, profiles: ["tecnico"] },
-  { key: "aprovacao",       label: "Aprovações",        icon: <CheckSquare     className="w-5 h-5 shrink-0" />, profiles: ["gestor"] },
-  { key: "financeiro",      label: "Financeiro / ERP",  icon: <TrendingUp      className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador"] },
+  { key: "aprovacao",       label: "Aprovações",        icon: <CheckSquare     className="w-5 h-5 shrink-0" />, profiles: ["gestor","administrador"] },
+  { key: "financeiro",      label: "Financeiro / ERP",  icon: <TrendingUp      className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador","gestor"] },
   { key: "integracoes-erp", label: "Integrações ERP",   icon: <Server          className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador"] },
-  { key: "relatorios",      label: "Relatórios",        icon: <BarChart3       className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador"] },
+  { key: "relatorios",      label: "Relatórios",        icon: <BarChart3       className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador","gestor"] },
   { key: "usuarios",        label: "Usuários",          icon: <Users           className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
-  { key: "tipos-despesa",   label: "Tipos de Despesa",  icon: <Tag             className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
-  { key: "auditoria",       label: "Auditoria",         icon: <ClipboardList   className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
+  { key: "tipos-despesa",   label: "Tipos de Despesa",  icon: <Tag             className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
+  { key: "auditoria",       label: "Auditoria",         icon: <ClipboardList   className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
 ];
 
 interface Props {
@@ -71,26 +71,20 @@ export default function Sidebar({
       <div className="flex items-center justify-between h-14 px-3 border-b border-sidebar-border">
         {/* Logo — oculta quando colapsado no desktop */}
         <div className={`flex items-center gap-2.5 overflow-hidden transition-all duration-300 ${collapsed && !mobile ? "w-0 opacity-0" : "w-auto opacity-100"}`}>
-          <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
-              <path d="M12 2L3 7v10l9 5 9-5V7z" fill="white" fillOpacity="0.9" />
-              <circle cx="12" cy="12" r="3" fill="white" fillOpacity="0.5" />
-            </svg>
-          </div>
-          <div className="shrink-0">
-            <p className="text-xs font-bold text-white leading-tight">Controle de</p>
-            <p className="text-xs font-bold text-white/70 leading-tight">Despesas RJ</p>
-          </div>
+          <img 
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/RJ%20Branco%202-Pn9QBwHse0Kjls3Cpbdg4mGuwo47pg.png" 
+            alt="RJ Compressores" 
+            className="h-10 w-auto shrink-0"
+          />
         </div>
 
         {/* Ícone isolado quando colapsado */}
         {collapsed && !mobile && (
-          <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center mx-auto">
-            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
-              <path d="M12 2L3 7v10l9 5 9-5V7z" fill="white" fillOpacity="0.9" />
-              <circle cx="12" cy="12" r="3" fill="white" fillOpacity="0.5" />
-            </svg>
-          </div>
+          <img 
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/RJ%20Branco%202-Pn9QBwHse0Kjls3Cpbdg4mGuwo47pg.png" 
+            alt="RJ" 
+            className="h-8 w-auto mx-auto shrink-0"
+          />
         )}
 
         {/* Fechar (mobile) ou colapsar (desktop) */}
@@ -144,7 +138,7 @@ export default function Sidebar({
       {/* Footer */}
       <div className="p-2 border-t border-sidebar-border">
         <button
-          onClick={logout}
+          onClick={() => logout()}
           title={collapsed && !mobile ? "Sair" : undefined}
           className={`flex items-center gap-2 w-full rounded-lg text-sm text-sidebar-foreground/60 hover:text-white hover:bg-sidebar-accent transition py-2 ${
             collapsed && !mobile ? "justify-center px-0" : "px-3"

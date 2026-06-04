@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/lib/supabase/auth-context";
+import { registrarAuditoria } from "@/lib/supabase/audit";
 
 // Helper to get supabase client - MUST be called inside functions, not at module level
 const getSupabase = () => createClient();
@@ -68,6 +68,14 @@ export interface Profile {
   ativo: boolean;
   gestor_id: string | null;
   primeiro_acesso: boolean;
+  empresa_id: number | null;
+  fornecedor_id: number | null;
+  condicao_pagamento_id: number | null;
+  operacao_financeira_id: number | null;
+  moeda_id: number | null;
+  centro_custo_id: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // Fetchers
@@ -98,7 +106,7 @@ const fetchCartoes = async (userId: string): Promise<Cartao[]> => {
   return data || [];
 };
 
-const fetchDespesas = async (userId: string, perfil: string): Promise<Despesa[]> => {
+const fetchDespesas = async (userId?: string, perfil?: string): Promise<Despesa[]> => {
   const supabase = getSupabase();
   if (!supabase) return [];
   
@@ -113,7 +121,7 @@ const fetchDespesas = async (userId: string, perfil: string): Promise<Despesa[]>
     .order("created_at", { ascending: false });
 
   // Filtrar por perfil
-  if (perfil === "tecnico") {
+  if (perfil === "tecnico" && userId) {
     query = query.eq("tecnico_id", userId);
   }
   // Gestores, financeiros e admins veem tudo (RLS cuida da permissão)
@@ -212,26 +220,38 @@ export function useCartoes() {
   };
 }
 
-export function useDespesas() {
-  const { profile } = useAuth();
+export function useDespesas(userId?: string, perfil?: string) {
   const { data, error, isLoading, mutate } = useSWR(
-    profile ? `despesas-${profile.id}-${profile.perfil}` : null,
-    () => fetchDespesas(profile!.id, profile!.perfil),
+    `despesas_${userId || "all"}_${perfil || ""}`,
+    userId ? () => fetchDespesas(userId, perfil || "tecnico") : () => fetchDespesas("", perfil || "gestor"),
     { revalidateOnFocus: false }
   );
 
   const addDespesa = async (despesa: Omit<Despesa, "id" | "tecnico_id" | "created_at" | "updated_at" | "tipo_despesa" | "cartao" | "tecnico">) => {
+    if (!userId) return { error: "Não autenticado" };
+    
     const supabase = getSupabase();
-    if (!profile) return { error: "Não autenticado" };
     if (!supabase) return { error: "Supabase não disponível" };
 
     const { data, error } = await supabase
       .from("despesas")
-      .insert({ ...despesa, tecnico_id: profile.id })
+      .insert({ ...despesa, tecnico_id: userId })
       .select()
       .single();
 
     if (error) return { error: error.message };
+    
+    // Registrar auditoria
+    if (data?.id) {
+      await registrarAuditoria({
+        acao: "CREATE",
+        entidade: "despesa",
+        entidadeId: data.id,
+        usuarioId: userId,
+        detalhes: `Criada despesa de R$ ${despesa.valor.toFixed(2)} para ${despesa.cliente}`,
+      });
+    }
+    
     mutate();
     return { data };
   };
@@ -246,6 +266,16 @@ export function useDespesas() {
       .eq("id", id);
 
     if (error) return { error: error.message };
+    
+    // Registrar auditoria
+    await registrarAuditoria({
+      acao: "UPDATE",
+      entidade: "despesa",
+      entidadeId: id,
+      usuarioId: userId || "sistema",
+      detalhes: `Atualizada despesa. Status: ${updates.status_aprovacao || "N/A"}`,
+    });
+    
     mutate();
     return { error: null };
   };
@@ -260,6 +290,16 @@ export function useDespesas() {
       .eq("id", id);
 
     if (error) return { error: error.message };
+    
+    // Registrar auditoria
+    await registrarAuditoria({
+      acao: "DELETE",
+      entidade: "despesa",
+      entidadeId: id,
+      usuarioId: userId || "sistema",
+      detalhes: "Despesa deletada",
+    });
+    
     mutate();
     return { error: null };
   };

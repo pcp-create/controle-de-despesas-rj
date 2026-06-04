@@ -1,34 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import { useTiposDespesa } from "@/lib/supabase/hooks";
+import { useAppStore } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/helpers";
 import {
   Search,
   PlusCircle,
   Edit2,
-  Power,
+  Trash2,
   FileText,
   DollarSign,
   Check,
   X,
+  Loader2,
 } from "lucide-react";
 
 export default function TiposDespesaPageSupabase() {
-  const { tiposDespesa, isLoading, mutate } = useTiposDespesa();
-  const supabase = createClient();
-  
+  const { tiposDespesa, loadSupabaseData } = useAppStore();
+
   const [search, setSearch] = useState("");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     nome: "",
     descricao: "",
     limite_maximo: "",
     exige_comprovante: true,
     documento_padrao: "",
+    ativo: true,
   });
 
   const tiposFiltrados = tiposDespesa
@@ -42,17 +44,54 @@ export default function TiposDespesaPageSupabase() {
     .sort((a, b) => a.nome.localeCompare(b.nome));
 
   const handleToggleStatus = async (id: string, ativo: boolean) => {
-    const { error } = await supabase
-      .from("tipos_despesa")
-      .update({ ativo: !ativo })
-      .eq("id", id);
+    try {
+      setLoading(true);
+      const supabase = createClient();
 
-    if (error) {
-      setFeedback({ type: "error", msg: error.message });
-    } else {
-      setFeedback({ type: "success", msg: ativo ? "Tipo desativado" : "Tipo ativado" });
-      mutate();
-      setTimeout(() => setFeedback(null), 3000);
+      const { error } = await supabase
+        .from("tipos_despesa")
+        .update({ ativo: !ativo })
+        .eq("id", id);
+
+      if (error) {
+        setFeedback({ type: "error", msg: error.message });
+      } else {
+        setFeedback({ type: "success", msg: ativo ? "Tipo desativado" : "Tipo ativado" });
+        await loadSupabaseData();
+        setTimeout(() => setFeedback(null), 3000);
+      }
+    } catch (err) {
+      setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Erro ao atualizar" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Tem certeza que deseja excluir este tipo de despesa? Esta ação não pode ser desfeita.")) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const supabase = createClient();
+
+      const { error } = await supabase
+        .from("tipos_despesa")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        setFeedback({ type: "error", msg: error.message });
+      } else {
+        setFeedback({ type: "success", msg: "Tipo de despesa excluído com sucesso!" });
+        await loadSupabaseData();
+        setTimeout(() => setFeedback(null), 3000);
+      }
+    } catch (err) {
+      setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Erro ao excluir" });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -62,52 +101,67 @@ export default function TiposDespesaPageSupabase() {
       return;
     }
 
-    const data = {
-      nome: form.nome,
-      descricao: form.descricao || null,
-      limite_maximo: form.limite_maximo ? Number(form.limite_maximo) : null,
-      exige_comprovante: form.exige_comprovante,
-      documento_padrao: form.documento_padrao || null,
-    };
+    try {
+      setLoading(true);
+      const supabase = createClient();
 
-    if (editingId) {
-      const { error } = await supabase
-        .from("tipos_despesa")
-        .update(data)
-        .eq("id", editingId);
+      const data = {
+        nome: form.nome,
+        descricao: form.descricao || null,
+        limite_maximo: form.limite_maximo ? Number(form.limite_maximo) : null,
+        exige_comprovante: form.exige_comprovante,
+        documento_padrao: form.documento_padrao || null,
+        ativo: form.ativo,
+      };
 
-      if (error) {
-        setFeedback({ type: "error", msg: error.message });
+      if (editingId) {
+        const { error } = await supabase
+          .from("tipos_despesa")
+          .update(data)
+          .eq("id", editingId)
+          .select();
+
+        if (error) {
+          setFeedback({ type: "error", msg: `Erro: ${error.message}` });
+        } else {
+          setFeedback({ type: "success", msg: "Tipo atualizado com sucesso!" });
+          setEditingId(null);
+          setShowNew(false);
+          setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "", ativo: true });
+          await loadSupabaseData();
+          setTimeout(() => setFeedback(null), 3000);
+        }
       } else {
-        setFeedback({ type: "success", msg: "Tipo atualizado!" });
-        setEditingId(null);
-        mutate();
-      }
-    } else {
-      const { error } = await supabase
-        .from("tipos_despesa")
-        .insert(data);
+        const { error } = await supabase
+          .from("tipos_despesa")
+          .insert([data])
+          .select();
 
-      if (error) {
-        setFeedback({ type: "error", msg: error.message });
-      } else {
-        setFeedback({ type: "success", msg: "Tipo criado!" });
-        setShowNew(false);
-        mutate();
+        if (error) {
+          setFeedback({ type: "error", msg: `Erro: ${error.message}` });
+        } else {
+          setFeedback({ type: "success", msg: "Tipo criado com sucesso!" });
+          setShowNew(false);
+          setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "", ativo: true });
+          await loadSupabaseData();
+          setTimeout(() => setFeedback(null), 3000);
+        }
       }
+    } catch (err) {
+      setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Erro ao salvar" });
+    } finally {
+      setLoading(false);
     }
-
-    setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "" });
-    setTimeout(() => setFeedback(null), 3000);
   };
 
-  const startEdit = (tipo: typeof tiposDespesa[0]) => {
+  const startEdit = (tipo: (typeof tiposDespesa)[0]) => {
     setForm({
       nome: tipo.nome,
       descricao: tipo.descricao || "",
-      limite_maximo: tipo.limite_maximo?.toString() || "",
-      exige_comprovante: tipo.exige_comprovante,
-      documento_padrao: tipo.documento_padrao || "",
+      limite_maximo: tipo.limiteMaximo?.toString() || "",
+      exige_comprovante: tipo.exigeComprovante,
+      documento_padrao: tipo.documentoPadrao || "",
+      ativo: tipo.ativo,
     });
     setEditingId(tipo.id);
     setShowNew(false);
@@ -116,16 +170,8 @@ export default function TiposDespesaPageSupabase() {
   const cancelEdit = () => {
     setEditingId(null);
     setShowNew(false);
-    setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "" });
+    setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "", ativo: true });
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -136,8 +182,12 @@ export default function TiposDespesaPageSupabase() {
           <p className="text-sm text-muted-foreground">{tiposDespesa.length} tipo(s) cadastrado(s)</p>
         </div>
         <button
-          onClick={() => { setShowNew(true); setEditingId(null); }}
-          className="hidden lg:flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition"
+          onClick={() => {
+            setShowNew(true);
+            setEditingId(null);
+          }}
+          disabled={loading}
+          className="hidden lg:flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 disabled:bg-accent/50 transition"
         >
           <PlusCircle className="w-4 h-4" />
           Novo Tipo
@@ -146,11 +196,13 @@ export default function TiposDespesaPageSupabase() {
 
       {/* Feedback */}
       {feedback && (
-        <div className={`rounded-lg px-4 py-3 text-sm ${
-          feedback.type === "success" 
-            ? "bg-success/10 border border-success/20 text-success"
-            : "bg-destructive/10 border border-destructive/20 text-destructive"
-        }`}>
+        <div
+          className={`rounded-lg px-4 py-3 text-sm ${
+            feedback.type === "success"
+              ? "bg-success/10 border border-success/20 text-success"
+              : "bg-destructive/10 border border-destructive/20 text-destructive"
+          }`}
+        >
           {feedback.msg}
         </div>
       )}
@@ -158,9 +210,7 @@ export default function TiposDespesaPageSupabase() {
       {/* Formulário */}
       {(showNew || editingId) && (
         <div className="bg-white rounded-xl border border-border shadow-sm p-5">
-          <h2 className="font-semibold text-foreground mb-4">
-            {editingId ? "Editar Tipo" : "Novo Tipo"}
-          </h2>
+          <h2 className="font-semibold text-foreground mb-4">{editingId ? "Editar Tipo" : "Novo Tipo"}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Nome *</label>
@@ -170,6 +220,7 @@ export default function TiposDespesaPageSupabase() {
                 onChange={(e) => setForm({ ...form, nome: e.target.value })}
                 className="px-3 py-2 rounded-lg border border-input bg-background text-sm"
                 placeholder="Ex: Combustível"
+                disabled={loading}
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -181,6 +232,7 @@ export default function TiposDespesaPageSupabase() {
                 onChange={(e) => setForm({ ...form, limite_maximo: e.target.value })}
                 className="px-3 py-2 rounded-lg border border-input bg-background text-sm"
                 placeholder="Opcional"
+                disabled={loading}
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -191,6 +243,7 @@ export default function TiposDespesaPageSupabase() {
                 onChange={(e) => setForm({ ...form, documento_padrao: e.target.value })}
                 className="px-3 py-2 rounded-lg border border-input bg-background text-sm"
                 placeholder="Ex: Cupom Fiscal"
+                disabled={loading}
               />
             </div>
             <div className="flex items-center gap-2">
@@ -200,8 +253,11 @@ export default function TiposDespesaPageSupabase() {
                 checked={form.exige_comprovante}
                 onChange={(e) => setForm({ ...form, exige_comprovante: e.target.checked })}
                 className="w-4 h-4 rounded"
+                disabled={loading}
               />
-              <label htmlFor="exige_comprovante" className="text-sm">Exige comprovante</label>
+              <label htmlFor="exige_comprovante" className="text-sm">
+                Exige comprovante
+              </label>
             </div>
             <div className="sm:col-span-2 flex flex-col gap-1.5">
               <label className="text-sm font-medium">Descrição</label>
@@ -211,20 +267,35 @@ export default function TiposDespesaPageSupabase() {
                 className="px-3 py-2 rounded-lg border border-input bg-background text-sm resize-none"
                 rows={2}
                 placeholder="Descrição opcional"
+                disabled={loading}
               />
+            </div>
+            <div className="sm:col-span-2 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="ativo"
+                checked={form.ativo}
+                onChange={(e) => setForm({ ...form, ativo: e.target.checked })}
+                className="w-4 h-4 rounded"
+                disabled={loading}
+              />
+              <label htmlFor="ativo" className="text-sm">Ativo</label>
             </div>
           </div>
           <div className="flex gap-2 mt-4">
             <button
               onClick={cancelEdit}
-              className="flex-1 py-2 rounded-lg border border-input text-sm hover:bg-muted transition"
+              disabled={loading}
+              className="flex-1 py-2 rounded-lg border border-input text-sm hover:bg-muted disabled:opacity-50 transition"
             >
               Cancelar
             </button>
             <button
               onClick={handleSave}
-              className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 transition"
+              disabled={loading}
+              className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 disabled:bg-accent/50 transition flex items-center justify-center gap-2"
             >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Salvar
             </button>
           </div>
@@ -243,77 +314,98 @@ export default function TiposDespesaPageSupabase() {
         />
       </div>
 
-      {/* Lista */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {tiposFiltrados.map((t) => (
-          <div
-            key={t.id}
-            className={`bg-white rounded-xl border border-border shadow-sm p-4 ${!t.ativo ? "opacity-60" : ""}`}
-          >
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <FileText className="w-5 h-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium text-foreground">{t.nome}</h3>
-                  {!t.ativo && (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Inativo</span>
-                  )}
-                </div>
-                {t.descricao && (
-                  <p className="text-sm text-muted-foreground mt-1">{t.descricao}</p>
-                )}
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  {t.limite_maximo && (
-                    <span className="inline-flex items-center gap-1 text-xs bg-warning/10 text-warning px-2 py-0.5 rounded-full">
-                      <DollarSign className="w-3 h-3" />
-                      Limite: {formatCurrency(t.limite_maximo)}
+      {/* Lista em Tabela */}
+      <div className="bg-white rounded-xl border border-border overflow-hidden">
+        {tiposFiltrados.length > 0 ? (
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border bg-muted/50">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Nome</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Descrição</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Limite Máximo</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Comprovante</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Status</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tiposFiltrados.map((t) => (
+                <tr key={t.id} className={`border-b border-border hover:bg-muted/30 transition ${!t.ativo ? "opacity-60" : ""}`}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <span className="font-medium text-foreground text-sm">{t.nome}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="text-sm text-muted-foreground">{t.descricao || "—"}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {t.limiteMaximo !== null && t.limiteMaximo !== undefined ? (
+                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${
+                        t.limiteMaximo === 0 
+                          ? "bg-destructive/10 text-destructive" 
+                          : "bg-warning/10 text-warning"
+                      }`}>
+                        <DollarSign className="w-3 h-3" />
+                        {formatCurrency(t.limiteMaximo)}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${
+                      t.exigeComprovante ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
+                    }`}>
+                      {t.exigeComprovante ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                     </span>
-                  )}
-                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${
-                    t.exige_comprovante ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
-                  }`}>
-                    {t.exige_comprovante ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
-                    Comprovante
-                  </span>
-                </div>
-              </div>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <span className={`inline-flex text-xs px-2 py-0.5 rounded ${
+                      t.ativo 
+                        ? "bg-success/10 text-success" 
+                        : "bg-muted text-muted-foreground"
+                    }`}>
+                      {t.ativo ? "Ativo" : "Inativo"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => startEdit(t)}
+                        disabled={loading}
+                        className="p-1.5 rounded-lg border border-input hover:bg-muted disabled:opacity-50 transition"
+                        title="Editar"
+                      >
+                        <Edit2 className="w-4 h-4 text-foreground" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(t.id)}
+                        disabled={loading}
+                        className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 disabled:opacity-50 transition"
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+              <FileText className="w-8 h-8 text-muted-foreground" />
             </div>
-
-            <div className="flex gap-2 mt-4 pt-4 border-t border-border">
-              <button
-                onClick={() => startEdit(t)}
-                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-                Editar
-              </button>
-              <button
-                onClick={() => handleToggleStatus(t.id, t.ativo)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-sm transition ${
-                  t.ativo
-                    ? "border border-destructive/30 text-destructive hover:bg-destructive/10"
-                    : "border border-success/30 text-success hover:bg-success/10"
-                }`}
-              >
-                <Power className="w-3.5 h-3.5" />
-                {t.ativo ? "Desativar" : "Ativar"}
-              </button>
-            </div>
+            <h3 className="text-lg font-semibold text-foreground">Nenhum tipo encontrado</h3>
+            <p className="text-sm text-muted-foreground mt-1">Cadastre um novo tipo de despesa</p>
           </div>
-        ))}
+        )}
       </div>
-
-      {tiposFiltrados.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-            <FileText className="w-8 h-8 text-muted-foreground" />
-          </div>
-          <h3 className="text-lg font-semibold text-foreground">Nenhum tipo encontrado</h3>
-          <p className="text-sm text-muted-foreground mt-1">Cadastre um novo tipo de despesa</p>
-        </div>
-      )}
     </div>
   );
 }
