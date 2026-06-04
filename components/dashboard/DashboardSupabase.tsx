@@ -151,6 +151,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
     label: string;
     value: string | number;
     icon: React.ReactNode;
+    iconBg: string;
     iconColor: string;
     hint: string;
     onClick: () => void;
@@ -158,7 +159,8 @@ export default function DashboardSupabase({ onNavigate }: Props) {
     {
       label: "Total no período",
       value: formatCurrency(total),
-      icon: <DollarSign className="w-4 h-4" />,
+      icon: <DollarSign className="w-5 h-5" />,
+      iconBg: "bg-primary/10",
       iconColor: "text-primary",
       hint: "Ver todas as despesas",
       onClick: () => perfil === "tecnico" ? onNavigate("minhas-despesas") : onNavigate("todas-despesas"),
@@ -167,8 +169,9 @@ export default function DashboardSupabase({ onNavigate }: Props) {
       key: "nao_enviado",
       label: "Não enviadas",
       value: naoEnviadas,
-      icon: <FileClock className="w-4 h-4" />,
-      iconColor: "text-slate-400",
+      icon: <FileClock className="w-5 h-5" />,
+      iconBg: "bg-slate-100",
+      iconColor: "text-slate-500",
       hint: "Rascunhos ainda não enviados",
       onClick: () => handleCardClick("nao_enviado"),
     },
@@ -176,7 +179,8 @@ export default function DashboardSupabase({ onNavigate }: Props) {
       key: "enviado",
       label: "Enviadas",
       value: enviadas,
-      icon: <SendHorizonal className="w-4 h-4" />,
+      icon: <SendHorizonal className="w-5 h-5" />,
+      iconBg: "bg-primary/10",
       iconColor: "text-primary",
       hint: "Enviadas, aguardando processamento",
       onClick: () => handleCardClick("enviado"),
@@ -185,7 +189,8 @@ export default function DashboardSupabase({ onNavigate }: Props) {
       key: "aguardando_aprovacao",
       label: "Aguardando aprovação",
       value: aguardando,
-      icon: <Clock className="w-4 h-4" />,
+      icon: <Clock className="w-5 h-5" />,
+      iconBg: "bg-warning/10",
       iconColor: "text-warning",
       hint: perfil === "administrador" || perfil === "gestor" ? "Ir para Aprovações" : "Aguardando análise do gestor",
       onClick: () => handleCardClick("aguardando_aprovacao"),
@@ -194,7 +199,8 @@ export default function DashboardSupabase({ onNavigate }: Props) {
       key: "aprovado",
       label: "Aprovadas",
       value: aprovadas,
-      icon: <CircleCheck className="w-4 h-4" />,
+      icon: <CircleCheck className="w-5 h-5" />,
+      iconBg: "bg-success/10",
       iconColor: "text-success",
       hint: "Despesas aprovadas",
       onClick: () => handleCardClick("aprovado"),
@@ -203,7 +209,8 @@ export default function DashboardSupabase({ onNavigate }: Props) {
       key: "reprovado",
       label: "Reprovadas",
       value: reprovadas,
-      icon: <CircleX className="w-4 h-4" />,
+      icon: <CircleX className="w-5 h-5" />,
+      iconBg: "bg-destructive/10",
       iconColor: "text-destructive",
       hint: "Despesas reprovadas",
       onClick: () => handleCardClick("reprovado"),
@@ -306,20 +313,20 @@ export default function DashboardSupabase({ onNavigate }: Props) {
       </div>
 
       {/* 6 cards em grid único */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {allCards.map(({ label, value, icon, iconColor, hint, onClick }) => (
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        {allCards.map(({ label, value, icon, iconBg, iconColor, hint, onClick }) => (
           <button
             key={label}
             onClick={onClick}
             title={hint}
-            className="group bg-white rounded-xl p-4 border border-border shadow-sm flex flex-col gap-2 text-left hover:shadow-md hover:border-primary/30 active:scale-[0.98] transition-all"
+            className="group bg-white rounded-xl border border-border shadow-sm p-4 flex flex-col text-left hover:shadow-md hover:border-primary/30 active:scale-[0.98] transition-all"
           >
-            <div className="flex items-center justify-between">
-              <span className={iconColor}>{icon}</span>
-              <ArrowRight className="w-3 h-3 text-muted-foreground/40 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-3 ${iconBg} ${iconColor}`}>
+              {icon}
             </div>
-            <p className="text-2xl font-bold text-foreground leading-none tracking-tight">{value}</p>
-            <p className="text-xs text-muted-foreground leading-tight">{label}</p>
+            <p className="text-2xl font-bold text-foreground">{value}</p>
+            <p className="text-xs text-muted-foreground mt-1 leading-tight">{label}</p>
+            <ArrowRight className="w-3 h-3 text-muted-foreground/30 opacity-0 group-hover:opacity-100 mt-2 transition-opacity self-end" />
           </button>
         ))}
       </div>
