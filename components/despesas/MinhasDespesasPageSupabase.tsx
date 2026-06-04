@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useAuth } from "@/lib/supabase/auth-context";
+import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, type Despesa } from "@/lib/supabase/hooks";
 import { formatCurrency } from "@/lib/helpers";
 import {
@@ -39,8 +39,8 @@ const statusErpConfig = {
 };
 
 export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) {
-  const { profile } = useAuth();
-  const { despesas, isLoading, deleteDespesa, enviarDespesa } = useDespesas();
+  const { currentUser, loadSupabaseData } = useAppStore();
+  const { despesas, isLoading, deleteDespesa, enviarDespesa } = useDespesas(currentUser?.id);
   const { tiposDespesa } = useTiposDespesa();
   
   const [search, setSearch] = useState("");
@@ -50,7 +50,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) 
 
   const minhasDespesas = useMemo(() => {
     return despesas
-      .filter((d) => d.tecnico_id === profile?.id)
+      .filter((d) => d.tecnico_id === currentUser?.id)
       .filter((d) => {
         if (filterStatus !== "todos" && d.status_aprovacao !== filterStatus) return false;
         if (search) {
@@ -65,7 +65,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) 
         return true;
       })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [despesas, profile, search, filterStatus, tiposDespesa]);
+  }, [despesas, currentUser, search, filterStatus, tiposDespesa]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Tem certeza que deseja excluir esta despesa?")) return;
@@ -74,6 +74,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) 
       setFeedback({ type: "error", msg: result.error });
     } else {
       setFeedback({ type: "success", msg: "Despesa excluída!" });
+      await loadSupabaseData();
       setTimeout(() => setFeedback(null), 3000);
     }
   };
@@ -84,6 +85,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) 
       setFeedback({ type: "error", msg: result.msg });
     } else {
       setFeedback({ type: "success", msg: result.msg });
+      await loadSupabaseData();
       setTimeout(() => setFeedback(null), 3000);
     }
   };
