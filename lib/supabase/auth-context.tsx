@@ -35,24 +35,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [supabaseReady, setSupabaseReady] = useState(false);
-
-  const supabase = createClient();
-
-  // Verificar se o cliente Supabase está pronto
-  useEffect(() => {
-    if (supabase) {
-      setSupabaseReady(true);
-    } else {
-      // Retry after a short delay if supabase isn't ready
-      const timer = setTimeout(() => {
-        setSupabaseReady(!!createClient());
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [supabase]);
 
   const fetchProfile = useCallback(async (userId: string) => {
+    const supabase = createClient();
     if (!supabase) return null;
     
     const { data, error } = await supabase
@@ -67,25 +52,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     return data as Profile;
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
-    if (!supabase || !supabaseReady) {
+    const supabase = createClient();
+    
+    if (!supabase) {
+      // Se Supabase não estiver disponível, não mostrar loading infinito
       setLoading(false);
       return;
     }
 
     // Verificar sessão atual
     const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
-        setUser(session.user);
-        const profileData = await fetchProfile(session.user.id);
-        setProfile(profileData);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          setUser(session.user);
+          const profileData = await fetchProfile(session.user.id);
+          setProfile(profileData);
+        }
+      } catch (err) {
+        console.error("Erro ao obter sessão:", err);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
 
     getSession();
@@ -107,9 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase, supabaseReady, fetchProfile]);
+  }, [fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
+    const supabase = createClient();
     if (!supabase) return { error: "Supabase não está disponível" };
     
     setLoading(true);
@@ -144,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    const supabase = createClient();
     if (!supabase) return;
     await supabase.auth.signOut();
     setUser(null);
@@ -151,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const updateProfile = async (data: Partial<Profile>) => {
+    const supabase = createClient();
     if (!user) return { error: "Usuário não autenticado" };
     if (!supabase) return { error: "Supabase não está disponível" };
 
@@ -171,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const changePassword = async (newPassword: string) => {
+    const supabase = createClient();
     if (!supabase) return { error: "Supabase não está disponível" };
     
     const { error } = await supabase.auth.updateUser({

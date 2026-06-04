@@ -7,6 +7,7 @@ export async function uploadComprovante(
   file: File
 ): Promise<{ url: string; nome: string; path: string } | { error: string }> {
   const supabase = createClient();
+  if (!supabase) return { error: "Supabase não está disponível" };
 
   // Gerar nome único para o arquivo
   const ext = file.name.split(".").pop() || "jpg";
@@ -38,6 +39,7 @@ export async function uploadComprovante(
 
 export async function getComprovanteUrl(path: string): Promise<string | null> {
   const supabase = createClient();
+  if (!supabase) return null;
 
   const { data } = await supabase.storage
     .from("comprovantes")
@@ -48,6 +50,7 @@ export async function getComprovanteUrl(path: string): Promise<string | null> {
 
 export async function deleteComprovante(path: string): Promise<{ success: boolean; error?: string }> {
   const supabase = createClient();
+  if (!supabase) return { success: false, error: "Supabase não está disponível" };
 
   const { error } = await supabase.storage
     .from("comprovantes")
@@ -62,6 +65,8 @@ export async function deleteComprovante(path: string): Promise<{ success: boolea
 
 export function getComprovantePublicUrl(path: string): string {
   const supabase = createClient();
+  if (!supabase) return "";
+  
   const { data } = supabase.storage.from("comprovantes").getPublicUrl(path);
   return data.publicUrl;
 }

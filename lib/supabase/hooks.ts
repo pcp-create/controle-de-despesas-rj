@@ -4,7 +4,8 @@ import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/supabase/auth-context";
 
-const supabase = createClient();
+// Helper to get supabase client - MUST be called inside functions, not at module level
+const getSupabase = () => createClient();
 
 // Types
 export interface TipoDespesa {
@@ -71,6 +72,9 @@ export interface Profile {
 
 // Fetchers
 const fetchTiposDespesa = async (): Promise<TipoDespesa[]> => {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  
   const { data, error } = await supabase
     .from("tipos_despesa")
     .select("*")
@@ -81,6 +85,9 @@ const fetchTiposDespesa = async (): Promise<TipoDespesa[]> => {
 };
 
 const fetchCartoes = async (userId: string): Promise<Cartao[]> => {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  
   const { data, error } = await supabase
     .from("cartoes")
     .select("*")
@@ -92,6 +99,9 @@ const fetchCartoes = async (userId: string): Promise<Cartao[]> => {
 };
 
 const fetchDespesas = async (userId: string, perfil: string): Promise<Despesa[]> => {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  
   let query = supabase
     .from("despesas")
     .select(`
@@ -114,6 +124,9 @@ const fetchDespesas = async (userId: string, perfil: string): Promise<Despesa[]>
 };
 
 const fetchProfiles = async (): Promise<Profile[]> => {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
@@ -145,7 +158,9 @@ export function useCartoes() {
   );
 
   const addCartao = async (cartao: Omit<Cartao, "id" | "user_id" | "ativo">) => {
+    const supabase = getSupabase();
     if (!profile) return { error: "Não autenticado" };
+    if (!supabase) return { error: "Supabase não disponível" };
 
     const { data, error } = await supabase
       .from("cartoes")
@@ -159,6 +174,9 @@ export function useCartoes() {
   };
 
   const updateCartao = async (id: string, updates: Partial<Cartao>) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    
     const { error } = await supabase
       .from("cartoes")
       .update(updates)
@@ -170,6 +188,9 @@ export function useCartoes() {
   };
 
   const deleteCartao = async (id: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    
     const { error } = await supabase
       .from("cartoes")
       .update({ ativo: false })
@@ -200,7 +221,9 @@ export function useDespesas() {
   );
 
   const addDespesa = async (despesa: Omit<Despesa, "id" | "tecnico_id" | "created_at" | "updated_at" | "tipo_despesa" | "cartao" | "tecnico">) => {
+    const supabase = getSupabase();
     if (!profile) return { error: "Não autenticado" };
+    if (!supabase) return { error: "Supabase não disponível" };
 
     const { data, error } = await supabase
       .from("despesas")
@@ -214,6 +237,9 @@ export function useDespesas() {
   };
 
   const updateDespesa = async (id: string, updates: Partial<Despesa>) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    
     const { error } = await supabase
       .from("despesas")
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -225,6 +251,9 @@ export function useDespesas() {
   };
 
   const deleteDespesa = async (id: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    
     const { error } = await supabase
       .from("despesas")
       .delete()
@@ -236,6 +265,9 @@ export function useDespesas() {
   };
 
   const enviarDespesa = async (id: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { ok: false, msg: "Supabase não disponível" };
+    
     // Simulação de envio ao ERP
     const erpPayload = { despesa_id: id, timestamp: new Date().toISOString() };
     const erpResposta = { success: true, erp_id: `ERP-${Date.now()}`, message: "Enviado com sucesso" };
@@ -258,7 +290,9 @@ export function useDespesas() {
   };
 
   const aprovarDespesa = async (id: string) => {
+    const supabase = getSupabase();
     if (!profile) return { error: "Não autenticado" };
+    if (!supabase) return { error: "Supabase não disponível" };
 
     const { error } = await supabase
       .from("despesas")
@@ -277,7 +311,9 @@ export function useDespesas() {
   };
 
   const reprovarDespesa = async (id: string, justificativa: string) => {
+    const supabase = getSupabase();
     if (!profile) return { error: "Não autenticado" };
+    if (!supabase) return { error: "Supabase não disponível" };
 
     const { error } = await supabase
       .from("despesas")
@@ -315,6 +351,9 @@ export function useProfiles() {
   });
 
   const addProfile = async (profileData: Omit<Profile, "id" | "primeiro_acesso">, password: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    
     // Criar usuário no Auth
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: profileData.email,
@@ -333,6 +372,9 @@ export function useProfiles() {
   };
 
   const updateProfile = async (id: string, updates: Partial<Profile>) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    
     const { error } = await supabase
       .from("profiles")
       .update({ ...updates, updated_at: new Date().toISOString() })
@@ -344,6 +386,9 @@ export function useProfiles() {
   };
 
   const toggleProfileStatus = async (id: string, ativo: boolean) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    
     const { error } = await supabase
       .from("profiles")
       .update({ ativo, updated_at: new Date().toISOString() })

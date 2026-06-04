@@ -1,14 +1,20 @@
 import { createBrowserClient } from '@supabase/ssr'
 
+let supabaseClient: ReturnType<typeof createBrowserClient> | null = null
+
 export function createClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('[v0] Supabase env vars not available yet, returning null client')
-    // Return a mock client that won't crash but won't work either
-    return null as unknown as ReturnType<typeof createBrowserClient>
+    console.error('[v0] Supabase env vars not available yet, returning null client')
+    return null
   }
 
-  return createBrowserClient(supabaseUrl, supabaseAnonKey)
+  // Singleton pattern - reuse the same client instance
+  if (!supabaseClient) {
+    supabaseClient = createBrowserClient(supabaseUrl, supabaseAnonKey)
+  }
+
+  return supabaseClient
 }
