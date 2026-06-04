@@ -63,7 +63,9 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     setErrors({});
 
     // Verificar se o valor excede o limite
-    const excedeLimite = tipoSelecionado?.limite_maximo && Number(form.valor) > tipoSelecionado.limite_maximo;
+    const excedeLimite = tipoSelecionado?.limite_maximo !== null && 
+                         tipoSelecionado?.limite_maximo !== undefined && 
+                         Number(form.valor) > tipoSelecionado.limite_maximo;
 
     const despesaData = {
       tipo_despesa_id: form.tipoDespesaId,
@@ -76,10 +78,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       data_despesa: form.dataDespesa,
       comprovante_nome: comprovante?.nome || null,
       comprovante_url: comprovante?.url || null,
-      status_aprovacao: excedeLimite ? "RequereAprovacao" : "AguardandoGestor",
+      status_aprovacao: "AguardandoGestor" as const,
       status_erp: "Rascunho" as const,
       gestor_aprovador_id: null,
-      justificativa_reprovacao: null,
+      justificativa_reprovacao: excedeLimite ? `Valor (R$ ${Number(form.valor).toFixed(2)}) excede o limite de R$ ${tipoSelecionado?.limite_maximo?.toFixed(2)}` : null,
       data_envio: null,
       data_aprovacao: null,
       erp_id: null,
