@@ -13,6 +13,7 @@ export interface TipoDespesa {
   nome: string;
   descricao: string | null;
   limite_maximo: number | null;
+  limite_ocorrencias_diarias: number | null;
   exige_comprovante: boolean;
   documento_padrao: string | null;
   ativo: boolean;
@@ -308,7 +309,7 @@ export function useDespesas(userId?: string, perfil?: string) {
     const supabase = getSupabase();
     if (!supabase) return { ok: false, msg: "Supabase não disponível" };
 
-    // Buscar despesa + tipo para verificar limite
+    // Buscar despesa + tipo para verificar limites
     const { data: despesaData } = await supabase
       .from("despesas")
       .select("*, tipo_despesa:tipos_despesa(*)")
@@ -318,15 +319,38 @@ export function useDespesas(userId?: string, perfil?: string) {
     const tipoDespesa = despesaData?.tipo_despesa as TipoDespesa | null;
     const valor = Number(despesaData?.valor ?? 0);
     const limite = tipoDespesa?.limite_maximo;
-    const dentroDoLimite = limite !== null && limite !== undefined && valor <= limite;
+    const dentroDoValorLimite = limite !== null && limite !== undefined && valor <= limite;
+
+    // Verificar limite de ocorrências diárias
+    let dentroDoLimiteDiario = true;
+    if (dentroDoValorLimite && tipoDespesa?.limite_ocorrencias_diarias) {
+      const dataDespesa = despesaData?.data_despesa as string;
+      const inicioDia = dataDespesa.split("T")[0] + "T00:00:00.000Z";
+      const fimDia    = dataDespesa.split("T")[0] + "T23:59:59.999Z";
+
+      const { count } = await supabase
+        .from("despesas")
+        .select("id", { count: "exact", head: true })
+        .eq("tecnico_id", despesaData?.tecnico_id)
+        .eq("tipo_despesa_id", despesaData?.tipo_despesa_id)
+        .eq("status_aprovacao", "AprovadoGestor")
+        .gte("data_despesa", inicioDia)
+        .lte("data_despesa", fimDia)
+        .neq("id", id); // excluir a própria despesa
+
+      const ocorrenciasHoje = count ?? 0;
+      dentroDoLimiteDiario = ocorrenciasHoje < tipoDespesa.limite_ocorrencias_diarias;
+    }
+
+    const aprovacaoAutomatica = dentroDoValorLimite && dentroDoLimiteDiario;
 
     const erpPayload = { despesa_id: id, timestamp: new Date().toISOString() };
     const erpResposta = { success: true, erp_id: `ERP-${Date.now()}`, message: "Enviado com sucesso" };
     const now = new Date().toISOString();
 
     const updateData: Record<string, unknown> = {
-      status_erp: dentroDoLimite ? "AprovadoGestorERPAtualizado" : "EnviadoAguardandoGestor",
-      status_aprovacao: dentroDoLimite ? "AprovadoGestor" : "AguardandoGestor",
+      status_erp: aprovacaoAutomatica ? "AprovadoGestorERPAtualizado" : "EnviadoAguardandoGestor",
+      status_aprovacao: aprovacaoAutomatica ? "AprovadoGestor" : "AguardandoGestor",
       erp_id: erpResposta.erp_id,
       erp_payload: erpPayload,
       erp_resposta: erpResposta,
@@ -334,10 +358,9 @@ export function useDespesas(userId?: string, perfil?: string) {
       updated_at: now,
     };
 
-    // Aprovação automática: preenche gestor_aprovador_id e data_aprovacao como sistema
-    if (dentroDoLimite) {
+    if (aprovacaoAutomatica) {
       updateData.data_aprovacao = now;
-      updateData.gestor_aprovador_id = null; // aprovado automaticamente pelo sistema
+      updateData.gestor_aprovador_id = null;
     }
 
     const { error } = await supabase
@@ -348,12 +371,13 @@ export function useDespesas(userId?: string, perfil?: string) {
     if (error) return { ok: false, msg: error.message };
     mutate();
 
-    return {
-      ok: true,
-      msg: dentroDoLimite
-        ? "Despesa enviada e aprovada automaticamente (dentro do limite)!"
-        : "Despesa enviada com sucesso!",
-    };
+    if (aprovacaoAutomatica) {
+      return { ok: true, msg: "Despesa enviada e aprovada automaticamente (dentro do limite)!" };
+    }
+    if (dentroDoValorLimite && !dentroDoLimiteDiario) {
+      return { ok: true, msg: "Despesa enviada para aprovação — limite diário de ocorrências atingido." };
+    }
+    return { ok: true, msg: "Despesa enviada com sucesso!" };
   };
 
   const aprovarDespesa = async (id: string) => {

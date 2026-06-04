@@ -137,6 +137,7 @@ export const useAppStore = create<AppState>()(
             nome: tipo.nome,
             descricao: tipo.descricao || "",
             limiteMaximo: tipo.limite_maximo || 0,
+            limiteOcorrenciasDiarias: tipo.limite_ocorrencias_diarias ?? null,
             exigeComprovante: tipo.exige_comprovante !== false,
             documentoPadrao: tipo.documento_padrao || "",
             ativo: tipo.ativo !== false,

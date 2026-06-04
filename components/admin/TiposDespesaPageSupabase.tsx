@@ -28,6 +28,7 @@ export default function TiposDespesaPageSupabase() {
     nome: "",
     descricao: "",
     limite_maximo: "",
+    limite_ocorrencias_diarias: "",
     exige_comprovante: true,
     documento_padrao: "",
     ativo: true,
@@ -109,6 +110,7 @@ export default function TiposDespesaPageSupabase() {
         nome: form.nome,
         descricao: form.descricao || null,
         limite_maximo: form.limite_maximo ? Number(form.limite_maximo) : null,
+        limite_ocorrencias_diarias: form.limite_ocorrencias_diarias ? Number(form.limite_ocorrencias_diarias) : null,
         exige_comprovante: form.exige_comprovante,
         documento_padrao: form.documento_padrao || null,
         ativo: form.ativo,
@@ -127,7 +129,7 @@ export default function TiposDespesaPageSupabase() {
           setFeedback({ type: "success", msg: "Tipo atualizado com sucesso!" });
           setEditingId(null);
           setShowNew(false);
-          setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "", ativo: true });
+          setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", exige_comprovante: true, documento_padrao: "", ativo: true });
           await loadSupabaseData();
           setTimeout(() => setFeedback(null), 3000);
         }
@@ -142,7 +144,7 @@ export default function TiposDespesaPageSupabase() {
         } else {
           setFeedback({ type: "success", msg: "Tipo criado com sucesso!" });
           setShowNew(false);
-          setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "", ativo: true });
+          setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", exige_comprovante: true, documento_padrao: "", ativo: true });
           await loadSupabaseData();
           setTimeout(() => setFeedback(null), 3000);
         }
@@ -159,6 +161,7 @@ export default function TiposDespesaPageSupabase() {
       nome: tipo.nome,
       descricao: tipo.descricao || "",
       limite_maximo: tipo.limiteMaximo?.toString() || "",
+      limite_ocorrencias_diarias: (tipo as any).limiteOcorrenciasDiarias?.toString() || "",
       exige_comprovante: tipo.exigeComprovante,
       documento_padrao: tipo.documentoPadrao || "",
       ativo: tipo.ativo,
@@ -170,7 +173,7 @@ export default function TiposDespesaPageSupabase() {
   const cancelEdit = () => {
     setEditingId(null);
     setShowNew(false);
-    setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "", ativo: true });
+    setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", exige_comprovante: true, documento_padrao: "", ativo: true });
   };
 
   return (
@@ -234,6 +237,22 @@ export default function TiposDespesaPageSupabase() {
                 placeholder="Opcional"
                 disabled={loading}
               />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Limite diário de ocorrências</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={form.limite_ocorrencias_diarias}
+                onChange={(e) => setForm({ ...form, limite_ocorrencias_diarias: e.target.value })}
+                className="px-3 py-2 rounded-lg border border-input bg-background text-sm"
+                placeholder="Ex: 1 (ilimitado se vazio)"
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">
+                Acima deste número por dia, irá para aprovação mesmo dentro do valor limite.
+              </p>
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Documento Padrão</label>
@@ -348,6 +367,11 @@ export default function TiposDespesaPageSupabase() {
                     ) : (
                       <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">Sem limite</span>
                     )}
+                    {(t as any).limiteOcorrenciasDiarias != null && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
+                        {(t as any).limiteOcorrenciasDiarias}x/dia
+                      </span>
+                    )}
                     <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${t.exigeComprovante ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
                       {t.exigeComprovante ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                       {t.exigeComprovante ? "Exige comprovante" : "Sem comprovante"}
@@ -388,6 +412,7 @@ export default function TiposDespesaPageSupabase() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Nome</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Descrição</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Limite Máximo</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Limite/dia</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Comprovante</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Status</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Ações</th>
@@ -412,6 +437,15 @@ export default function TiposDespesaPageSupabase() {
                           <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-warning/10 text-warning">
                             <DollarSign className="w-3 h-3" />
                             {formatCurrency(t.limiteMaximo)}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {(t as any).limiteOcorrenciasDiarias != null ? (
+                          <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                            {(t as any).limiteOcorrenciasDiarias}x
                           </span>
                         ) : (
                           <span className="text-sm text-muted-foreground">—</span>
