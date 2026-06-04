@@ -256,6 +256,7 @@ export const useAppStore = create<AppState>()(
                   erpId: `ERP-${Date.now()}`,
                   erpPayload: JSON.stringify(erpPayload),
                   erpResposta: JSON.stringify({ success: true, id: `ERP-${Date.now()}`, message: "Enviado com sucesso" }),
+                  dataEnvio: now,
                   dataAtualizacao: now,
                   ...(dentroDoLimite ? { dataAprovacao: now, gestorAprovadorId: "sistema" } : {}),
                 }

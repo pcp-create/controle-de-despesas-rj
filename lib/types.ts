@@ -97,6 +97,7 @@ export interface Despesa {
   erpPayload?: string;
   erpResposta?: string;
   gestorAprovadorId?: string;
+  dataEnvio?: string;
   dataAprovacao?: string;
   justificativaReprovacao?: string;
   dataCriacao: string;

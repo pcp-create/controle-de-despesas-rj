@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAppStore } from "@/lib/store";
-import { ArrowLeft, Upload, X, Info, Save, Send } from "lucide-react";
+import { ArrowLeft, Upload, X, Info, Save } from "lucide-react";
 import { formatCurrency } from "@/lib/helpers";
 import type { Despesa } from "@/lib/types";
 
@@ -12,7 +12,7 @@ interface Props {
 }
 
 export default function NovaDespesaPage({ onBack, editDespesa }: Props) {
-  const { currentUser, tiposDespesa, cartoes, addDespesa, updateDespesa, enviarDespesa } = useAppStore();
+  const { currentUser, tiposDespesa, cartoes, addDespesa, updateDespesa } = useAppStore();
   const isEditing = !!editDespesa;
   
   const [form, setForm] = useState({
@@ -111,36 +111,6 @@ export default function NovaDespesaPage({ onBack, editDespesa }: Props) {
 
     setErrors({});
     setTimeout(() => setFeedback(null), 4000);
-  };
-
-  const handleEnviar = () => {
-    const errs = validate();
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs);
-      return;
-    }
-
-    let despesaId = savedId;
-
-    // Se não foi salvo ainda, salvar primeiro
-    if (!despesaId) {
-      const data = buildDespesaData();
-      despesaId = addDespesa(data);
-      setSavedId(despesaId);
-    } else {
-      // Atualizar antes de enviar
-      const data = buildDespesaData();
-      updateDespesa(despesaId, data);
-    }
-
-    // Enviar despesa
-    const result = enviarDespesa(despesaId);
-    if (result.ok) {
-      setFeedback({ type: "success", msg: result.msg });
-      setTimeout(() => onBack(), 2000);
-    } else {
-      setFeedback({ type: "error", msg: result.msg });
-    }
   };
 
   const fieldClass = (key: string) =>
@@ -329,14 +299,9 @@ export default function NovaDespesaPage({ onBack, editDespesa }: Props) {
             Cancelar
           </button>
           <button type="submit"
-            className="flex-1 py-2.5 rounded-lg border border-accent text-accent text-sm font-semibold hover:bg-accent/5 transition flex items-center justify-center gap-2">
+            className="flex-1 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent/90 transition flex items-center justify-center gap-2">
             <Save className="w-4 h-4" />
             Salvar Rascunho
-          </button>
-          <button type="button" onClick={handleEnviar}
-            className="flex-1 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent/90 transition flex items-center justify-center gap-2">
-            <Send className="w-4 h-4" />
-            Enviar Despesa
           </button>
         </div>
       </form>
