@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAppStore } from "@/lib/store";
-import { PlusCircle, Search, Eye, Edit2, Send, Paperclip, CheckCircle2 } from "lucide-react";
+import { PlusCircle, Search, Eye, Edit2, Send, Paperclip, CheckCircle2, FileText, Download, Image, File, X } from "lucide-react";
 import {
   formatCurrency,
   formatDate,
@@ -25,6 +25,7 @@ export default function MinhasDespesasPage({ onNova, onEditar }: Props) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [selected, setSelected] = useState<Despesa | null>(null);
+  const [anexoOpen, setAnexoOpen] = useState<Despesa | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [confirmEnviar, setConfirmEnviar] = useState<Despesa | null>(null);
 
@@ -193,7 +194,7 @@ export default function MinhasDespesasPage({ onNova, onEditar }: Props) {
                     <td className="px-3 py-3 text-center">
                       {d.comprovanteNome ? (
                         <button
-                          onClick={() => setSelected(d)}
+                          onClick={() => setAnexoOpen(d)}
                           className="inline-flex items-center justify-center p-1.5 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition"
                           title={d.comprovanteNome}
                         >
@@ -254,6 +255,96 @@ export default function MinhasDespesasPage({ onNova, onEditar }: Props) {
           </table>
         </div>
       </div>
+
+      {/* Modal de anexo */}
+      {anexoOpen && (() => {
+        const isImage = anexoOpen.comprovanteNome?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+        const isPDF = anexoOpen.comprovanteNome?.match(/\.pdf$/i);
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            onClick={() => setAnexoOpen(null)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Cabeçalho */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${isImage ? "bg-accent/10" : "bg-primary/10"}`}>
+                    {isImage ? (
+                      <Image className="w-5 h-5 text-accent" />
+                    ) : isPDF ? (
+                      <FileText className="w-5 h-5 text-primary" />
+                    ) : (
+                      <File className="w-5 h-5 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground truncate max-w-[220px]">
+                      {anexoOpen.comprovanteNome}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      OS: {anexoOpen.numeroOS} &mdash; {anexoOpen.cliente}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setAnexoOpen(null)}
+                  className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
+                  aria-label="Fechar"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Área de visualização */}
+              <div className="flex items-center justify-center bg-muted/30 min-h-[200px] px-6 py-8">
+                {anexoOpen.comprovanteUrl && isImage ? (
+                  <img
+                    src={anexoOpen.comprovanteUrl}
+                    alt={anexoOpen.comprovanteNome}
+                    className="max-h-80 max-w-full rounded-lg object-contain shadow"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-3 text-center">
+                    {isPDF ? (
+                      <FileText className="w-16 h-16 text-primary/30" />
+                    ) : (
+                      <File className="w-16 h-16 text-muted-foreground/30" />
+                    )}
+                    <p className="text-sm text-muted-foreground">
+                      {isPDF ? "Documento PDF — clique em Visualizar para abrir" : "Arquivo anexado"}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Rodapé com ações */}
+              <div className="flex gap-3 px-5 py-4 border-t border-border">
+                <button
+                  onClick={() => {
+                    if (anexoOpen.comprovanteUrl) window.open(anexoOpen.comprovanteUrl, "_blank");
+                    else alert("Visualizar: " + anexoOpen.comprovanteNome);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-accent text-accent text-sm font-medium hover:bg-accent/5 transition"
+                >
+                  <FileText className="w-4 h-4" />
+                  Visualizar
+                </button>
+                <button
+                  onClick={() => alert("Download: " + anexoOpen.comprovanteNome)}
+                  className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-input text-muted-foreground text-sm font-medium hover:bg-muted transition"
+                >
+                  <Download className="w-4 h-4" />
+                  Baixar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Modal detalhe */}
       {selected && (
