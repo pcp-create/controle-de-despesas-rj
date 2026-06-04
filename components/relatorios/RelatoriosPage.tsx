@@ -23,10 +23,12 @@ export default function RelatoriosPage() {
   const tecnicos = users.filter((u) => u.perfil === "tecnico");
 
   const filtered = despesas.filter((d) => {
-    // Normaliza a data da despesa para YYYY-MM-DD para comparacao correta
-    const dataDespesa = d.dataDespesa.slice(0, 10);
-    if (filtros.dataInicial && dataDespesa < filtros.dataInicial) return false;
-    if (filtros.dataFinal && dataDespesa > filtros.dataFinal) return false;
+    // Normaliza a data da despesa para YYYY-MM-DD para comparação correta
+    // Fallback para dataCriacao se dataDespesa não existir (dados antigos do mock)
+    const dataStr = (d.dataDespesa || d.dataCriacao || "").slice(0, 10);
+    
+    if (filtros.dataInicial && dataStr < filtros.dataInicial) return false;
+    if (filtros.dataFinal && dataStr > filtros.dataFinal) return false;
     if (filtros.tecnicoId && d.tecnicoId !== filtros.tecnicoId) return false;
     if (filtros.cliente && !d.cliente.toLowerCase().includes(filtros.cliente.toLowerCase())) return false;
     if (filtros.numeroOS && !d.numeroOS.toLowerCase().includes(filtros.numeroOS.toLowerCase())) return false;
@@ -35,7 +37,11 @@ export default function RelatoriosPage() {
     if (filtros.statusERP && d.statusERP !== filtros.statusERP) return false;
     if (filtros.statusAprovacao && d.statusAprovacao !== filtros.statusAprovacao) return false;
     return true;
-  }).sort((a, b) => new Date(b.dataDespesa).getTime() - new Date(a.dataDespesa).getTime());
+  }).sort((a, b) => {
+    const dataA = (a.dataDespesa || a.dataCriacao || "").slice(0, 10);
+    const dataB = (b.dataDespesa || b.dataCriacao || "").slice(0, 10);
+    return dataB.localeCompare(dataA);
+  });
 
   const totalValor = filtered.reduce((s, d) => s + d.valor, 0);
 
@@ -198,7 +204,7 @@ export default function RelatoriosPage() {
                 const cartao = cartoes.find((c) => c.id === d.cartaoId);
                 return (
                   <tr key={d.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition">
-                    <td className="px-4 py-3 whitespace-nowrap">{formatDate(d.dataDespesa)}</td>
+                    <td className="px-4 py-3 whitespace-nowrap">{formatDate(d.dataDespesa || d.dataCriacao)}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{tecnico?.nome.split(" ")[0]}</td>
                     <td className="px-4 py-3">{d.cliente}</td>
                     <td className="px-4 py-3 text-muted-foreground">{d.numeroOS}</td>
