@@ -75,7 +75,7 @@ const genId = () => `id_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      currentUser: mockUsers.find(u => u.perfil === "administrador") || null,
+      currentUser: null,
       users: mockUsers,
       cartoes: mockCartoes,
       tiposDespesa: mockTiposDespesa,
@@ -300,7 +300,7 @@ export const useAppStore = create<AppState>()(
       migrate: () => {
         // Ao mudar a versao, descarta tudo do localStorage e recarrega os dados mock
         return {
-          currentUser: mockUsers.find(u => u.perfil === "administrador") || null,
+          currentUser: null,
           users: mockUsers,
           cartoes: mockCartoes,
           tiposDespesa: mockTiposDespesa,
