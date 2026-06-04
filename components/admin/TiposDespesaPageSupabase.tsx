@@ -8,7 +8,7 @@ import {
   Search,
   PlusCircle,
   Edit2,
-  Power,
+  Trash2,
   FileText,
   DollarSign,
   Check,
@@ -30,6 +30,7 @@ export default function TiposDespesaPageSupabase() {
     limite_maximo: "",
     exige_comprovante: true,
     documento_padrao: "",
+    ativo: true,
   });
 
   const tiposFiltrados = tiposDespesa
@@ -66,6 +67,34 @@ export default function TiposDespesaPageSupabase() {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Tem certeza que deseja excluir este tipo de despesa? Esta ação não pode ser desfeita.")) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const supabase = createClient();
+
+      const { error } = await supabase
+        .from("tipos_despesa")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        setFeedback({ type: "error", msg: error.message });
+      } else {
+        setFeedback({ type: "success", msg: "Tipo de despesa excluído com sucesso!" });
+        await loadSupabaseData();
+        setTimeout(() => setFeedback(null), 3000);
+      }
+    } catch (err) {
+      setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Erro ao excluir" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!form.nome.trim()) {
       setFeedback({ type: "error", msg: "Nome é obrigatório" });
@@ -82,6 +111,7 @@ export default function TiposDespesaPageSupabase() {
         limite_maximo: form.limite_maximo ? Number(form.limite_maximo) : null,
         exige_comprovante: form.exige_comprovante,
         documento_padrao: form.documento_padrao || null,
+        ativo: form.ativo,
       };
 
       if (editingId) {
@@ -97,7 +127,7 @@ export default function TiposDespesaPageSupabase() {
           setFeedback({ type: "success", msg: "Tipo atualizado com sucesso!" });
           setEditingId(null);
           setShowNew(false);
-          setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "" });
+          setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "", ativo: true });
           await loadSupabaseData();
           setTimeout(() => setFeedback(null), 3000);
         }
@@ -112,7 +142,7 @@ export default function TiposDespesaPageSupabase() {
         } else {
           setFeedback({ type: "success", msg: "Tipo criado com sucesso!" });
           setShowNew(false);
-          setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "" });
+          setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "", ativo: true });
           await loadSupabaseData();
           setTimeout(() => setFeedback(null), 3000);
         }
@@ -131,6 +161,7 @@ export default function TiposDespesaPageSupabase() {
       limite_maximo: tipo.limiteMaximo?.toString() || "",
       exige_comprovante: tipo.exigeComprovante,
       documento_padrao: tipo.documentoPadrao || "",
+      ativo: tipo.ativo,
     });
     setEditingId(tipo.id);
     setShowNew(false);
@@ -139,7 +170,7 @@ export default function TiposDespesaPageSupabase() {
   const cancelEdit = () => {
     setEditingId(null);
     setShowNew(false);
-    setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "" });
+    setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "", ativo: true });
   };
 
   return (
@@ -238,6 +269,17 @@ export default function TiposDespesaPageSupabase() {
                 placeholder="Descrição opcional"
                 disabled={loading}
               />
+            </div>
+            <div className="sm:col-span-2 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="ativo"
+                checked={form.ativo}
+                onChange={(e) => setForm({ ...form, ativo: e.target.checked })}
+                className="w-4 h-4 rounded"
+                disabled={loading}
+              />
+              <label htmlFor="ativo" className="text-sm">Ativo</label>
             </div>
           </div>
           <div className="flex gap-2 mt-4">
@@ -341,16 +383,12 @@ export default function TiposDespesaPageSupabase() {
                         <Edit2 className="w-4 h-4 text-foreground" />
                       </button>
                       <button
-                        onClick={() => handleToggleStatus(t.id, t.ativo)}
+                        onClick={() => handleDelete(t.id)}
                         disabled={loading}
-                        className={`p-1.5 rounded-lg transition disabled:opacity-50 ${
-                          t.ativo
-                            ? "border border-destructive/30 text-destructive hover:bg-destructive/10"
-                            : "border border-success/30 text-success hover:bg-success/10"
-                        }`}
-                        title={t.ativo ? "Desativar" : "Ativar"}
+                        className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 disabled:opacity-50 transition"
+                        title="Excluir"
                       >
-                        <Power className="w-4 h-4" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
