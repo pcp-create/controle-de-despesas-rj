@@ -24,6 +24,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, userData: { nome: string; usuario: string; perfil: Perfil }) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   updateProfile: (data: Partial<Profile>) => Promise<{ error: string | null }>;
   changePassword: (newPassword: string) => Promise<{ error: string | null }>;
@@ -135,6 +136,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
+  const signUp = async (email: string, password: string, userData: { nome: string; usuario: string; perfil: Perfil }) => {
+    const supabase = createClient();
+    console.log("[v0] signUp called - email:", email, "userData:", userData);
+    setLoading(true);
+    
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          nome: userData.nome,
+          usuario: userData.usuario,
+          perfil: userData.perfil,
+        },
+      },
+    });
+
+    console.log("[v0] Supabase signUp result - data:", data, "error:", error);
+
+    if (error) {
+      console.log("[v0] SignUp error:", error.message);
+      setLoading(false);
+      return { error: error.message };
+    }
+
+    if (data.user) {
+      console.log("[v0] User created:", data.user.id);
+      setUser(data.user);
+      
+      // Aguardar um momento para o trigger criar o profile
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const profileData = await fetchProfile(data.user.id);
+      console.log("[v0] Profile fetched after signup:", profileData);
+      setProfile(profileData);
+    }
+
+    setLoading(false);
+    return { error: null };
+  };
+
   const signOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
@@ -188,6 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         loading,
         signIn,
+        signUp,
         signOut,
         updateProfile,
         changePassword,
