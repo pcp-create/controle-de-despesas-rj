@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from "@/lib/supabase/auth-context";
+import { useAppStore } from "@/lib/store";
 import { Menu, Bell, ChevronDown, LogOut, Lock } from "lucide-react";
 import { useState } from "react";
 
@@ -10,7 +10,7 @@ interface Props {
 }
 
 export default function HeaderSupabase({ onMenuClick, onAlterarSenha }: Props) {
-  const { profile, signOut } = useAuth();
+  const { currentUser, logout } = useAppStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const perfilLabel: Record<string, string> = {
@@ -20,12 +20,17 @@ export default function HeaderSupabase({ onMenuClick, onAlterarSenha }: Props) {
     tecnico: "Técnico",
   };
 
-  const initials = profile?.nome
+  const initials = currentUser?.nome
     .split(" ")
     .slice(0, 2)
     .map((n) => n[0])
     .join("")
     .toUpperCase();
+
+  const handleLogout = () => {
+    logout();
+    setDropdownOpen(false);
+  };
 
   return (
     <header className="flex items-center justify-between h-14 px-4 md:px-6 bg-white border-b border-border flex-shrink-0">
@@ -57,10 +62,10 @@ export default function HeaderSupabase({ onMenuClick, onAlterarSenha }: Props) {
             </div>
             <div className="hidden sm:flex flex-col items-start">
               <span className="text-sm font-medium text-foreground leading-tight max-w-32 truncate">
-                {profile?.nome.split(" ")[0]}
+                {currentUser?.nome.split(" ")[0]}
               </span>
               <span className="text-xs text-muted-foreground leading-tight">
-                {perfilLabel[profile?.perfil ?? ""] ?? profile?.perfil}
+                {perfilLabel[currentUser?.perfil ?? ""] ?? currentUser?.perfil}
               </span>
             </div>
             <ChevronDown className="w-4 h-4 text-muted-foreground hidden sm:block" />
@@ -74,8 +79,8 @@ export default function HeaderSupabase({ onMenuClick, onAlterarSenha }: Props) {
               />
               <div className="absolute right-0 top-full mt-1 z-20 w-48 bg-white rounded-xl shadow-lg border border-border py-1">
                 <div className="px-3 py-2 border-b border-border">
-                  <p className="text-sm font-medium text-foreground truncate">{profile?.nome}</p>
-                  <p className="text-xs text-muted-foreground">{profile?.email}</p>
+                  <p className="text-sm font-medium text-foreground truncate">{currentUser?.nome}</p>
+                  <p className="text-xs text-muted-foreground">{currentUser?.email}</p>
                 </div>
                 <button
                   onClick={() => { setDropdownOpen(false); onAlterarSenha(); }}
@@ -85,7 +90,7 @@ export default function HeaderSupabase({ onMenuClick, onAlterarSenha }: Props) {
                   Alterar Senha
                 </button>
                 <button
-                  onClick={signOut}
+                  onClick={handleLogout}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition"
                 >
                   <LogOut className="w-4 h-4" />
