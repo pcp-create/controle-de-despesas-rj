@@ -15,17 +15,27 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[v0] Login attempt - email:", email, "senha length:", senha.length);
     setError("");
     setLoading(true);
     
-    const result = await signIn(email, senha);
-    
-    if (result.error) {
-      if (result.error.includes("Invalid login")) {
-        setError("Email ou senha incorretos");
+    try {
+      const result = await signIn(email, senha);
+      console.log("[v0] SignIn result:", result);
+      
+      if (result.error) {
+        console.log("[v0] Login error:", result.error);
+        if (result.error.includes("Invalid login")) {
+          setError("Email ou senha incorretos");
+        } else {
+          setError(result.error);
+        }
       } else {
-        setError(result.error);
+        console.log("[v0] Login successful, should redirect");
       }
+    } catch (err) {
+      console.log("[v0] Login exception:", err);
+      setError("Erro ao fazer login");
     }
     
     setLoading(false);

@@ -96,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     const supabase = createClient();
+    console.log("[v0] signIn called - email:", email);
     setLoading(true);
     
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -103,16 +104,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
     });
 
+    console.log("[v0] Supabase signInWithPassword result - data:", data, "error:", error);
+
     if (error) {
+      console.log("[v0] Auth error:", error.message);
       setLoading(false);
       return { error: error.message };
     }
 
     if (data.user) {
+      console.log("[v0] User authenticated:", data.user.id);
       setUser(data.user);
       const profileData = await fetchProfile(data.user.id);
+      console.log("[v0] Profile fetched:", profileData);
       
       if (!profileData?.ativo) {
+        console.log("[v0] User inactive, signing out");
         await supabase.auth.signOut();
         setUser(null);
         setProfile(null);
@@ -124,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(false);
+    console.log("[v0] signIn complete, returning success");
     return { error: null };
   };
 
