@@ -13,8 +13,6 @@ export async function uploadComprovante(
   const ext = file.name.split(".").pop() || "jpg";
   const fileName = `${userId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
-  console.log("[v0] Uploading comprovante:", { userId, fileName, fileSize: file.size, fileType: file.type });
-
   const { data, error } = await supabase.storage
     .from("comprovantes")
     .upload(fileName, file, {
@@ -22,10 +20,7 @@ export async function uploadComprovante(
       upsert: false,
     });
 
-  console.log("[v0] Upload result:", { data, error });
-
   if (error) {
-    console.error("[v0] Error uploading comprovante:", error);
     return { error: error.message };
   }
 
@@ -33,8 +28,6 @@ export async function uploadComprovante(
   const { data: urlData } = await supabase.storage
     .from("comprovantes")
     .createSignedUrl(data.path, 60 * 60 * 24 * 365);
-
-  console.log("[v0] Signed URL created:", urlData?.signedUrl);
 
   return {
     url: urlData?.signedUrl || "",
