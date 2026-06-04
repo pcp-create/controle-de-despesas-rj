@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/lib/supabase/auth-context";
-import { useDespesas, useTiposDespesa, useCartoes, type Despesa } from "@/lib/supabase/hooks";
+import { useAppStore } from "@/lib/store";
+import { useDespesas, useTiposDespesa, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
 import { ArrowLeft, Upload, X, Info, Save, Loader2 } from "lucide-react";
 
@@ -12,9 +12,8 @@ interface Props {
 }
 
 export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) {
-  const { profile } = useAuth();
+  const { currentUser, cartoes } = useAppStore();
   const { tiposDespesa } = useTiposDespesa();
-  const { cartoes } = useCartoes();
   const { addDespesa, updateDespesa } = useDespesas();
 
   const [form, setForm] = useState({
@@ -107,7 +106,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !profile?.id) return;
+    if (!file || !currentUser?.id) return;
 
     // Validar tamanho (5MB)
     if (file.size > 5 * 1024 * 1024) {
@@ -125,7 +124,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     setUploading(true);
     setErrors({ ...errors, comprovante: "" });
 
-    const result = await uploadComprovante(profile.id, file);
+    const result = await uploadComprovante(currentUser.id, file);
 
     if ("error" in result) {
       setErrors({ ...errors, comprovante: result.error });
