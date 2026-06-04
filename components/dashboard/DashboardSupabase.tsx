@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type React from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import {
@@ -9,6 +10,11 @@ import {
   ArrowRight,
   CalendarDays,
   PlusCircle,
+  SendHorizonal,
+  Clock,
+  CircleCheck,
+  CircleX,
+  FileClock,
 } from "lucide-react";
 import { formatCurrency, getStatusGeral, statusGeralConfig } from "@/lib/helpers";
 import type { PageKey, NavigateFn } from "@/components/layout/AppShellSupabase";
@@ -141,12 +147,47 @@ export default function DashboardSupabase({ onNavigate }: Props) {
 
   const totalGeral = byUsuario.reduce((s, u) => s + u.total, 0);
 
-  const statusCards: { key: string; value: number }[] = [
-    { key: "nao_enviado",          value: naoEnviadas },
-    { key: "enviado",              value: enviadas },
-    { key: "aguardando_aprovacao", value: aguardando },
-    { key: "aprovado",             value: aprovadas },
-    { key: "reprovado",            value: reprovadas },
+  const statusCards: { key: string; value: number; icon: React.ReactNode; iconBg: string; iconColor: string; hint: string }[] = [
+    {
+      key: "nao_enviado",
+      value: naoEnviadas,
+      icon: <FileClock className="w-5 h-5" />,
+      iconBg: "bg-slate-100",
+      iconColor: "text-slate-500",
+      hint: "Rascunhos ainda não enviados para aprovação",
+    },
+    {
+      key: "enviado",
+      value: enviadas,
+      icon: <SendHorizonal className="w-5 h-5" />,
+      iconBg: "bg-primary/10",
+      iconColor: "text-primary",
+      hint: "Enviadas, aguardando processamento",
+    },
+    {
+      key: "aguardando_aprovacao",
+      value: aguardando,
+      icon: <Clock className="w-5 h-5" />,
+      iconBg: "bg-warning/10",
+      iconColor: "text-warning",
+      hint: perfil === "administrador" || perfil === "gestor" ? "Ir para Aprovações" : "Aguardando análise do gestor",
+    },
+    {
+      key: "aprovado",
+      value: aprovadas,
+      icon: <CircleCheck className="w-5 h-5" />,
+      iconBg: "bg-success/10",
+      iconColor: "text-success",
+      hint: "Despesas aprovadas pelo gestor",
+    },
+    {
+      key: "reprovado",
+      value: reprovadas,
+      icon: <CircleX className="w-5 h-5" />,
+      iconBg: "bg-destructive/10",
+      iconColor: "text-destructive",
+      hint: "Despesas reprovadas",
+    },
   ];
 
   const recentDespesas = [...myDespesas]
@@ -247,42 +288,48 @@ export default function DashboardSupabase({ onNavigate }: Props) {
       {/* Card total + 5 cards de status clicáveis */}
       <div className="flex flex-col gap-3">
         {/* Card total */}
-        <div className="bg-white rounded-xl p-4 border border-border shadow-sm flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+        <div className="bg-white rounded-xl p-5 border border-border shadow-sm flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
             <DollarSign className="w-5 h-5" />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-2xl font-bold text-foreground">{formatCurrency(total)}</p>
-            <p className="text-xs text-muted-foreground">Total do período &mdash; {myDespesas.length} lançamento{myDespesas.length !== 1 ? "s" : ""}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Total no período &mdash; <span className="font-medium text-foreground">{myDespesas.length} lançamento{myDespesas.length !== 1 ? "s" : ""}</span>
+            </p>
           </div>
+          <TrendingUp className="w-5 h-5 text-muted-foreground/40 shrink-0 hidden sm:block" />
         </div>
 
-        {/* 5 cards de status */}
+        {/* 5 cards de status clicáveis */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {statusCards.map(({ key, value }) => {
+          {statusCards.map(({ key, value, icon, iconBg, iconColor, hint }) => {
             const cfg = statusGeralConfig[key as keyof typeof statusGeralConfig];
-            const isAguardando = key === "aguardando_aprovacao";
-            const isAdminGestor = perfil === "administrador" || perfil === "gestor";
-            const tooltip = isAguardando && isAdminGestor
-              ? "Ir para Aprovações"
-              : perfil === "tecnico"
-              ? "Ver em Minhas Despesas"
-              : "Ver em Todas as Despesas";
             return (
               <button
                 key={key}
                 onClick={() => handleCardClick(key)}
-                title={tooltip}
-                className="bg-white rounded-xl p-4 border border-border shadow-sm flex flex-col gap-2 text-left hover:border-primary/40 hover:shadow-md active:scale-[0.98] transition-all group"
+                title={hint}
+                className="group bg-white rounded-xl p-4 border border-border shadow-sm flex flex-col gap-3 text-left hover:shadow-md hover:border-primary/30 active:scale-[0.98] transition-all"
               >
+                {/* Ícone + seta */}
                 <div className="flex items-center justify-between">
-                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-0.5 rounded-full ${cfg.color}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                    {cfg.label}
-                  </span>
-                  <ArrowRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${iconBg} ${iconColor}`}>
+                    {icon}
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 translate-x-0 group-hover:translate-x-0.5 transition-all" />
                 </div>
-                <p className="text-3xl font-bold text-foreground">{value}</p>
+
+                {/* Contador */}
+                <div>
+                  <p className="text-3xl font-bold text-foreground leading-none">{value}</p>
+                </div>
+
+                {/* Badge de status */}
+                <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full w-fit ${cfg.color}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />
+                  {cfg.label}
+                </span>
               </button>
             );
           })}
