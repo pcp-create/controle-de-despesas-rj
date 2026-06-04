@@ -212,6 +212,26 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) 
                         </div>
                       )}
 
+                      {/* Hospedagem */}
+                      {d.data_checkin && d.data_checkout && (
+                        <>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Check-in</p>
+                            <p className="text-foreground">{new Date(d.data_checkin + "T12:00:00").toLocaleDateString("pt-BR")}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Check-out</p>
+                            <p className="text-foreground">{new Date(d.data_checkout + "T12:00:00").toLocaleDateString("pt-BR")}</p>
+                          </div>
+                          {d.numero_diarias && (
+                            <div className="col-span-2 flex items-center justify-between p-2.5 rounded-lg bg-primary/5 border border-primary/15 text-sm">
+                              <span className="text-muted-foreground"><strong className="text-foreground">{d.numero_diarias}</strong> diária{d.numero_diarias > 1 ? "s" : ""}</span>
+                              <span className="text-muted-foreground"><strong className="text-foreground">{formatCurrency(Number(d.valor) / d.numero_diarias)}</strong> / diária</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+
                       {/* Aprovação/Reprovação */}
                       {d.status_aprovacao === "AprovadoGestor" && d.data_aprovacao && (
                         <>

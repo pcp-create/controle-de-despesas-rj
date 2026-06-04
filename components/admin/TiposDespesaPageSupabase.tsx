@@ -14,6 +14,7 @@ import {
   Check,
   X,
   Loader2,
+  BedDouble,
 } from "lucide-react";
 
 export default function TiposDespesaPageSupabase() {
@@ -30,6 +31,7 @@ export default function TiposDespesaPageSupabase() {
     descricao: "",
     limite_maximo: "",
     limite_ocorrencias_diarias: "",
+    calcula_diarias: false,
     exige_comprovante: true,
     documento_padrao: "",
     ativo: true,
@@ -112,6 +114,7 @@ export default function TiposDespesaPageSupabase() {
         descricao: form.descricao || null,
         limite_maximo: form.limite_maximo ? Number(form.limite_maximo) : null,
         limite_ocorrencias_diarias: form.limite_ocorrencias_diarias ? Number(form.limite_ocorrencias_diarias) : null,
+        calcula_diarias: form.calcula_diarias,
         exige_comprovante: form.exige_comprovante,
         documento_padrao: form.documento_padrao || null,
         ativo: form.ativo,
@@ -130,7 +133,7 @@ export default function TiposDespesaPageSupabase() {
           setFeedback({ type: "success", msg: "Tipo atualizado com sucesso!" });
           setEditingId(null);
           setShowNew(false);
-          setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", exige_comprovante: true, documento_padrao: "", ativo: true });
+          setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", calcula_diarias: false, exige_comprovante: true, documento_padrao: "", ativo: true });
           await loadSupabaseData();
           setTimeout(() => setFeedback(null), 3000);
         }
@@ -145,7 +148,7 @@ export default function TiposDespesaPageSupabase() {
         } else {
           setFeedback({ type: "success", msg: "Tipo criado com sucesso!" });
           setShowNew(false);
-          setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", exige_comprovante: true, documento_padrao: "", ativo: true });
+          setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", calcula_diarias: false, exige_comprovante: true, documento_padrao: "", ativo: true });
           await loadSupabaseData();
           setTimeout(() => setFeedback(null), 3000);
         }
@@ -163,6 +166,7 @@ export default function TiposDespesaPageSupabase() {
       descricao: tipo.descricao || "",
       limite_maximo: tipo.limiteMaximo?.toString() || "",
       limite_ocorrencias_diarias: (tipo as any).limiteOcorrenciasDiarias?.toString() || "",
+      calcula_diarias: (tipo as any).calculaDiarias === true,
       exige_comprovante: tipo.exigeComprovante,
       documento_padrao: tipo.documentoPadrao || "",
       ativo: tipo.ativo,
@@ -177,7 +181,7 @@ export default function TiposDespesaPageSupabase() {
   const cancelEdit = () => {
     setEditingId(null);
     setShowNew(false);
-    setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", exige_comprovante: true, documento_padrao: "", ativo: true });
+    setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", calcula_diarias: false, exige_comprovante: true, documento_padrao: "", ativo: true });
   };
 
   return (
@@ -268,6 +272,19 @@ export default function TiposDespesaPageSupabase() {
                 placeholder="Ex: Cupom Fiscal"
                 disabled={loading}
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="calcula_diarias"
+                checked={form.calcula_diarias}
+                onChange={(e) => setForm({ ...form, calcula_diarias: e.target.checked })}
+                className="w-4 h-4 rounded"
+                disabled={loading}
+              />
+              <label htmlFor="calcula_diarias" className="text-sm">
+                Calcula por diária — exige check-in e check-out ao lançar despesa
+              </label>
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -374,6 +391,12 @@ export default function TiposDespesaPageSupabase() {
                     {(t as any).limiteOcorrenciasDiarias != null && (
                       <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
                         {(t as any).limiteOcorrenciasDiarias}x/dia
+                      </span>
+                    )}
+                    {(t as any).calculaDiarias && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
+                        <BedDouble className="w-3 h-3" />
+                        Diárias
                       </span>
                     )}
                     <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full ${t.exigeComprovante ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>

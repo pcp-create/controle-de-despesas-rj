@@ -14,6 +14,7 @@ export interface TipoDespesa {
   descricao: string | null;
   limite_maximo: number | null;
   limite_ocorrencias_diarias: number | null;
+  calcula_diarias: boolean;
   exige_comprovante: boolean;
   documento_padrao: string | null;
   ativo: boolean;
@@ -43,6 +44,9 @@ export interface Despesa {
   comprovante_nome: string | null;
   comprovante_url: string | null;
   data_despesa: string;
+  data_checkin: string | null;
+  data_checkout: string | null;
+  numero_diarias: number | null;
   status_aprovacao: "AguardandoGestor" | "AprovadoGestor" | "Reprovado";
   status_erp: "Rascunho" | "EnviadoAguardandoGestor" | "AprovadoGestorERPAtualizado" | "ErroEnvioERP" | "ErroAtualizarERP";
   gestor_aprovador_id: string | null;
@@ -319,7 +323,15 @@ export function useDespesas(userId?: string, perfil?: string) {
     const tipoDespesa = despesaData?.tipo_despesa as TipoDespesa | null;
     const valor = Number(despesaData?.valor ?? 0);
     const limite = tipoDespesa?.limite_maximo;
-    const dentroDoValorLimite = limite !== null && limite !== undefined && valor <= limite;
+
+    // --- Lógica de diárias (ex: Hotel) ---
+    // Se o tipo calcula por diária, compara (valor / diárias) com o limite
+    let valorParaComparacao = valor;
+    if (tipoDespesa?.calcula_diarias && despesaData?.numero_diarias && despesaData.numero_diarias > 0) {
+      valorParaComparacao = valor / despesaData.numero_diarias;
+    }
+
+    const dentroDoValorLimite = limite !== null && limite !== undefined && valorParaComparacao <= limite;
 
     // Verificar limite de ocorrências diárias
     let dentroDoLimiteDiario = true;
@@ -336,7 +348,7 @@ export function useDespesas(userId?: string, perfil?: string) {
         .eq("status_aprovacao", "AprovadoGestor")
         .gte("data_despesa", inicioDia)
         .lte("data_despesa", fimDia)
-        .neq("id", id); // excluir a própria despesa
+        .neq("id", id);
 
       const ocorrenciasHoje = count ?? 0;
       dentroDoLimiteDiario = ocorrenciasHoje < tipoDespesa.limite_ocorrencias_diarias;
@@ -372,10 +384,16 @@ export function useDespesas(userId?: string, perfil?: string) {
     mutate();
 
     if (aprovacaoAutomatica) {
+      if (tipoDespesa?.calcula_diarias && despesaData?.numero_diarias) {
+        return { ok: true, msg: `Despesa aprovada automaticamente — ${despesaData.numero_diarias} diária(s) dentro do limite!` };
+      }
       return { ok: true, msg: "Despesa enviada e aprovada automaticamente (dentro do limite)!" };
     }
     if (dentroDoValorLimite && !dentroDoLimiteDiario) {
       return { ok: true, msg: "Despesa enviada para aprovação — limite diário de ocorrências atingido." };
+    }
+    if (tipoDespesa?.calcula_diarias && !dentroDoValorLimite) {
+      return { ok: true, msg: "Despesa enviada para aprovação — valor por diária acima do limite." };
     }
     return { ok: true, msg: "Despesa enviada com sucesso!" };
   };

@@ -138,6 +138,7 @@ export const useAppStore = create<AppState>()(
             descricao: tipo.descricao || "",
             limiteMaximo: tipo.limite_maximo || 0,
             limiteOcorrenciasDiarias: tipo.limite_ocorrencias_diarias ?? null,
+            calculaDiarias: tipo.calcula_diarias === true,
             exigeComprovante: tipo.exige_comprovante !== false,
             documentoPadrao: tipo.documento_padrao || "",
             ativo: tipo.ativo !== false,
