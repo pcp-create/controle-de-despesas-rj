@@ -180,12 +180,25 @@ export default function UsuariosPageSupabase() {
         updateUser(editingUser.id, form);
         setFeedback({ type: "success", msg: "Usuário atualizado com sucesso!" });
       } else {
-        // Criar novo usuário com UUID válido
-        const novoId = crypto.randomUUID();
-        const { error } = await supabase
+        // Criar novo usuário no Auth primeiro
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: form.email,
+          password: form.senha || "12345",
+        });
+
+        if (authError || !authData.user?.id) {
+          setFormError("Erro ao criar usuário de autenticação: " + (authError?.message || "ID não retornado"));
+          setFormLoading(false);
+          return;
+        }
+
+        const userId = authData.user.id;
+
+        // Agora inserir em profiles com o ID do auth.users
+        const { error: profileError } = await supabase
           .from("profiles")
           .insert({
-            id: novoId,
+            id: userId,
             nome: form.nome,
             email: form.email,
             usuario: form.usuario,
@@ -202,15 +215,15 @@ export default function UsuariosPageSupabase() {
             senha: form.senha || "12345",
           });
 
-        if (error) {
-          setFormError("Erro ao criar usuário: " + error.message);
+        if (profileError) {
+          setFormError("Erro ao criar perfil do usuário: " + profileError.message);
           setFormLoading(false);
           return;
         }
         
         addUser({
           ...form,
-          id: novoId,
+          id: userId,
           ativo: true,
           primeiroAcesso: false,
         });
@@ -241,14 +254,23 @@ export default function UsuariosPageSupabase() {
         return;
       }
 
-      const { error } = await supabase
+      // Deletar do profiles
+      const { error: profileError } = await supabase
         .from("profiles")
         .delete()
         .eq("id", user.id);
 
-      if (error) {
-        setFeedback({ type: "error", msg: "Erro ao deletar usuário: " + error.message });
+      if (profileError) {
+        setFeedback({ type: "error", msg: "Erro ao deletar perfil: " + profileError.message });
         return;
+      }
+
+      // Deletar do auth.users (admin API)
+      const { error: authError } = await supabase.auth.admin.deleteUser(user.id);
+      
+      if (authError) {
+        console.warn("[v0] Aviso ao deletar auth user:", authError.message);
+        // Não retornar erro aqui pois o perfil já foi deletado
       }
 
       deleteUser(user.id);
