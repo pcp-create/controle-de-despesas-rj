@@ -83,19 +83,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (isMounted && profileData) {
             setProfile(profileData);
           }
-        } else {
-          // Sem sessão, fazer auto-login
-          console.log("[v0] Sem sessão, tentando auto-login...");
-          const { error } = await supabase.auth.signInWithPassword({
-            email: "administrador@rjcompressores.com.br",
-            password: "317622",
-          });
-          
-          if (error) {
-            console.error("[v0] Erro no auto-login:", error);
-          } else {
-            console.log("[v0] Auto-login bem-sucedido");
-          }
         }
       } catch (err) {
         console.error("[v0] Erro ao inicializar auth:", err);
