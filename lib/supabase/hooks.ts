@@ -163,22 +163,23 @@ export function useTiposDespesa() {
   };
 }
 
-export function useCartoes() {
+export function useCartoes(userId?: string) {
   const { profile } = useAuth();
+  const effectiveId = userId || profile?.id;
   const { data, error, isLoading, mutate } = useSWR(
-    profile ? `cartoes-${profile.id}` : null,
-    () => fetchCartoes(profile!.id),
+    effectiveId ? `cartoes-${effectiveId}` : null,
+    () => fetchCartoes(effectiveId!),
     { revalidateOnFocus: false }
   );
 
   const addCartao = async (cartao: Omit<Cartao, "id" | "user_id" | "ativo">) => {
     const supabase = getSupabase();
-    if (!profile) return { error: "Não autenticado" };
+    if (!effectiveId) return { error: "Não autenticado" };
     if (!supabase) return { error: "Supabase não disponível" };
 
     const { data, error } = await supabase
       .from("cartoes")
-      .insert({ ...cartao, user_id: profile.id })
+      .insert({ ...cartao, user_id: effectiveId })
       .select()
       .single();
 

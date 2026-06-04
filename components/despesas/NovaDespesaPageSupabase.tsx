@@ -15,7 +15,7 @@ interface Props {
 export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) {
   const { currentUser } = useAppStore();
   const { tiposDespesa } = useTiposDespesa();
-  const { cartoes } = useCartoes();
+  const { cartoes } = useCartoes(currentUser?.id);
   const { addDespesa, updateDespesa } = useDespesas(currentUser?.id);
 
   const [form, setForm] = useState({
