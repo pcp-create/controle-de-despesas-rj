@@ -113,7 +113,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     const supabase = createClient();
-    setLoading(true);
     
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -121,11 +120,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (error) {
-      setLoading(false);
       return { error: error.message };
     }
 
     if (data.user) {
+      setLoading(true);
       setUser(data.user);
       const profileData = await fetchProfile(data.user.id);
       
@@ -138,9 +137,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       setProfile(profileData);
+      setLoading(false);
     }
 
-    setLoading(false);
     return { error: null };
   };
 
