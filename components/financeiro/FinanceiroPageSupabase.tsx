@@ -117,7 +117,7 @@ export default function FinanceiroPageSupabase() {
                            d.status_aprovacao === "AguardandoGestor" ? "Aguardando" : 
                            d.status_aprovacao === "Reprovado" ? "Reprovado" : "-",
         "Comprovante": d.comprovante_url ? "Sim" : "Não",
-        "Status ERP": d.status_erp || "Rascunho",
+        "Status ERP": d.status_erp || "Não enviado",
         "Data Envio": d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "-",
         "ERP ID": d.erp_id || "-",
       };
@@ -345,7 +345,7 @@ export default function FinanceiroPageSupabase() {
                 }[d.status_aprovacao] || "bg-muted/10 text-muted-foreground";
 
                 const statusErpBg = {
-                  "Rascunho": "bg-slate-100 text-slate-700",
+                  "Rascunho": "bg-destructive/10 text-destructive",
                   "Enviado": "bg-blue-100 text-blue-700",
                   "Processado": "bg-purple-100 text-purple-700",
                   "Concluído": "bg-success/10 text-success",
@@ -379,7 +379,7 @@ export default function FinanceiroPageSupabase() {
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusErpBg}`}>
-                        {d.status_erp || "Rascunho"}
+                        {d.status_erp || "Não enviado"}
                       </span>
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">

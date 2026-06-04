@@ -31,7 +31,7 @@ const statusAprovacaoConfig = {
 };
 
 const statusErpConfig = {
-  Rascunho: { label: "Rascunho", color: "bg-muted text-muted-foreground" },
+  Rascunho: { label: "Não enviado", color: "bg-destructive/10 text-destructive" },
   EnviadoAguardandoGestor: { label: "Enviado", color: "bg-primary/10 text-primary" },
   AprovadoGestorERPAtualizado: { label: "Integrado", color: "bg-success/10 text-success" },
   ErroEnvioERP: { label: "Erro Envio", color: "bg-destructive/10 text-destructive" },

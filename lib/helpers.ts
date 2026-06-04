@@ -17,7 +17,7 @@ export function formatDateTime(dateStr: string): string {
 }
 
 export const erpStatusLabel: Record<ERPStatus, string> = {
-  Rascunho: "Rascunho",
+  Rascunho: "Não enviado",
   EnviadoAguardandoGestor: "Aguardando Gestor",
   ErroEnvioERP: "Erro ao Enviar ERP",
   AprovadoGestor: "Aprovado pelo Gestor",
@@ -28,7 +28,7 @@ export const erpStatusLabel: Record<ERPStatus, string> = {
 };
 
 export const erpStatusColor: Record<ERPStatus, string> = {
-  Rascunho: "bg-muted text-muted-foreground",
+  Rascunho: "bg-destructive/15 text-destructive",
   EnviadoAguardandoGestor: "bg-warning/15 text-warning",
   ErroEnvioERP: "bg-destructive/15 text-destructive",
   AprovadoGestor: "bg-success/15 text-success",

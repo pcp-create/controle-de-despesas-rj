@@ -22,7 +22,7 @@ const statusAprovacaoConfig: Record<string, { label: string; color: string; icon
 };
 
 const statusErpConfig: Record<string, { label: string; color: string }> = {
-  Rascunho:                   { label: "Rascunho",    color: "bg-muted text-muted-foreground" },
+  Rascunho:                   { label: "Não enviado", color: "bg-destructive/10 text-destructive" },
   EnviadoAguardandoGestor:    { label: "Enviado",     color: "bg-primary/10 text-primary" },
   AprovadoGestorERPAtualizado:{ label: "Integrado",   color: "bg-success/10 text-success" },
   AprovadoGestor:             { label: "Aprovado",    color: "bg-success/10 text-success" },
