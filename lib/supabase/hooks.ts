@@ -68,6 +68,14 @@ export interface Profile {
   ativo: boolean;
   gestor_id: string | null;
   primeiro_acesso: boolean;
+  empresa_id: number | null;
+  fornecedor_id: number | null;
+  condicao_pagamento_id: number | null;
+  operacao_financeira_id: number | null;
+  moeda_id: number | null;
+  centro_custo_id: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // Fetchers

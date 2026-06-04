@@ -23,6 +23,7 @@ import { format } from "date-fns";
 interface AppState {
   // Auth
   currentUser: User | null;
+  setCurrentUser: (user: User | null) => void;
   login: (usuario: string, senha: string) => { ok: boolean; msg: string };
   logout: () => void;
   alterarSenha: (
@@ -81,6 +82,8 @@ export const useAppStore = create<AppState>()(
       tiposDespesa: mockTiposDespesa,
       despesas: mockDespesas,
       auditoria: mockAuditoria,
+
+      setCurrentUser: (user) => set({ currentUser: user }),
 
       login: (usuario, senha) => {
         const user = get().users.find(
