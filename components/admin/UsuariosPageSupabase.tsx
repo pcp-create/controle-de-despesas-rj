@@ -146,33 +146,129 @@ export default function UsuariosPageSupabase() {
     setFormLoading(true);
 
     try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      
+      if (!supabase) {
+        setFormError("Supabase não disponível");
+        setFormLoading(false);
+        return;
+      }
+
       if (editingUser) {
+        // Atualizar usuário
+        const { error } = await supabase
+          .from("profiles")
+          .update({
+            nome: form.nome,
+            email: form.email,
+            usuario: form.usuario,
+            perfil: form.perfil,
+            gestor_id: form.gestor_id,
+            telefone: form.telefone || null,
+            empresa_id: form.empresaId || null,
+            fornecedor_id: form.fornecedorId || null,
+            condicao_pagamento_id: form.condicaoPagamentoId || null,
+            operacao_financeira_id: form.operacaoFinanceiraId || null,
+            moeda_id: form.moedaId || null,
+            centro_custo_id: form.centroCustoId || null,
+          })
+          .eq("id", editingUser.id);
+
+        if (error) {
+          setFormError("Erro ao atualizar usuário: " + error.message);
+          setFormLoading(false);
+          return;
+        }
+        
         updateUser(editingUser.id, form);
         setFeedback({ type: "success", msg: "Usuário atualizado com sucesso!" });
       } else {
+        // Criar novo usuário
+        const novoId = "u" + Date.now();
+        const { error } = await supabase
+          .from("profiles")
+          .insert({
+            id: novoId,
+            nome: form.nome,
+            email: form.email,
+            usuario: form.usuario,
+            perfil: form.perfil,
+            gestor_id: form.gestor_id,
+            telefone: form.telefone || null,
+            empresa_id: form.empresaId || null,
+            fornecedor_id: form.fornecedorId || null,
+            condicao_pagamento_id: form.condicaoPagamentoId || null,
+            operacao_financeira_id: form.operacaoFinanceiraId || null,
+            moeda_id: form.moedaId || null,
+            centro_custo_id: form.centroCustoId || null,
+            ativo: true,
+            primeiro_acesso: false,
+            senha: form.senha || "12345",
+          });
+
+        if (error) {
+          setFormError("Erro ao criar usuário: " + error.message);
+          setFormLoading(false);
+          return;
+        }
+        
         addUser({
           ...form,
-          id: "u" + Date.now(),
+          id: novoId,
           ativo: true,
           primeiroAcesso: false,
         });
         setFeedback({ type: "success", msg: "Usuário criado com sucesso!" });
       }
 
+      // Recarregar dados do Supabase
+      const { loadSupabaseData } = useAppStore.getState();
+      await loadSupabaseData();
+
       handleCloseModal();
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
-      setFormError("Erro ao processar solicitação");
+      console.error("[v0] Erro ao processar usuário:", err);
+      setFormError("Erro ao processar solicitação: " + (err instanceof Error ? err.message : "erro desconhecido"));
     }
 
     setFormLoading(false);
   };
 
-  const handleDelete = (user: any) => {
-    deleteUser(user.id);
-    setDeleteConfirm(null);
-    setFeedback({ type: "success", msg: "Usuário removido com sucesso!" });
-    setTimeout(() => setFeedback(null), 3000);
+  const handleDelete = async (user: any) => {
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      
+      if (!supabase) {
+        setFeedback({ type: "error", msg: "Supabase não disponível" });
+        return;
+      }
+
+      const { error } = await supabase
+        .from("profiles")
+        .delete()
+        .eq("id", user.id);
+
+      if (error) {
+        setFeedback({ type: "error", msg: "Erro ao deletar usuário: " + error.message });
+        return;
+      }
+
+      deleteUser(user.id);
+      setDeleteConfirm(null);
+      setFeedback({ type: "success", msg: "Usuário removido com sucesso!" });
+      
+      // Recarregar dados
+      const { loadSupabaseData } = useAppStore.getState();
+      await loadSupabaseData();
+      
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      console.error("[v0] Erro ao deletar usuário:", err);
+      setFeedback({ type: "error", msg: "Erro ao deletar usuário" });
+    }
   };
 
   const handleResetPassword = async (user: any) => {
