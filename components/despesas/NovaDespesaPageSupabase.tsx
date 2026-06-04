@@ -195,11 +195,15 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Nenhum</option>
-              {cartoes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.apelido ? `${c.apelido} - ${c.banco} ${c.bandeira} *${c.ultimos_digitos}` : `${c.banco} ${c.bandeira} *${c.ultimos_digitos}`}
-                </option>
-              ))}
+              {cartoes.map((c) => {
+                const digitos = c.ultimos_digitos || c.ultimosDigitos || "****";
+                const apelido = c.apelido || c.apelido_cartao || "";
+                return (
+                  <option key={c.id} value={c.id}>
+                    {apelido ? `${apelido} - ${c.banco} ${c.bandeira} *${digitos}` : `${c.banco} ${c.bandeira} *${digitos}`}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
