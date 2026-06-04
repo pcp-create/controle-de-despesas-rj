@@ -54,6 +54,7 @@ export interface Database {
           descricao: string | null
           limite_maximo: number | null
           limite_ocorrencias_diarias: number | null
+          calcula_diarias: boolean
           exige_comprovante: boolean
           documento_padrao: string | null
           ativo: boolean
@@ -66,6 +67,7 @@ export interface Database {
           descricao?: string | null
           limite_maximo?: number | null
           limite_ocorrencias_diarias?: number | null
+          calcula_diarias?: boolean
           exige_comprovante?: boolean
           documento_padrao?: string | null
           ativo?: boolean
@@ -78,6 +80,7 @@ export interface Database {
           descricao?: string | null
           limite_maximo?: number | null
           limite_ocorrencias_diarias?: number | null
+          calcula_diarias?: boolean
           exige_comprovante?: boolean
           documento_padrao?: string | null
           ativo?: boolean
