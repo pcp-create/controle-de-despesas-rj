@@ -18,6 +18,9 @@ import {
 } from "recharts";
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+type ModoFiltro = "mes" | "periodo";
 
 export default function FinanceiroPageSupabase() {
   const { despesas, isLoading } = useDespesas();
@@ -26,17 +29,33 @@ export default function FinanceiroPageSupabase() {
   
   const [search, setSearch] = useState("");
   const now = new Date();
+  const [modoFiltro, setModoFiltro] = useState<ModoFiltro>("mes");
   const [mesSelecionado, setMesSelecionado] = useState(now.getMonth());
   const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());
+  const [dataInicial, setDataInicial] = useState(() => {
+    const d = new Date(now.getFullYear(), now.getMonth(), 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [dataFinal, setDataFinal] = useState(() => now.toISOString().slice(0, 10));
+
+  const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
 
   // Despesas aprovadas do período
   const despesasPeriodo = useMemo(() => {
     return despesas.filter((d) => {
       if (d.status_aprovacao !== "AprovadoGestor") return false;
-      const dt = new Date(d.data_despesa);
-      return dt.getMonth() === mesSelecionado && dt.getFullYear() === anoSelecionado;
+      
+      const dataStr = (d.data_despesa || d.created_at || "").slice(0, 10);
+      if (modoFiltro === "mes") {
+        const dt = new Date(dataStr + "T00:00:00");
+        return dt.getMonth() === mesSelecionado && dt.getFullYear() === anoSelecionado;
+      } else {
+        if (dataInicial && dataStr < dataInicial) return false;
+        if (dataFinal && dataStr > dataFinal) return false;
+        return true;
+      }
     });
-  }, [despesas, mesSelecionado, anoSelecionado]);
+  }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
 
   // Métricas
   const totalAprovado = despesasPeriodo.reduce((s, d) => s + Number(d.valor), 0);
@@ -99,26 +118,70 @@ export default function FinanceiroPageSupabase() {
             Visão financeira das despesas aprovadas
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-muted-foreground" />
-          <select
-            value={mesSelecionado}
-            onChange={(e) => setMesSelecionado(Number(e.target.value))}
-            className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm"
-          >
-            {MESES.map((m, i) => (
-              <option key={m} value={i}>{m}</option>
-            ))}
-          </select>
-          <select
-            value={anoSelecionado}
-            onChange={(e) => setAnoSelecionado(Number(e.target.value))}
-            className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm"
-          >
-            {[now.getFullYear() - 1, now.getFullYear()].map((a) => (
-              <option key={a} value={a}>{a}</option>
-            ))}
-          </select>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          {/* Modo filtro */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setModoFiltro("mes")}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                modoFiltro === "mes"
+                  ? "bg-primary text-white"
+                  : "bg-muted text-foreground hover:bg-muted/80"
+              }`}
+            >
+              Por mês
+            </button>
+            <button
+              onClick={() => setModoFiltro("periodo")}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                modoFiltro === "periodo"
+                  ? "bg-primary text-white"
+                  : "bg-muted text-foreground hover:bg-muted/80"
+              }`}
+            >
+              Por período
+            </button>
+          </div>
+
+          {/* Filtros */}
+          {modoFiltro === "mes" ? (
+            <>
+              <select
+                value={mesSelecionado}
+                onChange={(e) => setMesSelecionado(Number(e.target.value))}
+                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm"
+              >
+                {MESES_FULL.map((m, i) => (
+                  <option key={i} value={i}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={anoSelecionado}
+                onChange={(e) => setAnoSelecionado(Number(e.target.value))}
+                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm"
+              >
+                {anos.map((a) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <>
+              <input
+                type="date"
+                value={dataInicial}
+                onChange={(e) => setDataInicial(e.target.value)}
+                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm"
+              />
+              <span className="text-sm text-muted-foreground">até</span>
+              <input
+                type="date"
+                value={dataFinal}
+                onChange={(e) => setDataFinal(e.target.value)}
+                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm"
+              />
+            </>
+          )}
         </div>
       </div>
 
