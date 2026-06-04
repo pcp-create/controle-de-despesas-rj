@@ -180,10 +180,11 @@ export default function UsuariosPageSupabase() {
         updateUser(editingUser.id, form);
         setFeedback({ type: "success", msg: "Usuário atualizado com sucesso!" });
       } else {
-        // Criar novo usuário no Auth primeiro
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        // Criar novo usuário no Auth usando admin API
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
           email: form.email,
           password: form.senha || "12345",
+          email_confirm: true,
         });
 
         if (authError || !authData.user?.id) {
