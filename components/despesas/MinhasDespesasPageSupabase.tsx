@@ -3,16 +3,12 @@
 import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, type Despesa } from "@/lib/supabase/hooks";
-import { formatCurrency } from "@/lib/helpers";
+import { formatCurrency, getStatusGeral, statusGeralConfig } from "@/lib/helpers";
 import {
   PlusCircle,
   Search,
   Filter,
-  Clock,
-  CheckCircle,
-  XCircle,
   Send,
-  AlertTriangle,
   Edit2,
   Trash2,
   Eye,
@@ -23,20 +19,6 @@ interface Props {
   onNova: () => void;
   onEditar: (despesa: Despesa) => void;
 }
-
-const statusAprovacaoConfig = {
-  AguardandoGestor: { label: "Aguardando Aprovação", color: "bg-warning/10 text-warning", icon: Clock },
-  AprovadoGestor: { label: "Aprovado", color: "bg-success/10 text-success", icon: CheckCircle },
-  Reprovado: { label: "Reprovado", color: "bg-destructive/10 text-destructive", icon: XCircle },
-};
-
-const statusErpConfig = {
-  Rascunho: { label: "Não enviado", color: "bg-destructive/10 text-destructive" },
-  EnviadoAguardandoGestor: { label: "Enviado", color: "bg-primary/10 text-primary" },
-  AprovadoGestorERPAtualizado: { label: "Integrado", color: "bg-success/10 text-success" },
-  ErroEnvioERP: { label: "Erro Envio", color: "bg-destructive/10 text-destructive" },
-  ErroAtualizarERP: { label: "Erro ERP", color: "bg-destructive/10 text-destructive" },
-};
 
 export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) {
   const { currentUser, loadSupabaseData } = useAppStore();
@@ -52,7 +34,10 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) 
     return despesas
       .filter((d) => d.tecnico_id === currentUser?.id)
       .filter((d) => {
-        if (filterStatus !== "todos" && d.status_aprovacao !== filterStatus) return false;
+        if (filterStatus !== "todos") {
+          const sg = getStatusGeral(d.status_erp, d.status_aprovacao);
+          if (sg !== filterStatus) return false;
+        }
         if (search) {
           const term = search.toLowerCase();
           const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
@@ -146,9 +131,11 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) 
             className="pl-9 pr-8 py-2 rounded-lg border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
           >
             <option value="todos">Todos</option>
-            <option value="AguardandoGestor">Aguardando Aprovação</option>
-            <option value="AprovadoGestor">Aprovados</option>
-            <option value="Reprovado">Reprovados</option>
+            <option value="nao_enviado">Não enviado</option>
+            <option value="enviado">Enviado</option>
+            <option value="aguardando_aprovacao">Aguardando Aprovação</option>
+            <option value="aprovado">Aprovado</option>
+            <option value="reprovado">Reprovado</option>
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
         </div>
@@ -167,10 +154,9 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) 
         <div className="flex flex-col gap-3">
           {minhasDespesas.map((d) => {
             const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
-            const statusAprov = statusAprovacaoConfig[d.status_aprovacao];
-            const statusERP = statusErpConfig[d.status_erp];
+            const sg = getStatusGeral(d.status_erp, d.status_aprovacao);
+            const status = statusGeralConfig[sg];
             const isExpanded = expandedId === d.id;
-            const IconAprov = statusAprov.icon;
 
             return (
               <div key={d.id} className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
@@ -191,20 +177,12 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) 
                       <span>•</span>
                       <span>{new Date(d.data_despesa).toLocaleDateString("pt-BR")}</span>
                     </div>
-                    {/* Linha 3: status */}
-                    <div className="flex items-center gap-3 mt-2 flex-wrap">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-muted-foreground">Despesa:</span>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusERP.color}`}>
-                          {statusERP.label}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-muted-foreground">Aprovação:</span>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusAprov.color}`}>
-                          {statusAprov.label}
-                        </span>
-                      </div>
+                    {/* Linha 3: status geral único */}
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${status.color}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
+                        {status.label}
+                      </span>
                     </div>
                   </div>
                   <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform shrink-0 ${isExpanded ? "rotate-180" : ""}`} />
