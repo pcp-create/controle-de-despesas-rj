@@ -119,8 +119,7 @@ export default function MinhasDespesasPage({ onNova, onEditar }: Props) {
                 <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Tipo</th>
                 <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Cliente / OS</th>
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Valor</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden sm:table-cell">Aprovacao</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide hidden md:table-cell">Enviado em</th>
+                <th className="text-left px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Aprovacao</th>
                 <th className="text-center px-3 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Anexo</th>
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Acoes</th>
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground text-xs uppercase tracking-wide">Enviar</th>
@@ -167,7 +166,7 @@ export default function MinhasDespesasPage({ onNova, onEditar }: Props) {
                     </td>
 
                     {/* Aprovacao */}
-                    <td className="px-4 py-3 hidden sm:table-cell">
+                    <td className="px-4 py-3">
                       {rascunho ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-warning/10 text-warning border border-warning/20">
                           Rascunho
@@ -176,17 +175,6 @@ export default function MinhasDespesasPage({ onNova, onEditar }: Props) {
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${approvalStatusColor[d.statusAprovacao]}`}>
                           {approvalStatusLabel[d.statusAprovacao]}
                         </span>
-                      )}
-                    </td>
-
-                    {/* Enviado em */}
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      {d.dataEnvio ? (
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">
-                          {formatDateTime(d.dataEnvio)}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground/40">—</span>
                       )}
                     </td>
 
@@ -239,13 +227,17 @@ export default function MinhasDespesasPage({ onNova, onEditar }: Props) {
                           Enviar
                         </button>
                       ) : (
-                        <span
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground/50 text-xs font-medium cursor-default whitespace-nowrap"
-                          title={d.dataEnvio ? `Enviado em ${formatDateTime(d.dataEnvio)}` : "Ja enviada"}
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Enviada
-                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-muted-foreground/50 text-xs font-medium cursor-default whitespace-nowrap">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Enviada
+                          </span>
+                          {d.dataEnvio && (
+                            <span className="text-xs text-muted-foreground/60 whitespace-nowrap">
+                              {formatDateTime(d.dataEnvio)}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>
