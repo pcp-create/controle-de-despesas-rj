@@ -2,6 +2,7 @@
 
 import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
+import { registrarAuditoria } from "@/lib/supabase/audit";
 
 // Helper to get supabase client - MUST be called inside functions, not at module level
 const getSupabase = () => createClient();
@@ -239,6 +240,18 @@ export function useDespesas(userId?: string, perfil?: string) {
       .single();
 
     if (error) return { error: error.message };
+    
+    // Registrar auditoria
+    if (data?.id) {
+      await registrarAuditoria({
+        acao: "CREATE",
+        entidade: "despesa",
+        entidadeId: data.id,
+        usuarioId: userId,
+        detalhes: `Criada despesa de R$ ${despesa.valor.toFixed(2)} para ${despesa.cliente}`,
+      });
+    }
+    
     mutate();
     return { data };
   };
@@ -253,6 +266,16 @@ export function useDespesas(userId?: string, perfil?: string) {
       .eq("id", id);
 
     if (error) return { error: error.message };
+    
+    // Registrar auditoria
+    await registrarAuditoria({
+      acao: "UPDATE",
+      entidade: "despesa",
+      entidadeId: id,
+      usuarioId: userId || "sistema",
+      detalhes: `Atualizada despesa. Status: ${updates.status_aprovacao || "N/A"}`,
+    });
+    
     mutate();
     return { error: null };
   };
@@ -267,6 +290,16 @@ export function useDespesas(userId?: string, perfil?: string) {
       .eq("id", id);
 
     if (error) return { error: error.message };
+    
+    // Registrar auditoria
+    await registrarAuditoria({
+      acao: "DELETE",
+      entidade: "despesa",
+      entidadeId: id,
+      usuarioId: userId || "sistema",
+      detalhes: "Despesa deletada",
+    });
+    
     mutate();
     return { error: null };
   };

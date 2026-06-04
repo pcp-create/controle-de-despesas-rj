@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useAuth } from "@/lib/supabase/auth-context";
+import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles, type Despesa } from "@/lib/supabase/hooks";
+import { registrarAuditoria } from "@/lib/supabase/audit";
+import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/helpers";
 import {
   Search,
@@ -23,8 +25,8 @@ const statusAprovacaoConfig = {
 };
 
 export default function AprovacaoPageSupabase() {
-  const { profile } = useAuth();
-  const { despesas, isLoading, aprovarDespesa, reprovarDespesa } = useDespesas();
+  const { currentUser, loadSupabaseData } = useAppStore();
+  const { despesas, isLoading } = useDespesas(undefined, currentUser?.perfil);
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
   
@@ -37,17 +39,17 @@ export default function AprovacaoPageSupabase() {
 
   // Filtrar despesas da equipe (despesas onde o tecnico tem o gestor atual como gestor)
   const despesasEquipe = useMemo(() => {
-    if (!profile) return [];
+    if (!currentUser) return [];
     
     return despesas
       .filter((d) => {
         // Se for admin ou financeiro, vê tudo
-        if (profile.perfil === "administrador" || profile.perfil === "financeiro") {
+        if (currentUser.perfil === "administrador" || currentUser.perfil === "financeiro") {
           return true;
         }
         // Se for gestor, vê apenas despesas dos técnicos sob sua supervisão
         const tecnico = profiles.find((p) => p.id === d.tecnico_id);
-        return tecnico?.gestor_id === profile.id;
+        return tecnico?.gestor_id === currentUser.id;
       })
       .filter((d) => {
         if (filterStatus !== "todos" && d.status_aprovacao !== filterStatus) return false;
@@ -65,16 +67,40 @@ export default function AprovacaoPageSupabase() {
         return true;
       })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [despesas, profile, profiles, search, filterStatus, tiposDespesa]);
+  }, [despesas, currentUser, profiles, search, filterStatus, tiposDespesa]);
 
   const pendentes = despesasEquipe.filter((d) => d.status_aprovacao === "AguardandoGestor").length;
 
   const handleAprovar = async (id: string) => {
-    const result = await aprovarDespesa(id);
-    if (result.error) {
-      setFeedback({ type: "error", msg: result.error });
+    const supabase = createClient();
+    if (!supabase) {
+      setFeedback({ type: "error", msg: "Supabase não disponível" });
+      return;
+    }
+
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        status_aprovacao: "AprovadoGestor",
+        gestor_aprovador_id: currentUser?.id,
+        data_aprovacao: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) {
+      setFeedback({ type: "error", msg: error.message });
     } else {
+      // Registrar auditoria
+      await registrarAuditoria({
+        acao: "APPROVE",
+        entidade: "despesa",
+        entidadeId: id,
+        usuarioId: currentUser?.id || "sistema",
+        detalhes: "Despesa aprovada pelo gestor",
+      });
+      
       setFeedback({ type: "success", msg: "Despesa aprovada!" });
+      await loadSupabaseData();
       setTimeout(() => setFeedback(null), 3000);
     }
   };
@@ -84,13 +110,39 @@ export default function AprovacaoPageSupabase() {
       setFeedback({ type: "error", msg: "Informe a justificativa da reprovação" });
       return;
     }
-    const result = await reprovarDespesa(id, justificativa);
-    if (result.error) {
-      setFeedback({ type: "error", msg: result.error });
+    
+    const supabase = createClient();
+    if (!supabase) {
+      setFeedback({ type: "error", msg: "Supabase não disponível" });
+      return;
+    }
+
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        status_aprovacao: "Reprovado",
+        gestor_aprovador_id: currentUser?.id,
+        justificativa_reprovacao: justificativa,
+        data_aprovacao: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) {
+      setFeedback({ type: "error", msg: error.message });
     } else {
+      // Registrar auditoria
+      await registrarAuditoria({
+        acao: "REJECT",
+        entidade: "despesa",
+        entidadeId: id,
+        usuarioId: currentUser?.id || "sistema",
+        detalhes: `Despesa reprovada: ${justificativa}`,
+      });
+      
       setFeedback({ type: "success", msg: "Despesa reprovada" });
       setReprovandoId(null);
       setJustificativa("");
+      await loadSupabaseData();
       setTimeout(() => setFeedback(null), 3000);
     }
   };
