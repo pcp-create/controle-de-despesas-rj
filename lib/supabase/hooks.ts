@@ -2,7 +2,6 @@
 
 import useSWR from "swr";
 import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/lib/supabase/auth-context";
 
 // Helper to get supabase client - MUST be called inside functions, not at module level
 const getSupabase = () => createClient();
@@ -220,22 +219,20 @@ export function useCartoes() {
   };
 }
 
-export function useDespesas() {
-  const { profile } = useAuth();
-  const { data, error, isLoading, mutate } = useSWR(
-    profile ? `despesas-${profile.id}-${profile.perfil}` : null,
-    () => fetchDespesas(profile!.id, profile!.perfil),
-    { revalidateOnFocus: false }
-  );
+export function useDespesas(userId?: string) {
+  const { data, error, isLoading, mutate } = useSWR(userId ? `despesas_${userId}` : null, userId ? () => fetchDespesas(userId) : null, {
+    revalidateOnFocus: false,
+  });
 
   const addDespesa = async (despesa: Omit<Despesa, "id" | "tecnico_id" | "created_at" | "updated_at" | "tipo_despesa" | "cartao" | "tecnico">) => {
+    if (!userId) return { error: "Não autenticado" };
+    
     const supabase = getSupabase();
-    if (!profile) return { error: "Não autenticado" };
     if (!supabase) return { error: "Supabase não disponível" };
 
     const { data, error } = await supabase
       .from("despesas")
-      .insert({ ...despesa, tecnico_id: profile.id })
+      .insert({ ...despesa, tecnico_id: userId })
       .select()
       .single();
 

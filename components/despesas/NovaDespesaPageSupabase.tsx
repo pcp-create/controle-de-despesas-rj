@@ -14,7 +14,7 @@ interface Props {
 export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) {
   const { currentUser, cartoes } = useAppStore();
   const { tiposDespesa } = useTiposDespesa();
-  const { addDespesa, updateDespesa } = useDespesas();
+  const { addDespesa, updateDespesa } = useDespesas(currentUser?.id);
 
   const [form, setForm] = useState({
     tipoDespesaId: editDespesa?.tipo_despesa_id || "",
@@ -45,9 +45,6 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     if (!form.valor || isNaN(Number(form.valor)) || Number(form.valor) <= 0) errs.valor = "Valor inválido";
     if (!form.dataDespesa) errs.dataDespesa = "Informe a data";
     
-    if (tipoSelecionado?.limite_maximo && Number(form.valor) > tipoSelecionado.limite_maximo) {
-      errs.valor = `Valor excede o limite de R$ ${tipoSelecionado.limite_maximo.toFixed(2)}`;
-    }
     if (tipoSelecionado?.exige_comprovante && !comprovante) {
       errs.comprovante = "Este tipo de despesa exige comprovante";
     }
@@ -65,6 +62,9 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     setLoading(true);
     setErrors({});
 
+    // Verificar se o valor excede o limite
+    const excedeLimite = tipoSelecionado?.limite_maximo && Number(form.valor) > tipoSelecionado.limite_maximo;
+
     const despesaData = {
       tipo_despesa_id: form.tipoDespesaId,
       cartao_id: form.cartaoId || null,
@@ -76,7 +76,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       data_despesa: form.dataDespesa,
       comprovante_nome: comprovante?.nome || null,
       comprovante_url: comprovante?.url || null,
-      status_aprovacao: "AguardandoGestor" as const,
+      status_aprovacao: excedeLimite ? "RequereAprovacao" : "AguardandoGestor",
       status_erp: "Rascunho" as const,
       gestor_aprovador_id: null,
       justificativa_reprovacao: null,
@@ -97,7 +97,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     if (result.error) {
       setFeedback({ type: "error", msg: result.error });
     } else {
-      setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
+      const mensagem = excedeLimite 
+        ? "Despesa salva! Valor excede o limite e será enviado para aprovação de gestor."
+        : "Despesa salva! Redirecionando...";
+      setFeedback({ type: "success", msg: mensagem });
       setTimeout(() => onBack(), 1500);
     }
     
