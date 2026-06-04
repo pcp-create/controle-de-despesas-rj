@@ -287,7 +287,7 @@ export default function TiposDespesaPageSupabase() {
                 </div>
                 {t.descricao && <p className="text-sm text-muted-foreground mt-1">{t.descricao}</p>}
                 <div className="flex flex-wrap items-center gap-2 mt-2">
-                  {t.limiteMaximo && (
+                  {t.limiteMaximo !== null && t.limiteMaximo !== undefined && (
                     <span className="inline-flex items-center gap-1 text-xs bg-warning/10 text-warning px-2 py-0.5 rounded-full">
                       <DollarSign className="w-3 h-3" />
                       Limite: {formatCurrency(t.limiteMaximo)}
