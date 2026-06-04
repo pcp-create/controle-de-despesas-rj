@@ -440,92 +440,67 @@ export default function UsuariosPageSupabase() {
               {activeTab === "erp" && (
                 <>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Empresa</label>
-                    <select
+                    <label className="text-sm font-medium text-foreground">Empresa ID</label>
+                    <input
+                      type="number"
                       value={form.empresaId || ""}
                       onChange={(e) => setForm({ ...form, empresaId: e.target.value })}
+                      placeholder="Ex: 1"
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">Selecione uma empresa</option>
-                      {mockEmpresas.map((e) => (
-                        <option key={e.id} value={e.id}>
-                          {e.nome}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Fornecedor</label>
-                    <select
+                    <label className="text-sm font-medium text-foreground">Fornecedor ID</label>
+                    <input
+                      type="number"
                       value={form.fornecedorId || ""}
                       onChange={(e) => setForm({ ...form, fornecedorId: e.target.value })}
+                      placeholder="Ex: 101"
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">Selecione um fornecedor</option>
-                      {mockFornecedores.map((f) => (
-                        <option key={f.id} value={f.id}>
-                          {f.nome}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Condição de Pagamento</label>
-                    <select
+                    <label className="text-sm font-medium text-foreground">Condição de Pagamento ID</label>
+                    <input
+                      type="number"
                       value={form.condicaoPagamentoId || ""}
                       onChange={(e) => setForm({ ...form, condicaoPagamentoId: e.target.value })}
+                      placeholder="Ex: 1"
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">Selecione uma condição</option>
-                      {mockCondicoesPagamento.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.nome}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Operação Financeira</label>
-                    <select
+                    <label className="text-sm font-medium text-foreground">Operação Financeira ID</label>
+                    <input
+                      type="number"
                       value={form.operacaoFinanceiraId || ""}
                       onChange={(e) => setForm({ ...form, operacaoFinanceiraId: e.target.value })}
+                      placeholder="Ex: 5"
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">Selecione uma operação</option>
-                      {mockOperacoesFinanceiras.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.nome}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Moeda</label>
-                    <select
+                    <label className="text-sm font-medium text-foreground">Moeda ID</label>
+                    <input
+                      type="number"
                       value={form.moedaId || ""}
                       onChange={(e) => setForm({ ...form, moedaId: e.target.value })}
+                      placeholder="Ex: 1"
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="">Selecione uma moeda</option>
-                      {mockMoedas.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.nome}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Centro de Custo</label>
+                    <label className="text-sm font-medium text-foreground">Centro de Custo ID</label>
                     <input
                       type="number"
                       value={form.centroCustoId || ""}
                       onChange={(e) => setForm({ ...form, centroCustoId: e.target.value })}
-                      placeholder="Digite o ID do centro de custo"
+                      placeholder="Ex: 1"
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
