@@ -16,6 +16,7 @@ import {
   Trash2,
   Loader2,
   Key,
+  CreditCard,
 } from "lucide-react";
 import { mockEmpresas, mockFornecedores, mockCondicoesPagamento, mockOperacoesFinanceiras, mockMoedas } from "@/lib/mock-data";
 
@@ -337,6 +338,16 @@ export default function UsuariosPageSupabase() {
                 Informações Básicas
               </button>
               <button
+                onClick={() => setActiveTab("cartoes")}
+                className={`flex-1 px-4 py-2 text-sm font-medium transition border-b-2 ${
+                  activeTab === "cartoes"
+                    ? "border-b-accent text-foreground"
+                    : "border-b-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Cartões
+              </button>
+              <button
                 onClick={() => setActiveTab("erp")}
                 className={`flex-1 px-4 py-2 text-sm font-medium transition border-b-2 ${
                   activeTab === "erp"
@@ -451,7 +462,48 @@ export default function UsuariosPageSupabase() {
                 </>
               )}
 
-              {/* Tab: ERP */}
+              {/* Tab: Cartões */}
+              {activeTab === "cartoes" && editingUser && (
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-medium text-foreground">Cartões de Crédito</h3>
+                    <button
+                      type="button"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-sm hover:bg-accent/90 transition"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      Adicionar
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="bg-muted/50 border border-border rounded-lg p-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <CreditCard className="w-6 h-6 text-accent" />
+                        <div className="flex-1">
+                          <h4 className="font-medium text-foreground">Exemplo - Apelido do Cartão</h4>
+                          <p className="text-xs text-muted-foreground">Banco - Bandeira - **** 1234</p>
+                        </div>
+                        <button type="button" className="p-1.5 rounded-lg hover:bg-muted/60 transition">
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </button>
+                      </div>
+                      <div className="text-xs text-muted-foreground">Padrão</div>
+                    </div>
+                  </div>
+
+                  <div className="text-sm text-muted-foreground text-center py-8">
+                    <CreditCard className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
+                    Nenhum cartão cadastrado
+                  </div>
+                </>
+              )}
+
+              {activeTab === "cartoes" && !editingUser && (
+                <div className="text-sm text-muted-foreground text-center py-8">
+                  <p>Salve o usuário primeiro para adicionar cartões de crédito.</p>
+                </div>
+              )}
               {activeTab === "erp" && (
                 <>
                   <div className="flex flex-col gap-1.5">
