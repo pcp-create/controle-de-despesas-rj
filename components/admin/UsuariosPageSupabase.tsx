@@ -15,6 +15,7 @@ import {
   X,
   Trash2,
   Loader2,
+  Key,
 } from "lucide-react";
 import { mockEmpresas, mockFornecedores, mockCondicoesPagamento, mockOperacoesFinanceiras, mockMoedas } from "@/lib/mock-data";
 
@@ -159,6 +160,13 @@ export default function UsuariosPageSupabase() {
     setTimeout(() => setFeedback(null), 3000);
   };
 
+  const handleResetPassword = (user: any) => {
+    const novaSenh = "12345";
+    updateUser(user.id, { ...user, senha: novaSenh });
+    setFeedback({ type: "success", msg: `Senha de ${user.nome} resetada para: ${novaSenh}` });
+    setTimeout(() => setFeedback(null), 5000);
+  };
+
   const gestores = users.filter((p) => p.perfil === "gestor" || p.perfil === "administrador");
 
   return (
@@ -268,6 +276,13 @@ export default function UsuariosPageSupabase() {
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                     Editar
+                  </button>
+                  <button
+                    onClick={() => handleResetPassword(u)}
+                    className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-accent/30 text-accent hover:bg-accent/10 transition"
+                    title="Resetar senha"
+                  >
+                    <Key className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => setDeleteConfirm(u)}
