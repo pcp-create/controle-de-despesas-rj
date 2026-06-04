@@ -97,7 +97,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     const supabase = createClient();
-    console.log("[v0] signIn called - email:", email);
     setLoading(true);
     
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -105,22 +104,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
     });
 
-    console.log("[v0] Supabase signInWithPassword result - data:", data, "error:", error);
-
     if (error) {
-      console.log("[v0] Auth error:", error.message);
       setLoading(false);
       return { error: error.message };
     }
 
     if (data.user) {
-      console.log("[v0] User authenticated:", data.user.id);
       setUser(data.user);
       const profileData = await fetchProfile(data.user.id);
-      console.log("[v0] Profile fetched:", profileData);
       
       if (!profileData?.ativo) {
-        console.log("[v0] User inactive, signing out");
         await supabase.auth.signOut();
         setUser(null);
         setProfile(null);
@@ -132,13 +125,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(false);
-    console.log("[v0] signIn complete, returning success");
     return { error: null };
   };
 
   const signUp = async (email: string, password: string, userData: { nome: string; usuario: string; perfil: Perfil }) => {
     const supabase = createClient();
-    console.log("[v0] signUp called - email:", email, "userData:", userData);
     setLoading(true);
     
     const { data, error } = await supabase.auth.signUp({
@@ -153,23 +144,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    console.log("[v0] Supabase signUp result - data:", data, "error:", error);
-
     if (error) {
-      console.log("[v0] SignUp error:", error.message);
       setLoading(false);
       return { error: error.message };
     }
 
     if (data.user) {
-      console.log("[v0] User created:", data.user.id);
       setUser(data.user);
       
       // Aguardar um momento para o trigger criar o profile
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       const profileData = await fetchProfile(data.user.id);
-      console.log("[v0] Profile fetched after signup:", profileData);
       setProfile(profileData);
     }
 
