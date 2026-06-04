@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
-import { useDespesas, useTiposDespesa, type Despesa } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useCartoes, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
 import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { formatCurrency } from "@/lib/helpers";
@@ -13,8 +13,9 @@ interface Props {
 }
 
 export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) {
-  const { currentUser, cartoes } = useAppStore();
+  const { currentUser } = useAppStore();
   const { tiposDespesa } = useTiposDespesa();
+  const { cartoes } = useCartoes();
   const { addDespesa, updateDespesa } = useDespesas(currentUser?.id);
 
   const [form, setForm] = useState({
@@ -223,13 +224,12 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Nenhum</option>
-              {cartoes.map((c) => {
-                const digitos = c.ultimos_digitos || c.ultimosDigitos || "****";
-                const apelido = c.apelido || "";
+              {cartoes.filter((c) => c.ativo).map((c) => {
+                const label = c.apelido
+                  ? `${c.apelido} — ${c.banco} ${c.bandeira} *${c.ultimos_digitos}`
+                  : `${c.banco} ${c.bandeira} *${c.ultimos_digitos}`;
                 return (
-                  <option key={c.id} value={c.id}>
-                    {apelido ? `${apelido} - ${c.banco} ${c.bandeira} *${digitos}` : `${c.banco} ${c.bandeira} *${digitos}`}
-                  </option>
+                  <option key={c.id} value={c.id}>{label}</option>
                 );
               })}
             </select>
