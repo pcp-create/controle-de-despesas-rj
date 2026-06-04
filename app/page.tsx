@@ -1,12 +1,25 @@
 "use client";
 
 import { useAuth } from "@/lib/supabase/auth-context";
+import { useEffect } from "react";
 import LoginPage from "@/components/auth/LoginPage";
 import AppShellSupabase from "@/components/layout/AppShellSupabase";
 import AlterarSenhaModalSupabase from "@/components/auth/AlterarSenhaModalSupabase";
 
 export default function Home() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, signIn } = useAuth();
+
+  // Auto-login ao carregar a página
+  useEffect(() => {
+    if (loading || user) return;
+    
+    const autoLogin = async () => {
+      console.log("[v0] Tentando auto-login com administrador...");
+      await signIn("administrador@rjcompressores.com.br", "317622");
+    };
+
+    autoLogin();
+  }, [loading, user, signIn]);
 
   if (loading) {
     return (
@@ -32,3 +45,4 @@ export default function Home() {
     </>
   );
 }
+
