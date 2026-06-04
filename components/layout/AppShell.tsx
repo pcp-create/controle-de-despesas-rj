@@ -14,6 +14,7 @@ import RelatoriosPage from "@/components/relatorios/RelatoriosPage";
 import UsuariosPage from "@/components/admin/UsuariosPage";
 import TiposDespesaPage from "@/components/admin/TiposDespesaPage";
 import AuditoriaPage from "@/components/admin/AuditoriaPage";
+import IntegracoesERPPage from "@/components/integracoes/IntegracoesERPPage";
 import AlterarSenhaModal from "@/components/auth/AlterarSenhaModal";
 import type { Despesa } from "@/lib/types";
 
@@ -23,6 +24,7 @@ export type PageKey =
   | "minhas-despesas"
   | "aprovacao"
   | "financeiro"
+  | "integracoes-erp"
   | "relatorios"
   | "usuarios"
   | "tipos-despesa"
@@ -69,6 +71,7 @@ export default function AppShell() {
       );
       case "aprovacao": return <AprovacaoPage />;
       case "financeiro": return <FinanceiroPage />;
+      case "integracoes-erp": return <IntegracoesERPPage />;
       case "relatorios": return <RelatoriosPage />;
       case "usuarios": return <UsuariosPage />;
       case "tipos-despesa": return <TiposDespesaPage />;
