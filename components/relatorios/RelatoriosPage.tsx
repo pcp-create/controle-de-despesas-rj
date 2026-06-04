@@ -23,8 +23,10 @@ export default function RelatoriosPage() {
   const tecnicos = users.filter((u) => u.perfil === "tecnico");
 
   const filtered = despesas.filter((d) => {
-    if (filtros.dataInicial && d.dataDespesa < filtros.dataInicial) return false;
-    if (filtros.dataFinal && d.dataDespesa > filtros.dataFinal) return false;
+    // Normaliza a data da despesa para YYYY-MM-DD para comparacao correta
+    const dataDespesa = d.dataDespesa.slice(0, 10);
+    if (filtros.dataInicial && dataDespesa < filtros.dataInicial) return false;
+    if (filtros.dataFinal && dataDespesa > filtros.dataFinal) return false;
     if (filtros.tecnicoId && d.tecnicoId !== filtros.tecnicoId) return false;
     if (filtros.cliente && !d.cliente.toLowerCase().includes(filtros.cliente.toLowerCase())) return false;
     if (filtros.numeroOS && !d.numeroOS.toLowerCase().includes(filtros.numeroOS.toLowerCase())) return false;
