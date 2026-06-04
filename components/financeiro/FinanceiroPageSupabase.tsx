@@ -139,18 +139,9 @@ export default function FinanceiroPageSupabase() {
     <div className="flex flex-col gap-5">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">Financeiro</h1>
-          <p className="text-sm text-muted-foreground">Visão financeira das despesas aprovadas</p>
-        </div>
-        <button
-          onClick={handleExportar}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-input bg-white text-sm font-medium hover:bg-muted transition shrink-0"
-        >
-          <Download className="w-4 h-4" />
-          <span className="hidden sm:inline">Exportar</span>
-        </button>
+      <div>
+        <h1 className="text-xl font-bold text-foreground">Financeiro</h1>
+        <p className="text-sm text-muted-foreground">Visão financeira das despesas aprovadas</p>
       </div>
 
       {/* ── Barra de filtros ── */}
@@ -285,15 +276,24 @@ export default function FinanceiroPageSupabase() {
             <h2 className="text-sm font-semibold text-foreground">Todas as Despesas — Confronto com Comprovante</h2>
             <p className="text-xs text-muted-foreground mt-0.5">{despesasFiltradas.length} despesa{despesasFiltradas.length !== 1 ? "s" : ""} no período</p>
           </div>
-          <div className="relative shrink-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar..."
-              className="pl-9 pr-4 py-2 rounded-lg border border-input bg-background text-sm w-full sm:w-56 focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar..."
+                className="pl-9 pr-4 py-2 rounded-lg border border-input bg-background text-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            <button
+              onClick={handleExportar}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-input bg-white text-sm font-medium hover:bg-muted transition shrink-0"
+            >
+              <Download className="w-4 h-4" />
+              <span>Exportar XLSX</span>
+            </button>
           </div>
         </div>
 
