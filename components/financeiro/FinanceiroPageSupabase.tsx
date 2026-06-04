@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
-import { formatCurrency } from "@/lib/helpers";
+import { formatCurrency, getStatusGeral, statusGeralConfig } from "@/lib/helpers";
 import { DollarSign, TrendingUp, Search, Eye } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -108,9 +108,7 @@ export default function FinanceiroPageSupabase() {
         Cliente: d.cliente,
         "Número OS": d.numero_os || "-",
         Valor: Number(d.valor),
-        "Status": d.status_aprovacao === "AprovadoGestor"   ? "Aprovado"   :
-          d.status_aprovacao === "AguardandoGestor" ? "Aguardando" :
-          d.status_aprovacao === "Reprovado"        ? "Reprovado"  : "-",
+        "Status": statusGeralConfig[getStatusGeral(d.status_erp ?? "", d.status_aprovacao)].label,
         Comprovante: d.comprovante_url ? "Sim" : "Não",
         "Status ERP": d.status_erp || "Não enviado",
         "Data Envio": d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "-",
@@ -151,9 +149,8 @@ export default function FinanceiroPageSupabase() {
     const rows = despesasFiltradas.map((d) => {
       const tipo    = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
       const tecnico = profiles.find((p) => p.id === d.tecnico_id);
-      const statusAprov = d.status_aprovacao === "AprovadoGestor"   ? "Aprovado"   :
-                          d.status_aprovacao === "AguardandoGestor" ? "Aguardando" :
-                          d.status_aprovacao === "Reprovado"        ? "Reprovado"  : "-";
+      const sg = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
+      const statusLabel = statusGeralConfig[sg].label;
       return [
         new Date(d.data_despesa).toLocaleDateString("pt-BR"),
         tecnico?.nome.split(" ").slice(0, 2).join(" ") || "-",
@@ -161,7 +158,7 @@ export default function FinanceiroPageSupabase() {
         d.cliente,
         d.numero_os || "-",
         formatCurrency(Number(d.valor)),
-        statusAprov,
+        statusLabel,
         d.comprovante_url ? "Sim" : "Não",
         d.status_erp || "-",
         d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "-",
@@ -192,9 +189,11 @@ export default function FinanceiroPageSupabase() {
       didParseCell: (data) => {
         if (data.section === "body" && data.column.index === 6) {
           const v = data.cell.raw as string;
-          if (v === "Aprovado")   { data.cell.styles.textColor = [22, 163, 74]; data.cell.styles.fontStyle = "bold"; }
-          if (v === "Aguardando") { data.cell.styles.textColor = [202, 138, 4]; }
-          if (v === "Reprovado")  { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = "bold"; }
+          if (v === "Aprovado")              { data.cell.styles.textColor = [22, 163, 74];  data.cell.styles.fontStyle = "bold"; }
+          if (v === "Aguardando Aprovação")  { data.cell.styles.textColor = [202, 138, 4]; }
+          if (v === "Reprovado")             { data.cell.styles.textColor = [220, 38, 38];  data.cell.styles.fontStyle = "bold"; }
+          if (v === "Enviado")               { data.cell.styles.textColor = [30, 58, 138]; }
+          if (v === "Não enviado")           { data.cell.styles.textColor = [120, 120, 120]; }
         }
       },
     });
@@ -410,18 +409,15 @@ export default function FinanceiroPageSupabase() {
               {despesasFiltradas.map((d) => {
                 const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
                 const tecnico = profiles.find((p) => p.id === d.tecnico_id);
-
-                const statusAprovacaoCls = {
-                  AprovadoGestor:   "bg-success/10 text-success",
-                  AguardandoGestor: "bg-warning/10 text-warning",
-                  Reprovado:        "bg-destructive/10 text-destructive",
-                }[d.status_aprovacao] ?? "bg-muted/20 text-muted-foreground";
+                const sg = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
+                const statusCfg = statusGeralConfig[sg];
 
                 const statusErpCls = {
                   Rascunho:                    "bg-muted/20 text-muted-foreground",
                   EnviadoAguardandoGestor:     "bg-warning/10 text-warning",
                   AprovadoGestorERPAtualizado: "bg-success/10 text-success",
-                  Erro:                        "bg-destructive/10 text-destructive",
+                  ErroAtualizarERP:            "bg-destructive/10 text-destructive",
+                  ErroEnvioERP:                "bg-destructive/10 text-destructive",
                 }[d.status_erp ?? ""] ?? "bg-muted/20 text-muted-foreground";
 
                 return (
@@ -433,10 +429,9 @@ export default function FinanceiroPageSupabase() {
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{d.numero_os || "-"}</td>
                     <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{formatCurrency(Number(d.valor))}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      <span className={`px-2 py-0.5 rounded-full font-medium ${statusAprovacaoCls}`}>
-                        {d.status_aprovacao === "AprovadoGestor"   ? "Aprovado"   :
-                         d.status_aprovacao === "AguardandoGestor" ? "Aguardando" :
-                         d.status_aprovacao === "Reprovado"        ? "Reprovado"  : "-"}
+                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${statusCfg.color}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />
+                        {statusCfg.label}
                       </span>
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
