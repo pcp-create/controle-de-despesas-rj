@@ -37,41 +37,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = useCallback(async (userId: string) => {
-    const supabase = createClient();
-    
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
+  // Usar useRef para controlar race conditions
+  const abortControllerRef = useCallback(() => new AbortController(), []);
 
-    if (error) {
-      console.error("Erro ao buscar perfil:", error);
+  const fetchProfile = useCallback(async (userId: string, signal?: AbortSignal) => {
+    try {
+      const supabase = createClient();
+      
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
+      if (signal?.aborted) return null;
+
+      if (error) {
+        console.error("Erro ao buscar perfil:", error);
+        return null;
+      }
+
+      return data as Profile;
+    } catch (err) {
+      if (signal?.aborted) return null;
+      console.error("Erro ao buscar perfil:", err);
       return null;
     }
-
-    return data as Profile;
   }, []);
 
+  // Efeito: Carregar sessão inicial e escutar mudanças de autenticação
   useEffect(() => {
     const supabase = createClient();
     let mounted = true;
+    const controller = new AbortController();
 
-    // Verificar sessão atual
-    const getSession = async () => {
+    // Buscar sessão inicial
+    const initializeAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
-        if (!mounted) return;
-        
+        if (!mounted || controller.signal.aborted) return;
+
         if (session?.user) {
           setUser(session.user);
-          const profileData = await fetchProfile(session.user.id);
-          if (mounted) setProfile(profileData);
+          const profileData = await fetchProfile(session.user.id, controller.signal);
+          if (mounted && !controller.signal.aborted && profileData) {
+            setProfile(profileData);
+          }
         }
       } catch (err) {
-        console.error("Erro ao obter sessão:", err);
+        console.error("Erro ao inicializar autenticação:", err);
       } finally {
         if (mounted) {
           setLoading(false);
@@ -79,23 +94,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    getSession();
-
-    // Timeout de segurança para evitar loading infinito
+    // Timeout de segurança: forçar saída do loading após 3 segundos
     const timeout = setTimeout(() => {
       if (mounted) {
         setLoading(false);
       }
-    }, 5000);
+    }, 3000);
+
+    initializeAuth();
 
     // Escutar mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!mounted || controller.signal.aborted) return;
+
         if (event === "SIGNED_IN" && session?.user) {
-          setUser(session.user);
-          const profileData = await fetchProfile(session.user.id);
-          setProfile(profileData);
-          setLoading(false);
+          // Após login, buscar perfil
+          const profileData = await fetchProfile(session.user.id, controller.signal);
+          
+          if (!mounted || controller.signal.aborted) return;
+
+          if (profileData?.ativo) {
+            setUser(session.user);
+            setProfile(profileData);
+            setLoading(false);
+          } else {
+            // Usuário inativo, fazer logout
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+            setLoading(false);
+          }
         } else if (event === "SIGNED_OUT") {
           setUser(null);
           setProfile(null);
@@ -106,122 +135,119 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       mounted = false;
+      controller.abort();
       clearTimeout(timeout);
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, [fetchProfile]);
 
+  // Função signIn: apenas fazer login, sem bloquear com loading
   const signIn = async (email: string, password: string) => {
     const supabase = createClient();
     
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (error) {
-      return { error: error.message };
-    }
-
-    if (data.user) {
-      setLoading(true);
-      setUser(data.user);
-      const profileData = await fetchProfile(data.user.id);
-      
-      if (!profileData?.ativo) {
-        await supabase.auth.signOut();
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
-        return { error: "Usuário inativo. Contate o administrador." };
+      if (error) {
+        return { error: error.message };
       }
-      
-      setProfile(profileData);
-      setLoading(false);
-    }
 
-    return { error: null };
+      // Login bem-sucedido - o listener onAuthStateChange vai lidar com o resto
+      // Retornar imediatamente sem esperar pelo perfil
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Erro ao fazer login" };
+    }
   };
 
   const signUp = async (email: string, password: string, userData: { nome: string; usuario: string; perfil: Perfil }) => {
     const supabase = createClient();
-    setLoading(true);
     
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          nome: userData.nome,
-          usuario: userData.usuario,
-          perfil: userData.perfil,
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            nome: userData.nome,
+            usuario: userData.usuario,
+            perfil: userData.perfil,
+          },
         },
-      },
-    });
+      });
 
-    if (error) {
-      setLoading(false);
-      return { error: error.message };
+      if (error) {
+        return { error: error.message };
+      }
+
+      // SignUp bem-sucedido - o listener vai lidar com o resto
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Erro ao criar conta" };
     }
-
-    if (data.user) {
-      setUser(data.user);
-      
-      // Aguardar um momento para o trigger criar o profile
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const profileData = await fetchProfile(data.user.id);
-      setProfile(profileData);
-    }
-
-    setLoading(false);
-    return { error: null };
   };
 
   const signOut = async () => {
     const supabase = createClient();
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setProfile(null);
+    } catch (err) {
+      console.error("Erro ao fazer logout:", err);
+    }
   };
 
   const updateProfile = async (data: Partial<Profile>) => {
     const supabase = createClient();
     if (!user) return { error: "Usuário não autenticado" };
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ ...data, updated_at: new Date().toISOString() })
-      .eq("id", user.id);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ ...data, updated_at: new Date().toISOString() })
+        .eq("id", user.id);
 
-    if (error) {
-      return { error: error.message };
+      if (error) {
+        return { error: error.message };
+      }
+
+      // Atualizar estado local
+      const profileData = await fetchProfile(user.id);
+      if (profileData) {
+        setProfile(profileData);
+      }
+
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Erro ao atualizar perfil" };
     }
-
-    // Atualizar estado local
-    const profileData = await fetchProfile(user.id);
-    setProfile(profileData);
-
-    return { error: null };
   };
 
   const changePassword = async (newPassword: string) => {
     const supabase = createClient();
     
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
 
-    if (error) {
-      return { error: error.message };
+      if (error) {
+        return { error: error.message };
+      }
+
+      // Marcar primeiro_acesso como false
+      if (profile?.primeiro_acesso) {
+        await updateProfile({ primeiro_acesso: false });
+      }
+
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Erro ao mudar senha" };
     }
-
-    // Marcar primeiro_acesso como false
-    if (profile?.primeiro_acesso) {
-      await updateProfile({ primeiro_acesso: false });
-    }
-
-    return { error: null };
   };
 
   return (
