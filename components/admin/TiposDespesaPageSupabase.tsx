@@ -84,25 +84,16 @@ export default function TiposDespesaPageSupabase() {
         documento_padrao: form.documento_padrao || null,
       };
 
-      console.log("[v0] handleSave - editingId:", editingId);
-      console.log("[v0] handleSave - data:", data);
-
       if (editingId) {
-        console.log("[v0] Atualizando tipo_despesa com id:", editingId);
-        
-        const { data: updateData, error } = await supabase
+        const { error } = await supabase
           .from("tipos_despesa")
           .update(data)
           .eq("id", editingId)
           .select();
 
-        console.log("[v0] Update response:", { updateData, error });
-
         if (error) {
-          console.error("[v0] Update error details:", error);
           setFeedback({ type: "error", msg: `Erro: ${error.message}` });
         } else {
-          console.log("[v0] Update success, reloading data");
           setFeedback({ type: "success", msg: "Tipo atualizado com sucesso!" });
           setEditingId(null);
           setShowNew(false);
@@ -111,20 +102,14 @@ export default function TiposDespesaPageSupabase() {
           setTimeout(() => setFeedback(null), 3000);
         }
       } else {
-        console.log("[v0] Inserindo novo tipo_despesa");
-        
-        const { data: insertData, error } = await supabase
+        const { error } = await supabase
           .from("tipos_despesa")
           .insert([data])
           .select();
 
-        console.log("[v0] Insert response:", { insertData, error });
-
         if (error) {
-          console.error("[v0] Insert error details:", error);
           setFeedback({ type: "error", msg: `Erro: ${error.message}` });
         } else {
-          console.log("[v0] Insert success, reloading data");
           setFeedback({ type: "success", msg: "Tipo criado com sucesso!" });
           setShowNew(false);
           setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "" });
@@ -132,41 +117,6 @@ export default function TiposDespesaPageSupabase() {
           setTimeout(() => setFeedback(null), 3000);
         }
       }
-    } catch (err) {
-      console.error("[v0] Exception in handleSave:", err);
-      setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Erro ao salvar" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-      if (editingId) {
-        const { error } = await supabase
-          .from("tipos_despesa")
-          .update(data)
-          .eq("id", editingId);
-
-        if (error) {
-          setFeedback({ type: "error", msg: error.message });
-        } else {
-          setFeedback({ type: "success", msg: "Tipo atualizado com sucesso!" });
-          setEditingId(null);
-          await loadSupabaseData();
-        }
-      } else {
-        const { error } = await supabase.from("tipos_despesa").insert([data]);
-
-        if (error) {
-          setFeedback({ type: "error", msg: error.message });
-        } else {
-          setFeedback({ type: "success", msg: "Tipo criado com sucesso!" });
-          setShowNew(false);
-          await loadSupabaseData();
-        }
-      }
-
-      setForm({ nome: "", descricao: "", limite_maximo: "", exige_comprovante: true, documento_padrao: "" });
-      setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
       setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Erro ao salvar" });
     } finally {
