@@ -179,27 +179,35 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar }: Props) 
                   className="w-full p-4 flex items-center gap-4 text-left"
                 >
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-foreground">{tipo?.nome || "Despesa"}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${statusERP.color}`}>
-                        {statusERP.label}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${statusAprov.color}`}>
-                        {statusAprov.label}
-                      </span>
+                    {/* Linha 1: tipo + valor */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-foreground">{tipo?.nome || "Despesa"}</span>
+                      <span className="text-base font-bold text-foreground shrink-0">{formatCurrency(Number(d.valor))}</span>
                     </div>
-                    <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                    {/* Linha 2: cliente • OS • data */}
+                    <div className="flex items-center gap-2 mt-0.5 text-sm text-muted-foreground flex-wrap">
                       <span>{d.cliente}</span>
-                      <span>•</span>
-                      <span>{d.numero_os}</span>
+                      {d.numero_os && <><span>•</span><span>{d.numero_os}</span></>}
                       <span>•</span>
                       <span>{new Date(d.data_despesa).toLocaleDateString("pt-BR")}</span>
                     </div>
+                    {/* Linha 3: status */}
+                    <div className="flex items-center gap-3 mt-2 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">Despesa:</span>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusERP.color}`}>
+                          {statusERP.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">Aprovação:</span>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusAprov.color}`}>
+                          {statusAprov.label}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-lg font-bold text-foreground">{formatCurrency(Number(d.valor))}</p>
-                  </div>
-                  <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform shrink-0 ${isExpanded ? "rotate-180" : ""}`} />
                 </button>
 
                 {isExpanded && (
