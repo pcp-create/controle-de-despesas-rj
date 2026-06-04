@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/supabase/auth-context";
 import { useDespesas, useTiposDespesa, useCartoes, type Despesa } from "@/lib/supabase/hooks";
-import { ArrowLeft, Upload, X, Info, Save } from "lucide-react";
+import { uploadComprovante } from "@/lib/supabase/storage";
+import { ArrowLeft, Upload, X, Info, Save, Loader2 } from "lucide-react";
 
 interface Props {
   onBack: () => void;
@@ -27,12 +28,13 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     dataDespesa: editDespesa?.data_despesa || new Date().toISOString().slice(0, 10),
   });
   
-  const [comprovante, setComprovante] = useState<{ nome: string; url: string } | null>(
+  const [comprovante, setComprovante] = useState<{ nome: string; url: string; path?: string } | null>(
     editDespesa?.comprovante_nome ? { nome: editDespesa.comprovante_nome, url: editDespesa.comprovante_url || "" } : null
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const tipoSelecionado = tiposDespesa.find((t) => t.id === form.tipoDespesaId);
 
@@ -103,12 +105,36 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     setLoading(false);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Simulação - em produção faria upload para Supabase Storage
-      setComprovante({ nome: file.name, url: URL.createObjectURL(file) });
+    if (!file || !profile?.id) return;
+
+    // Validar tamanho (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors({ ...errors, comprovante: "Arquivo deve ter no máximo 5MB" });
+      return;
     }
+
+    // Validar tipo
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+    if (!allowedTypes.includes(file.type)) {
+      setErrors({ ...errors, comprovante: "Tipo de arquivo não permitido. Use JPG, PNG, GIF, WebP ou PDF." });
+      return;
+    }
+
+    setUploading(true);
+    setErrors({ ...errors, comprovante: "" });
+
+    const result = await uploadComprovante(profile.id, file);
+
+    if ("error" in result) {
+      setErrors({ ...errors, comprovante: result.error });
+      setUploading(false);
+      return;
+    }
+
+    setComprovante({ nome: result.nome, url: result.url, path: result.path });
+    setUploading(false);
   };
 
   return (
@@ -280,6 +306,16 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">{comprovante.nome}</p>
+                {comprovante.url && (
+                  <a 
+                    href={comprovante.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs text-accent hover:underline"
+                  >
+                    Visualizar arquivo
+                  </a>
+                )}
               </div>
               <button
                 type="button"
@@ -288,6 +324,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               >
                 <X className="w-4 h-4" />
               </button>
+            </div>
+          ) : uploading ? (
+            <div className="flex flex-col items-center justify-center gap-2 p-6 rounded-lg border-2 border-dashed border-accent/50 bg-accent/5">
+              <Loader2 className="w-8 h-8 text-accent animate-spin" />
+              <span className="text-sm text-muted-foreground">Enviando comprovante...</span>
             </div>
           ) : (
             <label className="flex flex-col items-center justify-center gap-2 p-6 rounded-lg border-2 border-dashed border-border hover:border-accent/50 hover:bg-accent/5 cursor-pointer transition">
