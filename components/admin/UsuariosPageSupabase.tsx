@@ -180,22 +180,10 @@ export default function UsuariosPageSupabase() {
         updateUser(editingUser.id, form);
         setFeedback({ type: "success", msg: "Usuário atualizado com sucesso!" });
       } else {
-        // Criar novo usuário no Auth usando admin API
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-          email: form.email,
-          password: form.senha || "12345",
-          email_confirm: true,
-        });
+        // Criar novo usuário com UUID gerado localmente
+        const userId = crypto.randomUUID();
 
-        if (authError || !authData.user?.id) {
-          setFormError("Erro ao criar usuário de autenticação: " + (authError?.message || "ID não retornado"));
-          setFormLoading(false);
-          return;
-        }
-
-        const userId = authData.user.id;
-
-        // Agora inserir em profiles com o ID do auth.users
+        // Inserir diretamente em profiles (sem usar Auth)
         const { error: profileError } = await supabase
           .from("profiles")
           .insert({
@@ -217,7 +205,7 @@ export default function UsuariosPageSupabase() {
           });
 
         if (profileError) {
-          setFormError("Erro ao criar perfil do usuário: " + profileError.message);
+          setFormError("Erro ao criar usuário: " + profileError.message);
           setFormLoading(false);
           return;
         }
@@ -262,16 +250,8 @@ export default function UsuariosPageSupabase() {
         .eq("id", user.id);
 
       if (profileError) {
-        setFeedback({ type: "error", msg: "Erro ao deletar perfil: " + profileError.message });
+        setFeedback({ type: "error", msg: "Erro ao deletar usuário: " + profileError.message });
         return;
-      }
-
-      // Deletar do auth.users (admin API)
-      const { error: authError } = await supabase.auth.admin.deleteUser(user.id);
-      
-      if (authError) {
-        console.warn("[v0] Aviso ao deletar auth user:", authError.message);
-        // Não retornar erro aqui pois o perfil já foi deletado
       }
 
       deleteUser(user.id);
