@@ -56,25 +56,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const supabase = createClient();
+    let mounted = true;
 
     // Verificar sessão atual
     const getSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         
+        if (!mounted) return;
+        
         if (session?.user) {
           setUser(session.user);
           const profileData = await fetchProfile(session.user.id);
-          setProfile(profileData);
+          if (mounted) setProfile(profileData);
         }
       } catch (err) {
         console.error("Erro ao obter sessão:", err);
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     getSession();
+
+    // Timeout de segurança para evitar loading infinito
+    const timeout = setTimeout(() => {
+      if (mounted) {
+        setLoading(false);
+      }
+    }, 5000);
 
     // Escutar mudanças de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -83,44 +95,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(session.user);
           const profileData = await fetchProfile(session.user.id);
           setProfile(profileData);
+          setLoading(false);
         } else if (event === "SIGNED_OUT") {
           setUser(null);
           setProfile(null);
+          setLoading(false);
         }
       }
     );
 
     return () => {
+      mounted = false;
+      clearTimeout(timeout);
       subscription.unsubscribe();
     };
   }, [fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
     const supabase = createClient();
-    console.log("[v0] signIn called - email:", email);
-    setLoading(true);
     
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    console.log("[v0] Supabase signInWithPassword result - data:", data, "error:", error);
-
     if (error) {
-      console.log("[v0] Auth error:", error.message);
-      setLoading(false);
       return { error: error.message };
     }
 
     if (data.user) {
-      console.log("[v0] User authenticated:", data.user.id);
+      setLoading(true);
       setUser(data.user);
       const profileData = await fetchProfile(data.user.id);
-      console.log("[v0] Profile fetched:", profileData);
       
       if (!profileData?.ativo) {
-        console.log("[v0] User inactive, signing out");
         await supabase.auth.signOut();
         setUser(null);
         setProfile(null);
@@ -129,16 +137,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       setProfile(profileData);
+      setLoading(false);
     }
 
-    setLoading(false);
-    console.log("[v0] signIn complete, returning success");
     return { error: null };
   };
 
   const signUp = async (email: string, password: string, userData: { nome: string; usuario: string; perfil: Perfil }) => {
     const supabase = createClient();
-    console.log("[v0] signUp called - email:", email, "userData:", userData);
     setLoading(true);
     
     const { data, error } = await supabase.auth.signUp({
@@ -153,23 +159,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    console.log("[v0] Supabase signUp result - data:", data, "error:", error);
-
     if (error) {
-      console.log("[v0] SignUp error:", error.message);
       setLoading(false);
       return { error: error.message };
     }
 
     if (data.user) {
-      console.log("[v0] User created:", data.user.id);
       setUser(data.user);
       
       // Aguardar um momento para o trigger criar o profile
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       const profileData = await fetchProfile(data.user.id);
-      console.log("[v0] Profile fetched after signup:", profileData);
       setProfile(profileData);
     }
 

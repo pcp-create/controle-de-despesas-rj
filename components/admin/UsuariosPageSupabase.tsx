@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useProfiles } from "@/lib/supabase/hooks";
-import { useAuth } from "@/lib/supabase/auth-context";
+import { useProfiles, type Profile } from "@/lib/supabase/hooks";
+import { useAuth, type Perfil } from "@/lib/supabase/auth-context";
+import { createClient } from "@/lib/supabase/client";
 import {
   Search,
   PlusCircle,
@@ -13,22 +14,53 @@ import {
   Users,
   Briefcase,
   ChevronDown,
+  X,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 
 const perfilConfig = {
-  tecnico: { label: "Técnico", color: "bg-primary/10 text-primary", icon: Briefcase },
+  tecnico: { label: "Tecnico", color: "bg-primary/10 text-primary", icon: Briefcase },
   gestor: { label: "Gestor", color: "bg-accent/10 text-accent", icon: Users },
   financeiro: { label: "Financeiro", color: "bg-success/10 text-success", icon: Shield },
   administrador: { label: "Admin", color: "bg-warning/10 text-warning", icon: Shield },
 };
 
+interface UsuarioForm {
+  nome: string;
+  email: string;
+  usuario: string;
+  perfil: Perfil;
+  gestor_id: string | null;
+  senha?: string;
+}
+
+const initialForm: UsuarioForm = {
+  nome: "",
+  email: "",
+  usuario: "",
+  perfil: "tecnico",
+  gestor_id: null,
+  senha: "",
+};
+
 export default function UsuariosPageSupabase() {
   const { profile: currentProfile } = useAuth();
-  const { profiles, isLoading, toggleProfileStatus } = useProfiles();
+  const { profiles, isLoading, mutate, toggleProfileStatus } = useProfiles();
   
   const [search, setSearch] = useState("");
   const [filterPerfil, setFilterPerfil] = useState<string>("todos");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  
+  // Modal states
+  const [showModal, setShowModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<Profile | null>(null);
+  const [form, setForm] = useState<UsuarioForm>(initialForm);
+  const [formLoading, setFormLoading] = useState(false);
+  const [formError, setFormError] = useState("");
+  
+  // Delete confirmation
+  const [deleteConfirm, setDeleteConfirm] = useState<Profile | null>(null);
 
   const usuariosFiltrados = profiles
     .filter((u) => {
@@ -50,9 +82,125 @@ export default function UsuariosPageSupabase() {
     if (result.error) {
       setFeedback({ type: "error", msg: result.error });
     } else {
-      setFeedback({ type: "success", msg: ativo ? "Usuário desativado" : "Usuário ativado" });
+      setFeedback({ type: "success", msg: ativo ? "Usuario desativado" : "Usuario ativado" });
       setTimeout(() => setFeedback(null), 3000);
     }
+  };
+
+  const handleOpenModal = (user?: Profile) => {
+    if (user) {
+      setEditingUser(user);
+      setForm({
+        nome: user.nome,
+        email: user.email,
+        usuario: user.usuario,
+        perfil: user.perfil,
+        gestor_id: user.gestor_id,
+        senha: "",
+      });
+    } else {
+      setEditingUser(null);
+      setForm(initialForm);
+    }
+    setFormError("");
+    setShowModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setEditingUser(null);
+    setForm(initialForm);
+    setFormError("");
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError("");
+    setFormLoading(true);
+
+    try {
+      if (editingUser) {
+        // Editar usuario existente
+        const supabase = createClient();
+        const { error } = await supabase
+          .from("profiles")
+          .update({
+            nome: form.nome,
+            usuario: form.usuario,
+            perfil: form.perfil,
+            gestor_id: form.gestor_id || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", editingUser.id);
+
+        if (error) {
+          setFormError(error.message);
+          setFormLoading(false);
+          return;
+        }
+
+        setFeedback({ type: "success", msg: "Usuario atualizado com sucesso!" });
+      } else {
+        // Criar novo usuario via API
+        const response = await fetch("/api/create-user", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: form.email,
+            password: form.senha,
+            nome: form.nome,
+            usuario: form.usuario,
+            perfil: form.perfil,
+            gestor_id: form.gestor_id,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setFormError(data.error || "Erro ao criar usuario");
+          setFormLoading(false);
+          return;
+        }
+
+        setFeedback({ type: "success", msg: "Usuario criado com sucesso!" });
+      }
+
+      await mutate();
+      handleCloseModal();
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      setFormError("Erro ao processar solicitacao");
+    }
+
+    setFormLoading(false);
+  };
+
+  const handleDelete = async (user: Profile) => {
+    setFormLoading(true);
+    
+    try {
+      const response = await fetch("/api/delete-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setFeedback({ type: "error", msg: data.error || "Erro ao remover usuario" });
+      } else {
+        setFeedback({ type: "success", msg: "Usuario removido com sucesso!" });
+        await mutate();
+      }
+    } catch (err) {
+      setFeedback({ type: "error", msg: "Erro ao processar solicitacao" });
+    }
+
+    setDeleteConfirm(null);
+    setFormLoading(false);
+    setTimeout(() => setFeedback(null), 3000);
   };
 
   const gestores = profiles.filter((p) => p.perfil === "gestor" || p.perfil === "administrador");
@@ -70,15 +218,18 @@ export default function UsuariosPageSupabase() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Usuários</h1>
-          <p className="text-sm text-muted-foreground">{profiles.length} usuário(s) cadastrado(s)</p>
+          <h1 className="text-xl font-bold text-foreground">Usuarios</h1>
+          <p className="text-sm text-muted-foreground">{profiles.length} usuario(s) cadastrado(s)</p>
         </div>
-        <button
-          className="hidden lg:flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition"
-        >
-          <PlusCircle className="w-4 h-4" />
-          Novo Usuário
-        </button>
+        {currentProfile?.perfil === "administrador" && (
+          <button
+            onClick={() => handleOpenModal()}
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition"
+          >
+            <PlusCircle className="w-4 h-4" />
+            Novo Usuario
+          </button>
+        )}
       </div>
 
       {/* Feedback */}
@@ -100,7 +251,7 @@ export default function UsuariosPageSupabase() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome, email ou usuário..."
+            placeholder="Buscar por nome, email ou usuario..."
             className="w-full pl-9 pr-4 py-2 rounded-lg border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
@@ -112,7 +263,7 @@ export default function UsuariosPageSupabase() {
             className="pl-9 pr-8 py-2 rounded-lg border border-input bg-white text-sm appearance-none"
           >
             <option value="todos">Todos os perfis</option>
-            <option value="tecnico">Técnicos</option>
+            <option value="tecnico">Tecnicos</option>
             <option value="gestor">Gestores</option>
             <option value="financeiro">Financeiro</option>
             <option value="administrador">Administradores</option>
@@ -164,6 +315,7 @@ export default function UsuariosPageSupabase() {
               {currentProfile?.perfil === "administrador" && u.id !== currentProfile.id && (
                 <div className="flex gap-2 mt-4 pt-4 border-t border-border">
                   <button
+                    onClick={() => handleOpenModal(u)}
                     className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
@@ -180,6 +332,12 @@ export default function UsuariosPageSupabase() {
                     <Power className="w-3.5 h-3.5" />
                     {u.ativo ? "Desativar" : "Ativar"}
                   </button>
+                  <button
+                    onClick={() => setDeleteConfirm(u)}
+                    className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               )}
             </div>
@@ -192,8 +350,176 @@ export default function UsuariosPageSupabase() {
           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
             <Users className="w-8 h-8 text-muted-foreground" />
           </div>
-          <h3 className="text-lg font-semibold text-foreground">Nenhum usuário encontrado</h3>
-          <p className="text-sm text-muted-foreground mt-1">Ajuste os filtros ou cadastre novos usuários</p>
+          <h3 className="text-lg font-semibold text-foreground">Nenhum usuario encontrado</h3>
+          <p className="text-sm text-muted-foreground mt-1">Ajuste os filtros ou cadastre novos usuarios</p>
+        </div>
+      )}
+
+      {/* Modal de Criar/Editar Usuario */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h2 className="text-lg font-semibold text-foreground">
+                {editingUser ? "Editar Usuario" : "Novo Usuario"}
+              </h2>
+              <button
+                onClick={handleCloseModal}
+                className="p-1.5 rounded-lg hover:bg-muted transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-4 flex flex-col gap-4">
+              {/* Nome */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Nome completo</label>
+                <input
+                  type="text"
+                  value={form.nome}
+                  onChange={(e) => setForm({ ...form, nome: e.target.value })}
+                  placeholder="Digite o nome completo"
+                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  required
+                />
+              </div>
+
+              {/* Email - apenas para novo usuario */}
+              {!editingUser && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">Email</label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    placeholder="Digite o email"
+                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    required
+                  />
+                </div>
+              )}
+
+              {/* Usuario */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Usuario</label>
+                <input
+                  type="text"
+                  value={form.usuario}
+                  onChange={(e) => setForm({ ...form, usuario: e.target.value })}
+                  placeholder="Digite o nome de usuario"
+                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  required
+                />
+              </div>
+
+              {/* Senha - apenas para novo usuario */}
+              {!editingUser && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">Senha</label>
+                  <input
+                    type="password"
+                    value={form.senha}
+                    onChange={(e) => setForm({ ...form, senha: e.target.value })}
+                    placeholder="Digite a senha (min. 6 caracteres)"
+                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    required
+                    minLength={6}
+                  />
+                </div>
+              )}
+
+              {/* Perfil */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Perfil</label>
+                <select
+                  value={form.perfil}
+                  onChange={(e) => setForm({ ...form, perfil: e.target.value as Perfil })}
+                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  required
+                >
+                  <option value="tecnico">Tecnico</option>
+                  <option value="gestor">Gestor</option>
+                  <option value="financeiro">Financeiro</option>
+                  <option value="administrador">Administrador</option>
+                </select>
+              </div>
+
+              {/* Gestor (apenas para tecnicos) */}
+              {form.perfil === "tecnico" && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">Gestor responsavel</label>
+                  <select
+                    value={form.gestor_id || ""}
+                    onChange={(e) => setForm({ ...form, gestor_id: e.target.value || null })}
+                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Selecione um gestor</option>
+                    {gestores.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Erro */}
+              {formError && (
+                <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+                  {formError}
+                </div>
+              )}
+
+              {/* Botoes */}
+              <div className="flex gap-3 mt-2">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="flex-1 py-2 rounded-lg border border-input text-sm font-medium hover:bg-muted transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={formLoading}
+                  className="flex-1 py-2 rounded-lg bg-accent text-white text-sm font-medium hover:bg-accent/90 disabled:opacity-60 transition flex items-center justify-center gap-2"
+                >
+                  {formLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {editingUser ? "Salvar" : "Criar"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmacao de Exclusao */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <h2 className="text-lg font-semibold text-foreground mb-2">Confirmar exclusao</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              Tem certeza que deseja remover o usuario <strong>{deleteConfirm.nome}</strong>? 
+              Esta acao nao pode ser desfeita.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 py-2 rounded-lg border border-input text-sm font-medium hover:bg-muted transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => handleDelete(deleteConfirm)}
+                disabled={formLoading}
+                className="flex-1 py-2 rounded-lg bg-destructive text-white text-sm font-medium hover:bg-destructive/90 disabled:opacity-60 transition flex items-center justify-center gap-2"
+              >
+                {formLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                Remover
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
