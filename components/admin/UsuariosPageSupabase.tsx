@@ -175,11 +175,41 @@ export default function UsuariosPageSupabase() {
     setTimeout(() => setFeedback(null), 3000);
   };
 
-  const handleResetPassword = (user: any) => {
+  const handleResetPassword = async (user: any) => {
     const novaSenh = "12345";
-    updateUser(user.id, { ...user, senha: novaSenh });
-    setFeedback({ type: "success", msg: `Senha de ${user.nome} resetada para: ${novaSenh}` });
-    setTimeout(() => setFeedback(null), 5000);
+    
+    try {
+      setFormLoading(true);
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+
+      // Atualizar senha no Supabase
+      const { error } = await supabase
+        .from("profiles")
+        .update({ 
+          senha: novaSenh,
+          primeiro_acesso: true 
+        })
+        .eq("id", user.id);
+
+      if (error) {
+        console.error("[v0] Erro ao resetar senha:", error);
+        setFeedback({ type: "error", msg: "Erro ao resetar senha: " + error.message });
+      } else {
+        // Recarregar dados do Supabase
+        const { loadSupabaseData } = useAppStore.getState();
+        await loadSupabaseData();
+        
+        setFeedback({ type: "success", msg: `Senha de ${user.nome} resetada para: ${novaSenh}` });
+      }
+      
+      setTimeout(() => setFeedback(null), 5000);
+    } catch (err) {
+      console.error("[v0] Erro ao resetar senha:", err);
+      setFeedback({ type: "error", msg: "Erro ao resetar senha" });
+    } finally {
+      setFormLoading(false);
+    }
   };
 
   const loadUserCartoes = async (userId: string) => {
