@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { formatCurrency, getStatusGeral, statusGeralConfig } from "@/lib/helpers";
-import { DollarSign, TrendingUp, Search, Eye } from "lucide-react";
+import { DollarSign, TrendingUp, Search, Eye, CalendarDays } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -237,76 +237,79 @@ export default function FinanceiroPageSupabase() {
     <div className="flex flex-col gap-5">
 
       {/* ── Header ── */}
-      <div>
-        <h1 className="text-xl font-bold text-foreground">Financeiro</h1>
-        <p className="text-sm text-muted-foreground">Visão financeira das despesas aprovadas</p>
-      </div>
-
-      {/* ── Barra de filtros ── */}
-      <div className="bg-white rounded-xl border border-border p-3 flex flex-wrap items-center gap-3">
-        {/* Toggle modo */}
-        <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
-          <button
-            onClick={() => setModoFiltro("mes")}
-            className={`px-3 py-1.5 text-sm font-medium transition ${
-              modoFiltro === "mes"
-                ? "bg-primary text-white"
-                : "bg-white text-foreground hover:bg-muted/60"
-            }`}
-          >
-            Por mês
-          </button>
-          <button
-            onClick={() => setModoFiltro("periodo")}
-            className={`px-3 py-1.5 text-sm font-medium transition border-l border-border ${
-              modoFiltro === "periodo"
-                ? "bg-primary text-white"
-                : "bg-white text-foreground hover:bg-muted/60"
-            }`}
-          >
-            Por período
-          </button>
+      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+        <div className="flex-1">
+          <h1 className="text-xl font-bold text-foreground">Financeiro</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Visão financeira das despesas aprovadas &mdash;{" "}
+            <span className="text-accent font-medium">
+              {modoFiltro === "mes"
+                ? `${MESES_FULL[mesSelecionado]} ${anoSelecionado}`
+                : dataInicial && dataFinal
+                ? `${dataInicial.split("-").reverse().join("/")} até ${dataFinal.split("-").reverse().join("/")}`
+                : "Período personalizado"}
+            </span>
+          </p>
         </div>
 
-        {/* Campos de filtro */}
-        {modoFiltro === "mes" ? (
-          <div className="flex items-center gap-2 flex-wrap">
-            <select
-              value={mesSelecionado}
-              onChange={(e) => setMesSelecionado(Number(e.target.value))}
-              className="px-3 py-1.5 bg-background border border-border rounded-lg text-sm"
+        <div className="flex flex-col gap-2 sm:items-end">
+          <div className="flex items-center gap-1 p-1 bg-muted rounded-lg self-start sm:self-end">
+            <button
+              onClick={() => setModoFiltro("mes")}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition ${modoFiltro === "mes" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
             >
-              {MESES_FULL.map((m, i) => (
-                <option key={i} value={i}>{m}</option>
-              ))}
-            </select>
-            <select
-              value={anoSelecionado}
-              onChange={(e) => setAnoSelecionado(Number(e.target.value))}
-              className="px-3 py-1.5 bg-background border border-border rounded-lg text-sm"
+              Por Mês
+            </button>
+            <button
+              onClick={() => setModoFiltro("periodo")}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition ${modoFiltro === "periodo" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
             >
-              {anos.map((a) => (
-                <option key={a} value={a}>{a}</option>
-              ))}
-            </select>
+              Período
+            </button>
           </div>
-        ) : (
-          <div className="flex items-center gap-2 flex-wrap">
-            <input
-              type="date"
-              value={dataInicial}
-              onChange={(e) => setDataInicial(e.target.value)}
-              className="px-3 py-1.5 bg-background border border-border rounded-lg text-sm"
-            />
-            <span className="text-sm text-muted-foreground">até</span>
-            <input
-              type="date"
-              value={dataFinal}
-              onChange={(e) => setDataFinal(e.target.value)}
-              className="px-3 py-1.5 bg-background border border-border rounded-lg text-sm"
-            />
-          </div>
-        )}
+
+          {modoFiltro === "mes" ? (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-border rounded-lg text-xs text-muted-foreground">
+                <CalendarDays className="w-3.5 h-3.5" />
+              </div>
+              <select
+                value={mesSelecionado}
+                onChange={(e) => setMesSelecionado(Number(e.target.value))}
+                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                {MESES_FULL.map((m, i) => (
+                  <option key={i} value={i}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={anoSelecionado}
+                onChange={(e) => setAnoSelecionado(Number(e.target.value))}
+                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              >
+                {anos.map((a) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={dataInicial}
+                onChange={(e) => setDataInicial(e.target.value)}
+                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm"
+              />
+              <span className="text-xs text-muted-foreground">até</span>
+              <input
+                type="date"
+                value={dataFinal}
+                onChange={(e) => setDataFinal(e.target.value)}
+                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm"
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Cards de métricas ── */}

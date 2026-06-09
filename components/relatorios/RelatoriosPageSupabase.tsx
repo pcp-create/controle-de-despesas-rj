@@ -18,7 +18,7 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { Calendar, Download, TrendingUp, DollarSign, Users, FileText } from "lucide-react";
+import { Calendar, Download, TrendingUp, DollarSign, Users, FileText, CalendarDays } from "lucide-react";
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -123,45 +123,52 @@ export default function RelatoriosPageSupabase() {
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+        <div className="flex-1">
           <h1 className="text-xl font-bold text-foreground">Relatórios</h1>
-          <p className="text-sm text-muted-foreground">
-            {isFuncionario ? "Suas despesas aprovadas no período" : "Análise de despesas aprovadas"}
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {isFuncionario ? "Suas despesas aprovadas" : "Análise de despesas aprovadas"} &mdash;{" "}
+            <span className="text-accent font-medium">
+              {modoFiltro === "mes"
+                ? `${MESES_FULL[mesSelecionado]} ${anoSelecionado}`
+                : dataInicial && dataFinal
+                ? `${dataInicial.split("-").reverse().join("/")} até ${dataFinal.split("-").reverse().join("/")}`
+                : "Período personalizado"}
+            </span>
           </p>
         </div>
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-          {/* Modo filtro */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setModoFiltro("mes")}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                modoFiltro === "mes"
-                  ? "bg-primary text-white"
-                  : "bg-muted text-foreground hover:bg-muted/80"
-              }`}
-            >
-              Por mês
-            </button>
-            <button
-              onClick={() => setModoFiltro("periodo")}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                modoFiltro === "periodo"
-                  ? "bg-primary text-white"
-                  : "bg-muted text-foreground hover:bg-muted/80"
-              }`}
-            >
-              Por período
+
+        <div className="flex flex-col gap-2 sm:items-end">
+          <div className="flex items-center gap-2 sm:self-end">
+            <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
+              <button
+                onClick={() => setModoFiltro("mes")}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition ${modoFiltro === "mes" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Por Mês
+              </button>
+              <button
+                onClick={() => setModoFiltro("periodo")}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition ${modoFiltro === "periodo" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Período
+              </button>
+            </div>
+            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input bg-white text-xs hover:bg-muted transition">
+              <Download className="w-3.5 h-3.5" />
+              Exportar PDF
             </button>
           </div>
 
-          {/* Filtros */}
           {modoFiltro === "mes" ? (
-            <>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-border rounded-lg text-xs text-muted-foreground">
+                <CalendarDays className="w-3.5 h-3.5" />
+              </div>
               <select
                 value={mesSelecionado}
                 onChange={(e) => setMesSelecionado(Number(e.target.value))}
-                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm"
+                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 {MESES_FULL.map((m, i) => (
                   <option key={i} value={i}>{m}</option>
@@ -170,35 +177,30 @@ export default function RelatoriosPageSupabase() {
               <select
                 value={anoSelecionado}
                 onChange={(e) => setAnoSelecionado(Number(e.target.value))}
-                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm"
+                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 {anos.map((a) => (
                   <option key={a} value={a}>{a}</option>
                 ))}
               </select>
-            </>
+            </div>
           ) : (
-            <>
+            <div className="flex items-center gap-2">
               <input
                 type="date"
                 value={dataInicial}
                 onChange={(e) => setDataInicial(e.target.value)}
                 className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm"
               />
-              <span className="text-sm text-muted-foreground">até</span>
+              <span className="text-xs text-muted-foreground">até</span>
               <input
                 type="date"
                 value={dataFinal}
                 onChange={(e) => setDataFinal(e.target.value)}
                 className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm"
               />
-            </>
+            </div>
           )}
-
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition">
-            <Download className="w-4 h-4" />
-            Exportar PDF
-          </button>
         </div>
       </div>
 
