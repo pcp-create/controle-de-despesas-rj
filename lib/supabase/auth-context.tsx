@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 
-export type Perfil = "tecnico" | "gestor" | "financeiro" | "administrador";
+export type Perfil = "funcionario" | "gestor" | "financeiro" | "administrador";
 
 export interface Profile {
   id: string;

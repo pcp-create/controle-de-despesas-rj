@@ -22,7 +22,7 @@ export default function BottomNav({ currentPage, onNavigate }: Props) {
   const perfil = currentUser?.perfil;
 
   const items = (() => {
-    if (perfil === "tecnico") return [
+    if (perfil === "funcionario") return [
       { key: "dashboard" as PageKey, icon: <LayoutDashboard className="w-5 h-5" />, label: "Início" },
       { key: "minhas-despesas" as PageKey, icon: <FileText className="w-5 h-5" />, label: "Despesas" },
       { key: "nova-despesa" as PageKey, icon: <PlusCircle className="w-5 h-5" />, label: "Nova" },

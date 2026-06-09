@@ -44,7 +44,7 @@ type ModoFiltro = "mes" | "periodo";
 export default function DashboardSupabase({ onNavigate }: Props) {
   const { currentUser } = useAppStore();
   const { despesas, isLoading: loadingDespesas } = useDespesas(
-    currentUser?.perfil === "tecnico" ? currentUser.id : undefined,
+    currentUser?.perfil === "funcionario" ? currentUser.id : undefined,
     currentUser?.perfil
   );
   const { tiposDespesa } = useTiposDespesa();
@@ -69,8 +69,8 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   const myDespesas = useMemo(() => {
     let filtered = despesas;
     
-    // Se for gestor ou admin, mostrar todas. Se for técnico, mostrar só suas
-    if (perfil === "tecnico") {
+    // Se for gestor ou admin, mostrar todas. Se for funcionário, mostrar só suas
+    if (perfil === "funcionario") {
       filtered = despesas.filter((d) => d.tecnico_id === currentUser?.id);
     }
     
@@ -106,7 +106,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
       onNavigate("aprovacao");
       return;
     }
-    if (perfil === "tecnico") {
+    if (perfil === "funcionario") {
       onNavigate("minhas-despesas", statusKey);
     } else {
       onNavigate("todas-despesas", statusKey);
@@ -124,8 +124,8 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   // Despesas por usuário
   const byUsuario = useMemo(() => {
     if (perfil !== "gestor" && perfil !== "administrador") return [];
-    const tecnicos = profiles.filter((u) => u.perfil === "tecnico");
-    return tecnicos
+    const funcionarios = profiles.filter((u) => u.perfil === "funcionario");
+    return funcionarios
       .map((u) => {
         const du = myDespesas.filter((d) => d.tecnico_id === u.id);
         return {
@@ -163,7 +163,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
       iconBg: "bg-primary/10",
       iconColor: "text-primary",
       hint: "Ver todas as despesas",
-      onClick: () => perfil === "tecnico" ? onNavigate("minhas-despesas") : onNavigate("todas-despesas"),
+      onClick: () => perfil === "funcionario" ? onNavigate("minhas-despesas") : onNavigate("todas-despesas"),
     },
     {
       key: "nao_enviado",
@@ -301,7 +301,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
           )}
         </div>
 
-        {perfil === "tecnico" && (
+        {perfil === "funcionario" && (
           <button
             onClick={() => onNavigate("nova-despesa")}
             className="hidden lg:flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition"
@@ -360,7 +360,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-foreground">Últimos Lançamentos</h2>
             <button
-              onClick={() => onNavigate(perfil === "gestor" ? "aprovacao" : "minhas-despesas")}
+            onClick={() => onNavigate(perfil === "gestor" ? "aprovacao" : "minhas-despesas")}
               className="text-xs text-accent flex items-center gap-1 hover:underline"
             >
               Ver todos <ArrowRight className="w-3 h-3" />
@@ -390,7 +390,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
       {(perfil === "gestor" || perfil === "administrador") && byUsuario.length > 0 && (
         <div className="bg-white rounded-xl border border-border shadow-sm p-5">
           <h2 className="text-sm font-semibold text-foreground mb-4">
-            Despesas por Técnico
+            Despesas por Funcionário
             <span className="ml-2 text-xs font-normal text-muted-foreground">— {labelPeriodo}</span>
           </h2>
 

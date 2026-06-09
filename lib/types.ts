@@ -1,5 +1,5 @@
 // ─── Perfis ───────────────────────────────────────────────────────────────────
-export type UserProfile = "tecnico" | "gestor" | "financeiro" | "administrador";
+export type UserProfile = "funcionario" | "gestor" | "financeiro" | "administrador";
 
 // ─── Status ───────────────────────────────────────────────────────────────────
 export type ApprovalStatus =
