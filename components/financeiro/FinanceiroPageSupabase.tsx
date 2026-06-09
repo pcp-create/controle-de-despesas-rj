@@ -115,7 +115,7 @@ export default function FinanceiroPageSupabase() {
         : "-";
       return {
         Data: new Date(d.data_despesa).toLocaleDateString("pt-BR"),
-        Técnico: tecnico?.nome || "-",
+        Funcionário: tecnico?.nome || "-",
         Tipo: tipo?.nome || "-",
         Cliente: d.cliente,
         "Número OS": d.numero_os || "-",
@@ -189,7 +189,7 @@ export default function FinanceiroPageSupabase() {
 
     autoTable(doc, {
       startY: 36,
-      head: [["Data", "Técnico", "Tipo", "Cliente", "OS", "Valor", "Doc.", "Cartão", "Status", "Comprovante", "Status ERP", "Envio", "ERP ID"]],
+      head: [["Data", "Funcionário", "Tipo", "Cliente", "OS", "Valor", "Doc.", "Cartão", "Status", "Comprovante", "Status ERP", "Envio", "ERP ID"]],
       body: rows,
       styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
       headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: "bold", fontSize: 7.5 },
@@ -422,7 +422,7 @@ export default function FinanceiroPageSupabase() {
             <thead className="bg-muted/50 sticky top-0 z-10">
               <tr>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Data</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Técnico</th>
+                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Funcionário</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Tipo</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Cliente</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">OS</th>
