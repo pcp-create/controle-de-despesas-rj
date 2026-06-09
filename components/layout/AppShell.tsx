@@ -30,6 +30,7 @@ export type PageKey =
   | "relatorios"
   | "usuarios"
   | "tipos-despesa"
+  | "frotas"
   | "auditoria"
   | "alterar-senha";
 

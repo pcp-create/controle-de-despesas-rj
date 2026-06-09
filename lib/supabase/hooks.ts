@@ -58,12 +58,30 @@ export interface Despesa {
   erp_id: string | null;
   erp_payload: Record<string, unknown> | null;
   erp_resposta: Record<string, unknown> | null;
+  frota_id: string | null;
+  km_atual: number | null;
   created_at: string;
   updated_at: string;
   // Joins
   tipo_despesa?: TipoDespesa;
+  frota?: Frota;
   cartao?: Cartao;
   tecnico?: { id: string; nome: string; email: string };
+}
+
+export interface Frota {
+  id: string;
+  placa: string;
+  modelo: string;
+  marca: string;
+  ano: number | null;
+  cor: string | null;
+  tipo: string | null;
+  quilometragem: number;
+  observacao: string | null;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Profile {
@@ -455,6 +473,70 @@ export function useDespesas(userId?: string, perfil?: string) {
     enviarDespesa,
     aprovarDespesa,
     reprovarDespesa,
+  };
+}
+
+const fetchFrotas = async (): Promise<Frota[]> => {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("frotas")
+    .select("*")
+    .order("placa");
+  if (error) throw error;
+  return data || [];
+};
+
+export function useFrotas() {
+  const { data, error, isLoading, mutate } = useSWR("frotas", fetchFrotas, {
+    revalidateOnFocus: false,
+  });
+
+  const addFrota = async (frota: Omit<Frota, "id" | "created_at" | "updated_at">) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { data, error } = await supabase
+      .from("frotas")
+      .insert(frota)
+      .select()
+      .single();
+    if (error) return { error: error.message };
+    mutate();
+    return { data };
+  };
+
+  const updateFrota = async (id: string, updates: Partial<Frota>) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { error } = await supabase
+      .from("frotas")
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return { error: error.message };
+    mutate();
+    return { error: null };
+  };
+
+  const deleteFrota = async (id: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { error } = await supabase
+      .from("frotas")
+      .update({ ativo: false, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return { error: error.message };
+    mutate();
+    return { error: null };
+  };
+
+  return {
+    frotas: data || [],
+    isLoading,
+    error,
+    mutate,
+    addFrota,
+    updateFrota,
+    deleteFrota,
   };
 }
 

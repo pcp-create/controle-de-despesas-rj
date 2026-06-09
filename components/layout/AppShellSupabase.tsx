@@ -17,6 +17,7 @@ import RelatoriosPageSupabase from "@/components/relatorios/RelatoriosPageSupaba
 import IntegracoesERPPageSupabase from "@/components/integracoes/IntegracoesERPPageSupabase";
 import UsuariosPageSupabase from "@/components/admin/UsuariosPageSupabase";
 import TiposDespesaPageSupabase from "@/components/admin/TiposDespesaPageSupabase";
+import FrotasPageSupabase from "@/components/admin/FrotasPageSupabase";
 import AlterarSenhaModalSupabase from "@/components/auth/AlterarSenhaModalSupabase";
 import AuditoriaPageSupabase from "@/components/admin/AuditoriaPageSupabase";
 import { useAppStore } from "@/lib/store";
@@ -31,6 +32,7 @@ export type PageKey =
   | "relatorios"
   | "usuarios"
   | "tipos-despesa"
+  | "frotas"
   | "auditoria"
   | "alterar-senha";
 
@@ -85,6 +87,7 @@ export default function AppShellSupabase() {
       case "relatorios": return <RelatoriosPageSupabase />;
       case "usuarios": return <UsuariosPageSupabase />;
       case "tipos-despesa": return <TiposDespesaPageSupabase />;
+      case "frotas": return <FrotasPageSupabase />;
       case "todas-despesas": return <TodasDespesasPage initialStatus={initialStatusFilter} />;
       case "auditoria": return <AuditoriaPageSupabase />;
       default: return <DashboardSupabase onNavigate={navigate} />;
