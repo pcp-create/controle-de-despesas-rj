@@ -202,6 +202,15 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Documento</p>
                         <p className="text-foreground">{d.documento || "-"}</p>
                       </div>
+                      {d.cartao && (
+                        <div className="col-span-2">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Cartão</p>
+                          <p className="text-foreground font-mono">
+                            {d.cartao.banco} — {d.cartao.bandeira} — **** {d.cartao.ultimos_digitos}
+                            {d.cartao.apelido ? ` (${d.cartao.apelido})` : ""}
+                          </p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Comprovante</p>
                         <p className="text-foreground">{d.comprovante_nome || "Não anexado"}</p>

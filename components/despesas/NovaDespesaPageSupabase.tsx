@@ -379,13 +379,15 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               <span className="ml-2 text-xs text-muted-foreground">Sugestão: {tipoSelecionado.documento_padrao}</span>
             )}
           </label>
-          <input
-            type="text"
+          <select
             value={form.documento}
             onChange={(e) => setForm({ ...form, documento: e.target.value })}
-            placeholder="Número do cupom/nota"
             className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          />
+          >
+            <option value="">Selecione o tipo de documento...</option>
+            <option value="Nota Fiscal (NF)">Nota Fiscal (NF)</option>
+            <option value="Cupom">Cupom</option>
+          </select>
         </div>
 
         {/* Observação */}

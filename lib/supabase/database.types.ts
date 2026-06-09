@@ -57,6 +57,7 @@ export interface Database {
           calcula_diarias: boolean
           exige_comprovante: boolean
           documento_padrao: string | null
+          centro_custo_erp_id: string | null
           ativo: boolean
           created_at: string
           updated_at: string
@@ -70,6 +71,7 @@ export interface Database {
           calcula_diarias?: boolean
           exige_comprovante?: boolean
           documento_padrao?: string | null
+          centro_custo_erp_id?: string | null
           ativo?: boolean
           created_at?: string
           updated_at?: string
@@ -83,6 +85,7 @@ export interface Database {
           calcula_diarias?: boolean
           exige_comprovante?: boolean
           documento_padrao?: string | null
+          centro_custo_erp_id?: string | null
           ativo?: boolean
           created_at?: string
           updated_at?: string
