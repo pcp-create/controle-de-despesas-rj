@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useProfiles, useCartoes } from "@/lib/supabase/hooks";
 import { formatCurrency, getStatusGeral, statusGeralConfig } from "@/lib/helpers";
 import { DollarSign, TrendingUp, Search, Eye } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -28,6 +28,7 @@ export default function FinanceiroPageSupabase() {
   const { despesas, isLoading } = useDespesas();
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
+  const { cartoes } = useCartoes();
 
   const [search, setSearch] = useState("");
   const now = new Date();
@@ -88,19 +89,31 @@ export default function FinanceiroPageSupabase() {
     const term = search.toLowerCase();
     const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
     const tecnico = profiles.find((p) => p.id === d.tecnico_id);
+    const cartao = cartoes.find((c) => c.id === d.cartao_id);
+    const cartaoLabel = cartao
+      ? `${cartao.banco} ${cartao.bandeira} ${cartao.ultimos_digitos} ${cartao.apelido || ""}`.toLowerCase()
+      : "";
     return (
       d.cliente.toLowerCase().includes(term) ||
       d.numero_os.toLowerCase().includes(term) ||
       (tipo?.nome || "").toLowerCase().includes(term) ||
       (tecnico?.nome || "").toLowerCase().includes(term) ||
-      (d.erp_id || "").toString().includes(term)
+      (d.erp_id || "").toString().includes(term) ||
+      (d.documento || "").toLowerCase().includes(term) ||
+      cartaoLabel.includes(term)
     );
   });
+
+  const totalFiltrado = despesasFiltradas.reduce((s, d) => s + Number(d.valor), 0);
 
   const handleExportarXLSX = () => {
     const dados = despesasFiltradas.map((d) => {
       const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
       const tecnico = profiles.find((p) => p.id === d.tecnico_id);
+      const cartao = cartoes.find((c) => c.id === d.cartao_id);
+      const cartaoLabel = cartao
+        ? `${cartao.banco} — ${cartao.bandeira} — **** ${cartao.ultimos_digitos}`
+        : "-";
       return {
         Data: new Date(d.data_despesa).toLocaleDateString("pt-BR"),
         Técnico: tecnico?.nome || "-",
@@ -108,6 +121,8 @@ export default function FinanceiroPageSupabase() {
         Cliente: d.cliente,
         "Número OS": d.numero_os || "-",
         Valor: Number(d.valor),
+        Documento: d.documento || "-",
+        Cartão: cartaoLabel,
         "Status": statusGeralConfig[getStatusGeral(d.status_erp ?? "", d.status_aprovacao)].label,
         Comprovante: d.comprovante_url ? "Sim" : "Não",
         "Status ERP": d.status_erp || "Não enviado",
@@ -120,7 +135,8 @@ export default function FinanceiroPageSupabase() {
     const worksheet = XLSX.utils.json_to_sheet(dados);
     worksheet["!cols"] = [
       { wch: 12 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 12 },
-      { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 15 },
+      { wch: 12 }, { wch: 16 }, { wch: 30 }, { wch: 15 }, { wch: 12 },
+      { wch: 12 }, { wch: 12 }, { wch: 15 },
     ];
     XLSX.utils.book_append_sheet(workbook, worksheet, "Despesas");
     const nomeArquivo = `Despesas_${new Date().toLocaleDateString("pt-BR").replace(/\//g, "-")}.xlsx`;
@@ -149,6 +165,10 @@ export default function FinanceiroPageSupabase() {
     const rows = despesasFiltradas.map((d) => {
       const tipo    = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
       const tecnico = profiles.find((p) => p.id === d.tecnico_id);
+      const cartao  = cartoes.find((c) => c.id === d.cartao_id);
+      const cartaoLabel = cartao
+        ? `${cartao.banco} — ${cartao.bandeira} — **** ${cartao.ultimos_digitos}`
+        : "-";
       const sg = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
       const statusLabel = statusGeralConfig[sg].label;
       return [
@@ -158,6 +178,8 @@ export default function FinanceiroPageSupabase() {
         d.cliente,
         d.numero_os || "-",
         formatCurrency(Number(d.valor)),
+        d.documento || "-",
+        cartaoLabel,
         statusLabel,
         d.comprovante_url ? "Sim" : "Não",
         d.status_erp || "-",
@@ -168,26 +190,28 @@ export default function FinanceiroPageSupabase() {
 
     autoTable(doc, {
       startY: 36,
-      head: [["Data", "Técnico", "Tipo", "Cliente", "OS", "Valor", "Status", "Comprovante", "Status ERP", "Envio", "ERP ID"]],
+      head: [["Data", "Técnico", "Tipo", "Cliente", "OS", "Valor", "Doc.", "Cartão", "Status", "Comprovante", "Status ERP", "Envio", "ERP ID"]],
       body: rows,
-      styles: { fontSize: 7.5, cellPadding: 2, overflow: "linebreak" },
-      headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: "bold", fontSize: 8 },
+      styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
+      headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: "bold", fontSize: 7.5 },
       alternateRowStyles: { fillColor: [245, 247, 255] },
       columnStyles: {
-        0: { cellWidth: 18 },
-        1: { cellWidth: 28 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 38 },
-        4: { cellWidth: 18 },
-        5: { cellWidth: 22, halign: "right" },
-        6: { cellWidth: 20 },
-        7: { cellWidth: 24 },
-        8: { cellWidth: 38 },
-        9: { cellWidth: 18 },
-        10: { cellWidth: 28 },
+        0: { cellWidth: 16 },
+        1: { cellWidth: 22 },
+        2: { cellWidth: 20 },
+        3: { cellWidth: 28 },
+        4: { cellWidth: 14 },
+        5: { cellWidth: 18, halign: "right" },
+        6: { cellWidth: 16 },
+        7: { cellWidth: 32 },
+        8: { cellWidth: 18 },
+        9: { cellWidth: 20 },
+        10: { cellWidth: 20 },
+        11: { cellWidth: 14 },
+        12: { cellWidth: 22 },
       },
       didParseCell: (data) => {
-        if (data.section === "body" && data.column.index === 6) {
+        if (data.section === "body" && data.column.index === 8) {
           const v = data.cell.raw as string;
           if (v === "Aprovado")              { data.cell.styles.textColor = [22, 163, 74];  data.cell.styles.fontStyle = "bold"; }
           if (v === "Aguardando Aprovação")  { data.cell.styles.textColor = [202, 138, 4]; }
@@ -349,7 +373,13 @@ export default function FinanceiroPageSupabase() {
         <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold text-foreground">Todas as Despesas — Confronto com Comprovante</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">{despesasFiltradas.length} despesa{despesasFiltradas.length !== 1 ? "s" : ""} no período</p>
+            <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+              <p className="text-xs text-muted-foreground">{despesasFiltradas.length} despesa{despesasFiltradas.length !== 1 ? "s" : ""} no período</p>
+              <span className="text-xs text-muted-foreground">•</span>
+              <p className="text-xs font-semibold text-foreground">
+                Total filtrado: <span className="text-primary">{formatCurrency(totalFiltrado)}</span>
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <div className="relative">
@@ -398,6 +428,8 @@ export default function FinanceiroPageSupabase() {
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Cliente</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">OS</th>
                 <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Valor</th>
+                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Documento</th>
+                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Cartão</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Status</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Comprovante</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Status ERP</th>
@@ -409,8 +441,13 @@ export default function FinanceiroPageSupabase() {
               {despesasFiltradas.map((d) => {
                 const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
                 const tecnico = profiles.find((p) => p.id === d.tecnico_id);
+                const cartao = cartoes.find((c) => c.id === d.cartao_id);
                 const sg = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
                 const statusCfg = statusGeralConfig[sg];
+
+                const cartaoLabel = cartao
+                  ? `${cartao.banco} — ${cartao.bandeira} — **** ${cartao.ultimos_digitos}`
+                  : null;
 
                 const statusErpCls = {
                   Rascunho:                    "bg-muted/20 text-muted-foreground",
@@ -428,6 +465,22 @@ export default function FinanceiroPageSupabase() {
                     <td className="px-3 py-2 max-w-32 truncate">{d.cliente}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{d.numero_os || "-"}</td>
                     <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{formatCurrency(Number(d.valor))}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {d.documento ? (
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-muted/60 text-foreground font-medium">
+                          {d.documento}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {cartaoLabel ? (
+                        <span className="text-xs text-foreground font-mono">{cartaoLabel}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${statusCfg.color}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />
@@ -464,7 +517,7 @@ export default function FinanceiroPageSupabase() {
               })}
               {despesasFiltradas.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-3 py-10 text-center text-muted-foreground">
+                  <td colSpan={13} className="px-3 py-10 text-center text-muted-foreground">
                     Nenhuma despesa encontrada no período
                   </td>
                 </tr>
