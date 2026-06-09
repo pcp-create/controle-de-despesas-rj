@@ -18,6 +18,7 @@ export interface TipoDespesa {
   calcula_diarias: boolean;
   exige_comprovante: boolean;
   documento_padrao: string | null;
+  centro_custo_erp_id: string | null;
   ativo: boolean;
 }
 

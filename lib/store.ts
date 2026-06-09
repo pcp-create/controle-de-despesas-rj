@@ -141,6 +141,7 @@ export const useAppStore = create<AppState>()(
             calculaDiarias: tipo.calcula_diarias === true,
             exigeComprovante: tipo.exige_comprovante !== false,
             documentoPadrao: tipo.documento_padrao || "",
+            centroCustoErpId: tipo.centro_custo_erp_id || "",
             ativo: tipo.ativo !== false,
           }));
 

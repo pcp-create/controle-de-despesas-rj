@@ -34,6 +34,7 @@ export default function TiposDespesaPageSupabase() {
     calcula_diarias: false,
     exige_comprovante: true,
     documento_padrao: "",
+    centro_custo_erp_id: "",
     ativo: true,
   });
 
@@ -117,6 +118,7 @@ export default function TiposDespesaPageSupabase() {
         calcula_diarias: form.calcula_diarias,
         exige_comprovante: form.exige_comprovante,
         documento_padrao: form.documento_padrao || null,
+        centro_custo_erp_id: form.centro_custo_erp_id || null,
         ativo: form.ativo,
       };
 
@@ -133,7 +135,7 @@ export default function TiposDespesaPageSupabase() {
           setFeedback({ type: "success", msg: "Tipo atualizado com sucesso!" });
           setEditingId(null);
           setShowNew(false);
-          setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", calcula_diarias: false, exige_comprovante: true, documento_padrao: "", ativo: true });
+          setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", calcula_diarias: false, exige_comprovante: true, documento_padrao: "", centro_custo_erp_id: "", ativo: true });
           await loadSupabaseData();
           setTimeout(() => setFeedback(null), 3000);
         }
@@ -148,7 +150,7 @@ export default function TiposDespesaPageSupabase() {
         } else {
           setFeedback({ type: "success", msg: "Tipo criado com sucesso!" });
           setShowNew(false);
-          setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", calcula_diarias: false, exige_comprovante: true, documento_padrao: "", ativo: true });
+          setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", calcula_diarias: false, exige_comprovante: true, documento_padrao: "", centro_custo_erp_id: "", ativo: true });
           await loadSupabaseData();
           setTimeout(() => setFeedback(null), 3000);
         }
@@ -169,6 +171,7 @@ export default function TiposDespesaPageSupabase() {
       calcula_diarias: (tipo as any).calculaDiarias === true,
       exige_comprovante: tipo.exigeComprovante,
       documento_padrao: tipo.documentoPadrao || "",
+      centro_custo_erp_id: (tipo as any).centroCustoErpId || "",
       ativo: tipo.ativo,
     });
     setEditingId(tipo.id);
@@ -181,7 +184,7 @@ export default function TiposDespesaPageSupabase() {
   const cancelEdit = () => {
     setEditingId(null);
     setShowNew(false);
-    setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", calcula_diarias: false, exige_comprovante: true, documento_padrao: "", ativo: true });
+    setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", calcula_diarias: false, exige_comprovante: true, documento_padrao: "", centro_custo_erp_id: "", ativo: true });
   };
 
   return (
@@ -272,6 +275,20 @@ export default function TiposDespesaPageSupabase() {
                 placeholder="Ex: Cupom Fiscal"
                 disabled={loading}
               />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Centro de Custo ERP (M8)</label>
+              <input
+                type="text"
+                value={form.centro_custo_erp_id}
+                onChange={(e) => setForm({ ...form, centro_custo_erp_id: e.target.value })}
+                className="px-3 py-2 rounded-lg border border-input bg-background text-sm"
+                placeholder="Ex: CC-001"
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">
+                Código utilizado para sincronização com o ERP M8.
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -406,6 +423,11 @@ export default function TiposDespesaPageSupabase() {
                     {t.documentoPadrao && (
                       <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">{t.documentoPadrao}</span>
                     )}
+                    {(t as any).centroCustoErpId && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-mono">
+                        ERP: {(t as any).centroCustoErpId}
+                      </span>
+                    )}
                   </div>
 
                   {/* Linha 3: ações */}
@@ -440,6 +462,7 @@ export default function TiposDespesaPageSupabase() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Descrição</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Limite Máximo</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Limite/dia</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">CC ERP (M8)</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Comprovante</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Status</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Ações</th>
@@ -473,6 +496,15 @@ export default function TiposDespesaPageSupabase() {
                         {(t as any).limiteOcorrenciasDiarias != null ? (
                           <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
                             {(t as any).limiteOcorrenciasDiarias}x
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {(t as any).centroCustoErpId ? (
+                          <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-mono">
+                            {(t as any).centroCustoErpId}
                           </span>
                         ) : (
                           <span className="text-sm text-muted-foreground">—</span>
