@@ -2,9 +2,9 @@
 
 import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
-import { useDespesas, useTiposDespesa, useCartoes, type Despesa } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
-import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car } from "lucide-react";
 import { formatCurrency } from "@/lib/helpers";
 
 interface Props {
@@ -17,6 +17,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   const { tiposDespesa } = useTiposDespesa();
   const { cartoes } = useCartoes(currentUser?.id);
   const { addDespesa, updateDespesa } = useDespesas(currentUser?.id);
+  const { frotas } = useFrotas();
 
   const [form, setForm] = useState({
     tipoDespesaId: editDespesa?.tipo_despesa_id || "",
@@ -30,6 +31,9 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     // Campos de hospedagem
     dataCheckin:  editDespesa?.data_checkin  || "",
     dataCheckout: editDespesa?.data_checkout || "",
+    // Campos de combustível
+    frotaId: editDespesa?.frota_id || "",
+    kmAtual: editDespesa?.km_atual?.toString() || "",
   });
 
   const [comprovante, setComprovante] = useState<{ nome: string; url: string; path?: string } | null>(
@@ -42,6 +46,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
   const tipoSelecionado = tiposDespesa.find((t) => t.id === form.tipoDespesaId);
   const calculaDiarias = (tipoSelecionado as any)?.calculaDiarias === true || tipoSelecionado?.calcula_diarias === true;
+  const isCombustivel = tipoSelecionado?.nome?.toLowerCase().includes("combust") ?? false;
+  const frotasAtivas = frotas.filter((f) => f.ativo);
 
   // Calcula número de diárias em tempo real
   const numeroDiarias = useMemo(() => {
@@ -88,6 +94,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         errs.dataCheckout = "Check-out deve ser posterior ao check-in";
       }
     }
+    if (isCombustivel) {
+      if (!form.frotaId) errs.frotaId = "Selecione o veículo";
+      if (!form.kmAtual || isNaN(Number(form.kmAtual)) || Number(form.kmAtual) < 0)
+        errs.kmAtual = "Informe o KM atual";
+    }
     return errs;
   };
 
@@ -114,6 +125,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       data_checkin:  calculaDiarias && form.dataCheckin  ? form.dataCheckin  : null,
       data_checkout: calculaDiarias && form.dataCheckout ? form.dataCheckout : null,
       numero_diarias: numeroDiarias ?? null,
+      frota_id: isCombustivel && form.frotaId ? form.frotaId : null,
+      km_atual: isCombustivel && form.kmAtual ? Number(form.kmAtual) : null,
       comprovante_nome: comprovante?.nome || null,
       comprovante_url: comprovante?.url || null,
       status_aprovacao: "AguardandoGestor" as const,
@@ -368,6 +381,58 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* -------- Bloco de Combustível -------- */}
+        {isCombustivel && (
+          <div className="rounded-xl border border-accent/20 bg-accent/5 p-4 flex flex-col gap-4">
+            <div className="flex items-center gap-2 text-accent">
+              <Fuel className="w-5 h-5 shrink-0" />
+              <span className="font-semibold text-sm">Dados do Abastecimento</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Veículo */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                  <Car className="w-3.5 h-3.5" />
+                  Placa do Veículo *
+                </label>
+                {frotasAtivas.length === 0 ? (
+                  <div className="px-3 py-2.5 rounded-lg border border-input bg-muted text-sm text-muted-foreground">
+                    Nenhum veículo cadastrado na frota
+                  </div>
+                ) : (
+                  <select
+                    value={form.frotaId}
+                    onChange={(e) => setForm({ ...form, frotaId: e.target.value })}
+                    className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <option value="">Selecione o veículo...</option>
+                    {frotasAtivas.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.placa} — {f.marca} {f.modelo}{f.ano ? ` (${f.ano})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {errors.frotaId && <span className="text-xs text-destructive">{errors.frotaId}</span>}
+              </div>
+
+              {/* KM */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">KM Atual *</label>
+                <input
+                  type="number"
+                  value={form.kmAtual}
+                  onChange={(e) => setForm({ ...form, kmAtual: e.target.value })}
+                  placeholder="Ex: 45320"
+                  min={0}
+                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                {errors.kmAtual && <span className="text-xs text-destructive">{errors.kmAtual}</span>}
+              </div>
+            </div>
           </div>
         )}
 
