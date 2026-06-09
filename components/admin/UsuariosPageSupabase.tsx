@@ -527,28 +527,32 @@ export default function UsuariosPageSupabase() {
                 </div>
               </div>
 
-              {currentUser?.perfil === "administrador" && u.id !== currentUser.id && (
+              {currentUser?.perfil === "administrador" && (
                 <div className="flex gap-2 mt-4 pt-4 border-t border-border">
                   <button
                     onClick={() => handleOpenModal(u)}
                     className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
-                    Editar
+                    {u.id === currentUser.id ? "Editar meu perfil" : "Editar"}
                   </button>
-                  <button
-                    onClick={() => handleResetPassword(u)}
-                    className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-accent/30 text-accent hover:bg-accent/10 transition"
-                    title="Resetar senha"
-                  >
-                    <Key className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setDeleteConfirm(u)}
-                    className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {u.id !== currentUser.id && (
+                    <>
+                      <button
+                        onClick={() => handleResetPassword(u)}
+                        className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-accent/30 text-accent hover:bg-accent/10 transition"
+                        title="Resetar senha"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(u)}
+                        className="flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
