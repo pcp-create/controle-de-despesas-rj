@@ -124,7 +124,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   // Despesas por usuário
   const byUsuario = useMemo(() => {
     if (perfil !== "gestor" && perfil !== "administrador") return [];
-    const funcionarios = profiles.filter((u) => u.perfil === "funcionario");
+    const funcionarios = profiles;
     return funcionarios
       .map((u) => {
         const du = myDespesas.filter((d) => d.tecnico_id === u.id);

@@ -28,7 +28,7 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
   const [expandedId, setExpandedId]   = useState<string | null>(null);
 
   const tecnicos = useMemo(
-    () => profiles.filter((p) => p.perfil === "tecnico" || p.perfil === "gestor" || p.perfil === "admin"),
+    () => profiles,
     [profiles]
   );
 

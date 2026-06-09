@@ -95,9 +95,9 @@ export default function RelatoriosPageSupabase() {
       .reduce((s, d) => s + Number(d.valor), 0),
   })).filter((x) => x.valor > 0).sort((a, b) => b.valor - a.valor);
 
-  // Por técnico
+  // Por funcionário
   const byTecnico = useMemo(() => {
-    const funcionarios = profiles.filter((u) => u.perfil === "funcionario");
+    const funcionarios = profiles;
     return funcionarios
       .map((u) => {
         const du = despesasAno.filter((d) => d.tecnico_id === u.id);
@@ -276,7 +276,7 @@ export default function RelatoriosPageSupabase() {
           </div>
         )}
 
-        {/* Top Técnicos — apenas para gestor/admin */}
+        {/* Top Funcionários — apenas para gestor/admin */}
         {!isFuncionario && byTecnico.length > 0 && (
           <div className="bg-white rounded-xl border border-border shadow-sm p-5">
             <h2 className="text-sm font-semibold text-foreground mb-4">Top Funcionários</h2>
