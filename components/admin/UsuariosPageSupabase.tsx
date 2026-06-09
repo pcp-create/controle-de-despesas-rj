@@ -21,7 +21,7 @@ import {
 import { mockEmpresas, mockFornecedores, mockCondicoesPagamento, mockOperacoesFinanceiras, mockMoedas } from "@/lib/mock-data";
 
 const perfilConfig = {
-  tecnico: { label: "Técnico", color: "bg-primary/10 text-primary", icon: Briefcase },
+  funcionario: { label: "Funcionário", color: "bg-primary/10 text-primary", icon: Briefcase },
   gestor: { label: "Gestor", color: "bg-accent/10 text-accent", icon: Users },
   financeiro: { label: "Financeiro", color: "bg-success/10 text-success", icon: Shield },
   administrador: { label: "Admin", color: "bg-warning/10 text-warning", icon: Shield },
@@ -31,7 +31,7 @@ interface UsuarioForm {
   nome: string;
   email: string;
   usuario: string;
-  perfil: "tecnico" | "gestor" | "financeiro" | "administrador";
+  perfil: "funcionario" | "gestor" | "financeiro" | "administrador";
   gestor_id: string | null;
   senha?: string;
   empresaId?: string;
@@ -46,7 +46,7 @@ const initialForm: UsuarioForm = {
   nome: "",
   email: "",
   usuario: "",
-  perfil: "tecnico",
+  perfil: "funcionario",
   gestor_id: null,
   senha: "",
   empresaId: "",
@@ -478,7 +478,7 @@ export default function UsuariosPageSupabase() {
             className="pl-9 pr-8 py-2 rounded-lg border border-input bg-white text-sm appearance-none"
           >
             <option value="todos">Todos os perfis</option>
-            <option value="tecnico">Técnicos</option>
+            <option value="funcionario">Funcionários</option>
             <option value="gestor">Gestores</option>
             <option value="financeiro">Financeiro</option>
             <option value="administrador">Administradores</option>
@@ -697,14 +697,14 @@ export default function UsuariosPageSupabase() {
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                       required
                     >
-                      <option value="tecnico">Técnico</option>
+                      <option value="funcionario">Funcionário</option>
                       <option value="gestor">Gestor</option>
                       <option value="financeiro">Financeiro</option>
                       <option value="administrador">Administrador</option>
                     </select>
                   </div>
 
-                  {form.perfil === "tecnico" && (
+                  {form.perfil === "funcionario" && (
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-foreground">Gestor responsável</label>
                       <select

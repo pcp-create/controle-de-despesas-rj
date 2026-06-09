@@ -15,7 +15,7 @@ export interface Database {
           nome: string
           email: string
           usuario: string
-          perfil: 'tecnico' | 'gestor' | 'financeiro' | 'administrador'
+          perfil: 'funcionario' | 'gestor' | 'financeiro' | 'administrador'
           ativo: boolean
           gestor_id: string | null
           primeiro_acesso: boolean
@@ -27,7 +27,7 @@ export interface Database {
           nome: string
           email: string
           usuario: string
-          perfil: 'tecnico' | 'gestor' | 'financeiro' | 'administrador'
+          perfil: 'funcionario' | 'gestor' | 'financeiro' | 'administrador'
           ativo?: boolean
           gestor_id?: string | null
           primeiro_acesso?: boolean
@@ -39,7 +39,7 @@ export interface Database {
           nome?: string
           email?: string
           usuario?: string
-          perfil?: 'tecnico' | 'gestor' | 'financeiro' | 'administrador'
+          perfil?: 'funcionario' | 'gestor' | 'financeiro' | 'administrador'
           ativo?: boolean
           gestor_id?: string | null
           primeiro_acesso?: boolean

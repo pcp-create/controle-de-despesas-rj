@@ -47,9 +47,9 @@ export default function AprovacaoPageSupabase() {
         if (currentUser.perfil === "administrador" || currentUser.perfil === "financeiro") {
           return true;
         }
-        // Se for gestor, vê apenas despesas dos técnicos sob sua supervisão
-        const tecnico = profiles.find((p) => p.id === d.tecnico_id);
-        return tecnico?.gestor_id === currentUser.id;
+        // Se for gestor, vê apenas despesas dos funcionários sob sua supervisão
+        const funcionario = profiles.find((p) => p.id === d.tecnico_id);
+        return funcionario?.gestor_id === currentUser.id;
       })
       .filter((d) => {
         if (filterStatus !== "todos" && d.status_aprovacao !== filterStatus) return false;
@@ -188,7 +188,7 @@ export default function AprovacaoPageSupabase() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por técnico, cliente, OS..."
+            placeholder="Buscar por funcionário, cliente, OS..."
             className="w-full pl-9 pr-4 py-2 rounded-lg border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
@@ -220,9 +220,9 @@ export default function AprovacaoPageSupabase() {
       ) : (
         <div className="flex flex-col gap-3">
           {despesasEquipe.map((d) => {
-            const tipo    = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
-            const tecnico = profiles.find((p) => p.id === d.tecnico_id);
-            const gestor  = profiles.find((p) => p.id === d.gestor_aprovador_id);
+            const tipo       = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
+            const funcionario = profiles.find((p) => p.id === d.tecnico_id);
+            const gestor     = profiles.find((p) => p.id === d.gestor_aprovador_id);
             const sg      = getStatusGeral(d.status_erp, d.status_aprovacao);
             const status  = statusGeralConfig[sg];
             const isExpanded  = expandedId === d.id;
@@ -237,7 +237,7 @@ export default function AprovacaoPageSupabase() {
                 >
                   {/* Avatar técnico */}
                   <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0 uppercase">
-                    {tecnico?.nome?.[0] ?? "?"}
+                    {funcionario?.nome?.[0] ?? "?"}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -248,7 +248,7 @@ export default function AprovacaoPageSupabase() {
                     </div>
                     {/* Linha 2: técnico • cliente • OS • data */}
                     <div className="flex items-center gap-2 mt-0.5 text-sm text-muted-foreground flex-wrap">
-                      <span className="font-medium text-foreground/70">{tecnico?.nome ?? "-"}</span>
+                      <span className="font-medium text-foreground/70">{funcionario?.nome ?? "-"}</span>
                       <span>•</span>
                       <span>{d.cliente}</span>
                       {d.numero_os && <><span>•</span><span>{d.numero_os}</span></>}

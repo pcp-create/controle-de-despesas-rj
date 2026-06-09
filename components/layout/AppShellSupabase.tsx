@@ -140,7 +140,7 @@ export default function AppShellSupabase() {
       <BottomNav currentPage={page} onNavigate={navigate} />
 
       {/* Floating Nova Despesa button mobile */}
-      {currentUser?.perfil === "tecnico" && page !== "nova-despesa" && (
+      {currentUser?.perfil === "funcionario" && page !== "nova-despesa" && (
         <button
           onClick={() => navigate("nova-despesa")}
           className="fixed bottom-20 right-4 z-30 lg:hidden w-14 h-14 rounded-full bg-accent text-white shadow-lg flex items-center justify-center text-2xl font-bold hover:bg-accent/90 active:scale-95 transition-all"

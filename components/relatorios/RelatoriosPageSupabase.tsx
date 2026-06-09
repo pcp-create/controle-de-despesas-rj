@@ -27,9 +27,9 @@ type ModoFiltro = "mes" | "periodo";
 
 export default function RelatoriosPageSupabase() {
   const { currentUser } = useAppStore();
-  const isTecnico = currentUser?.perfil === "tecnico";
+  const isFuncionario = currentUser?.perfil === "funcionario";
 
-  const { despesas, isLoading } = useDespesas(isTecnico ? currentUser?.id : undefined);
+  const { despesas, isLoading } = useDespesas(isFuncionario ? currentUser?.id : undefined);
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
   
@@ -97,8 +97,8 @@ export default function RelatoriosPageSupabase() {
 
   // Por técnico
   const byTecnico = useMemo(() => {
-    const tecnicos = profiles.filter((u) => u.perfil === "tecnico");
-    return tecnicos
+    const funcionarios = profiles.filter((u) => u.perfil === "funcionario");
+    return funcionarios
       .map((u) => {
         const du = despesasAno.filter((d) => d.tecnico_id === u.id);
         return {
@@ -127,7 +127,7 @@ export default function RelatoriosPageSupabase() {
         <div>
           <h1 className="text-xl font-bold text-foreground">Relatórios</h1>
           <p className="text-sm text-muted-foreground">
-            {isTecnico ? "Suas despesas aprovadas no período" : "Análise de despesas aprovadas"}
+            {isFuncionario ? "Suas despesas aprovadas no período" : "Análise de despesas aprovadas"}
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -225,13 +225,13 @@ export default function RelatoriosPageSupabase() {
           <p className="text-2xl font-bold text-foreground">{formatCurrency(ticketMedio)}</p>
           <p className="text-xs text-muted-foreground mt-1">Ticket Médio</p>
         </div>
-        {!isTecnico && (
+        {!isFuncionario && (
           <div className="bg-white rounded-xl border border-border shadow-sm p-4">
             <div className="w-9 h-9 rounded-lg bg-warning/10 text-warning flex items-center justify-center mb-3">
               <Users className="w-5 h-5" />
             </div>
             <p className="text-2xl font-bold text-foreground">{tecnicosAtivos}</p>
-            <p className="text-xs text-muted-foreground mt-1">Técnicos Ativos</p>
+            <p className="text-xs text-muted-foreground mt-1">Funcionários Ativos</p>
           </div>
         )}
       </div>
@@ -277,9 +277,9 @@ export default function RelatoriosPageSupabase() {
         )}
 
         {/* Top Técnicos — apenas para gestor/admin */}
-        {!isTecnico && byTecnico.length > 0 && (
+        {!isFuncionario && byTecnico.length > 0 && (
           <div className="bg-white rounded-xl border border-border shadow-sm p-5">
-            <h2 className="text-sm font-semibold text-foreground mb-4">Top Técnicos</h2>
+            <h2 className="text-sm font-semibold text-foreground mb-4">Top Funcionários</h2>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={byTecnico} layout="vertical" barSize={16}>
                 <XAxis type="number" tick={{ fontSize: 11 }} axisLine={false} tickLine={false}

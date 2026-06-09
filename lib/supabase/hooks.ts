@@ -71,7 +71,7 @@ export interface Profile {
   nome: string;
   email: string;
   usuario: string;
-  perfil: "tecnico" | "gestor" | "financeiro" | "administrador";
+  perfil: "funcionario" | "gestor" | "financeiro" | "administrador";
   ativo: boolean;
   gestor_id: string | null;
   primeiro_acesso: boolean;
@@ -128,7 +128,7 @@ const fetchDespesas = async (userId?: string, perfil?: string): Promise<Despesa[
     .order("created_at", { ascending: false });
 
   // Filtrar por perfil
-  if (perfil === "tecnico" && userId) {
+  if (perfil === "funcionario" && userId) {
     query = query.eq("tecnico_id", userId);
   }
   // Gestores, financeiros e admins veem tudo (RLS cuida da permissão)
@@ -232,7 +232,7 @@ export function useDespesas(userId?: string, perfil?: string) {
   const { profile } = useAuth();
   const { data, error, isLoading, mutate } = useSWR(
     `despesas_${userId || "all"}_${perfil || ""}`,
-    userId ? () => fetchDespesas(userId, perfil || "tecnico") : () => fetchDespesas("", perfil || "gestor"),
+    userId ? () => fetchDespesas(userId, perfil || "funcionario") : () => fetchDespesas("", perfil || "gestor"),
     { revalidateOnFocus: false }
   );
 
