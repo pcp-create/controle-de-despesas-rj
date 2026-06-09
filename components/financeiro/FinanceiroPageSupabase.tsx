@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useDespesas, useTiposDespesa, useProfiles, useCartoes } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { formatCurrency, getStatusGeral, statusGeralConfig } from "@/lib/helpers";
 import { DollarSign, TrendingUp, Search, Eye } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -28,7 +28,6 @@ export default function FinanceiroPageSupabase() {
   const { despesas, isLoading } = useDespesas();
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
-  const { cartoes } = useCartoes();
 
   const [search, setSearch] = useState("");
   const now = new Date();
@@ -89,7 +88,7 @@ export default function FinanceiroPageSupabase() {
     const term = search.toLowerCase();
     const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
     const tecnico = profiles.find((p) => p.id === d.tecnico_id);
-    const cartao = cartoes.find((c) => c.id === d.cartao_id);
+    const cartao = d.cartao;
     const cartaoLabel = cartao
       ? `${cartao.banco} ${cartao.bandeira} ${cartao.ultimos_digitos} ${cartao.apelido || ""}`.toLowerCase()
       : "";
@@ -110,7 +109,7 @@ export default function FinanceiroPageSupabase() {
     const dados = despesasFiltradas.map((d) => {
       const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
       const tecnico = profiles.find((p) => p.id === d.tecnico_id);
-      const cartao = cartoes.find((c) => c.id === d.cartao_id);
+      const cartao = d.cartao;
       const cartaoLabel = cartao
         ? `${cartao.banco} — ${cartao.bandeira} — **** ${cartao.ultimos_digitos}`
         : "-";
@@ -165,7 +164,7 @@ export default function FinanceiroPageSupabase() {
     const rows = despesasFiltradas.map((d) => {
       const tipo    = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
       const tecnico = profiles.find((p) => p.id === d.tecnico_id);
-      const cartao  = cartoes.find((c) => c.id === d.cartao_id);
+      const cartao  = d.cartao;
       const cartaoLabel = cartao
         ? `${cartao.banco} — ${cartao.bandeira} — **** ${cartao.ultimos_digitos}`
         : "-";
@@ -441,7 +440,7 @@ export default function FinanceiroPageSupabase() {
               {despesasFiltradas.map((d) => {
                 const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
                 const tecnico = profiles.find((p) => p.id === d.tecnico_id);
-                const cartao = cartoes.find((c) => c.id === d.cartao_id);
+                const cartao = d.cartao;
                 const sg = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
                 const statusCfg = statusGeralConfig[sg];
 
