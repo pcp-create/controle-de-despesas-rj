@@ -28,7 +28,7 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
   const [expandedId, setExpandedId]   = useState<string | null>(null);
 
   const tecnicos = useMemo(
-    () => profiles.filter((p) => p.perfil === "tecnico" || p.perfil === "gestor"),
+    () => profiles.filter((p) => p.perfil === "tecnico" || p.perfil === "gestor" || p.perfil === "admin"),
     [profiles]
   );
 
@@ -106,7 +106,7 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
         </div>
 
-        {/* Filtro técnico */}
+        {/* Filtro funcionário */}
         <div className="relative">
           <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <select
@@ -114,7 +114,7 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
             onChange={(e) => setFilterTecnico(e.target.value)}
             className="pl-9 pr-8 py-2 rounded-lg border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
           >
-            <option value="todos">Todos os técnicos</option>
+            <option value="todos">Todos os funcionários</option>
             {tecnicos.map((t) => (
               <option key={t.id} value={t.id}>{t.nome}</option>
             ))}
