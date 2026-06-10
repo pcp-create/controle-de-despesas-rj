@@ -477,14 +477,10 @@ export function useDespesas(userId?: string, perfil?: string) {
 }
 
 const fetchFrotas = async (): Promise<Frota[]> => {
-  const supabase = getSupabase();
-  if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("frotas")
-    .select("*")
-    .order("placa");
-  if (error) throw error;
-  return data || [];
+  const res = await fetch("/api/frotas");
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json.data || [];
 };
 
 export function useFrotas() {
