@@ -17,6 +17,9 @@ export type ERPStatus =
   | "ReprovadoERPAtualizado"
   | "ErroAtualizarERP";
 
+// ─── Área / Setor ─────────────────────────────────────────────────────────────
+export type UserArea = "Administrativo" | "Comercial" | "Manutenção";
+
 // ─── Usuário ──────────────────────────────────────────────────────────────────
 export interface User {
   id: string;
@@ -25,6 +28,7 @@ export interface User {
   telefone: string;
   usuario: string;
   perfil: UserProfile;
+  area?: UserArea;
   ativo: boolean;
   gestorId?: string;
   senha: string;

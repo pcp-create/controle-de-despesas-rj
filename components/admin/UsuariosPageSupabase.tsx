@@ -32,6 +32,7 @@ interface UsuarioForm {
   email: string;
   usuario: string;
   perfil: "funcionario" | "gestor" | "financeiro" | "administrador";
+  area: string;
   gestor_id: string | null;
   senha?: string;
   empresaId?: string;
@@ -47,6 +48,7 @@ const initialForm: UsuarioForm = {
   email: "",
   usuario: "",
   perfil: "funcionario",
+  area: "",
   gestor_id: null,
   senha: "",
   empresaId: "",
@@ -111,6 +113,7 @@ export default function UsuariosPageSupabase() {
         email: user.email,
         usuario: user.usuario,
         perfil: user.perfil,
+        area: user.area || "",
         gestor_id: user.gestor_id || null,
         senha: "",
         empresaId: user.empresaId || "",
@@ -161,6 +164,7 @@ export default function UsuariosPageSupabase() {
             email: form.email,
             usuario: form.usuario,
             perfil: form.perfil,
+            area: form.area || null,
             gestor_id: form.gestor_id || null,
             empresa_id: form.empresaId || null,
             fornecedor_id: form.fornecedorId || null,
@@ -192,6 +196,7 @@ export default function UsuariosPageSupabase() {
             email: form.email,
             usuario: form.usuario,
             perfil: form.perfil,
+            area: form.area && form.area.trim() ? form.area : null,
             gestor_id: form.gestor_id && form.gestor_id.trim() ? form.gestor_id : null,
             empresa_id: form.empresaId && form.empresaId.trim() ? form.empresaId : null,
             fornecedor_id: form.fornecedorId && form.fornecedorId.trim() ? form.fornecedorId : null,
@@ -513,11 +518,16 @@ export default function UsuariosPageSupabase() {
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground truncate">{u.email}</p>
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
                     <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${perfil.color}`}>
                       <PerfilIcon className="w-3 h-3" />
                       {perfil.label}
                     </span>
+                    {u.area && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        {u.area}
+                      </span>
+                    )}
                     {gestor && (
                       <span className="text-xs text-muted-foreground">
                         Gestor: {gestor.nome.split(" ")[0]}
@@ -701,6 +711,20 @@ export default function UsuariosPageSupabase() {
                       <option value="gestor">Gestor</option>
                       <option value="financeiro">Financeiro</option>
                       <option value="administrador">Administrador</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Área / Setor</label>
+                    <select
+                      value={form.area}
+                      onChange={(e) => setForm({ ...form, area: e.target.value })}
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Selecione a área...</option>
+                      <option value="Administrativo">Administrativo</option>
+                      <option value="Comercial">Comercial</option>
+                      <option value="Manutenção">Manutenção</option>
                     </select>
                   </div>
 
