@@ -110,6 +110,7 @@ export const useAppStore = create<AppState>()(
             email: profile.email,
             usuario: profile.usuario,
             perfil: profile.perfil,
+            area: profile.area || "",
             ativo: profile.ativo,
             gestor_id: profile.gestor_id,
             primeiro_acesso: profile.primeiro_acesso,

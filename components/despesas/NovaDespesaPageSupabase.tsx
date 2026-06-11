@@ -80,10 +80,13 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   const validate = () => {
     const errs: Record<string, string> = {};
     if (!form.tipoDespesaId) errs.tipoDespesaId = "Selecione o tipo";
-    if (!form.cliente.trim()) errs.cliente = "Informe o cliente";
-    if (!form.numeroOS.trim()) errs.numeroOS = "Informe o número da OS";
+    if (!form.cartaoId) errs.cartaoId = "Selecione o cartão";
+    if (!form.documento) errs.documento = "Selecione o tipo de documento";
     if (!form.valor || isNaN(Number(form.valor)) || Number(form.valor) <= 0) errs.valor = "Valor inválido";
     if (!form.dataDespesa) errs.dataDespesa = "Informe a data";
+    if (statusLimite === "excede" && !form.observacao.trim()) {
+      errs.observacao = "Observação obrigatória quando o valor excede o limite";
+    }
     if (tipoSelecionado?.exige_comprovante && !comprovante) {
       errs.comprovante = "Este tipo de despesa exige comprovante";
     }
@@ -230,13 +233,13 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
           {/* Cartão */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-foreground">Cartão</label>
+            <label className="text-sm font-medium text-foreground">Cartão *</label>
             <select
               value={form.cartaoId}
               onChange={(e) => setForm({ ...form, cartaoId: e.target.value })}
               className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option value="">Nenhum</option>
+              <option value="">Selecione o cartão...</option>
               {cartoes.filter((c) => c.ativo).map((c) => {
                 const label = c.apelido
                   ? `${c.apelido} — ${c.banco} ${c.bandeira} *${c.ultimos_digitos}`
@@ -246,11 +249,12 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 );
               })}
             </select>
+            {errors.cartaoId && <span className="text-xs text-destructive">{errors.cartaoId}</span>}
           </div>
 
           {/* Cliente */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-foreground">Cliente *</label>
+            <label className="text-sm font-medium text-foreground">Cliente</label>
             <input
               type="text"
               value={form.cliente}
@@ -258,12 +262,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               placeholder="Nome do cliente"
               className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
-            {errors.cliente && <span className="text-xs text-destructive">{errors.cliente}</span>}
           </div>
 
           {/* OS */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-foreground">Número da OS *</label>
+            <label className="text-sm font-medium text-foreground">Número da OS</label>
             <input
               type="text"
               value={form.numeroOS}
@@ -271,7 +274,6 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               placeholder="OS-00000"
               className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
-            {errors.numeroOS && <span className="text-xs text-destructive">{errors.numeroOS}</span>}
           </div>
 
           {/* Valor total */}
@@ -439,7 +441,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         {/* Documento */}
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-foreground">
-            Documento
+            Documento *
             {tipoSelecionado?.documento_padrao && (
               <span className="ml-2 text-xs text-muted-foreground">Sugestão: {tipoSelecionado.documento_padrao}</span>
             )}
@@ -453,18 +455,30 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             <option value="Nota Fiscal (NF)">Nota Fiscal (NF)</option>
             <option value="Cupom">Cupom</option>
           </select>
+          {errors.documento && <span className="text-xs text-destructive">{errors.documento}</span>}
         </div>
 
         {/* Observação */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-foreground">Observação</label>
+          <label className="text-sm font-medium text-foreground">
+            Observação
+            {statusLimite === "excede" && <span className="text-destructive ml-1">*</span>}
+            {statusLimite === "excede" && (
+              <span className="ml-2 text-xs text-destructive font-normal">
+                Obrigatória quando o valor excede o limite
+              </span>
+            )}
+          </label>
           <textarea
             value={form.observacao}
             onChange={(e) => setForm({ ...form, observacao: e.target.value })}
-            placeholder="Informações adicionais..."
+            placeholder={statusLimite === "excede" ? "Justifique o valor acima do limite..." : "Informações adicionais..."}
             rows={2}
-            className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            className={`px-3 py-2.5 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none bg-background ${
+              statusLimite === "excede" ? "border-destructive/50 focus:ring-destructive/40" : "border-input"
+            }`}
           />
+          {errors.observacao && <span className="text-xs text-destructive">{errors.observacao}</span>}
         </div>
 
         {/* Comprovante */}
