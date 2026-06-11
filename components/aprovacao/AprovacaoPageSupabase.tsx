@@ -14,6 +14,8 @@ import {
   Eye,
   ChevronDown,
   MessageSquare,
+  Layers,
+  CreditCard,
 } from "lucide-react";
 
 const statusAprovacaoConfig = {
@@ -21,6 +23,16 @@ const statusAprovacaoConfig = {
   AprovadoGestor:   { label: "Aprovado",             color: "bg-success/10 text-success" },
   Reprovado:        { label: "Reprovado",             color: "bg-destructive/10 text-destructive" },
 };
+
+// ─── Tipo de agrupamento ──────────────────────────────────────────────────────
+interface GrupoDespesa {
+  chave: string;
+  despesaPrincipal: Despesa;
+  parcelas: Despesa[];
+  valorTotal: number;
+  parcelado: boolean;
+  numeroParcelas: number;
+}
 
 export default function AprovacaoPageSupabase() {
   const { currentUser, loadSupabaseData } = useAppStore();
@@ -32,26 +44,48 @@ export default function AprovacaoPageSupabase() {
   const [filterStatus, setFilterStatus] = useState<string>("AguardandoGestor");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
-  const [reprovandoId, setReprovandoId] = useState<string | null>(null);
+  const [reprovandoChave, setReprovandoChave] = useState<string | null>(null);
   const [justificativa, setJustificativa] = useState("");
 
-  // Filtrar despesas da equipe (despesas onde o tecnico tem o gestor atual como gestor)
-  const despesasEquipe = useMemo(() => {
+  // ─── Agrupa despesas parceladas pelo grupo_parcela_id ────────────────────────
+  const grupos = useMemo<GrupoDespesa[]>(() => {
     if (!currentUser) return [];
-    
-    return despesas
-      .filter((d) => {
-        // Exclui despesas não enviadas — não devem aparecer em aprovações
-        if (!d.status_erp || d.status_erp === "Rascunho") return false;
-        // Se for admin ou financeiro, vê tudo
-        if (currentUser.perfil === "administrador" || currentUser.perfil === "financeiro") {
-          return true;
-        }
-        // Se for gestor, vê apenas despesas dos funcionários sob sua supervisão
-        const funcionario = profiles.find((p) => p.id === d.tecnico_id);
-        return funcionario?.gestor_id === currentUser.id;
-      })
-      .filter((d) => {
+
+    const visiveis = despesas.filter((d) => {
+      if (!d.status_erp || d.status_erp === "Rascunho") return false;
+      if (currentUser.perfil === "administrador" || currentUser.perfil === "financeiro") return true;
+      const funcionario = profiles.find((p) => p.id === d.tecnico_id);
+      return funcionario?.gestor_id === currentUser.id;
+    });
+
+    const mapa = new Map<string, Despesa[]>();
+    for (const d of visiveis) {
+      const chave = d.grupo_parcela_id ?? d.id;
+      const lista = mapa.get(chave) ?? [];
+      lista.push(d);
+      mapa.set(chave, lista);
+    }
+
+    const resultado: GrupoDespesa[] = [];
+    for (const [chave, lista] of mapa.entries()) {
+      const ordenadas = lista.sort((a, b) => a.parcela_atual - b.parcela_atual);
+      const principal = ordenadas[0];
+      const valorTotal = ordenadas.reduce((acc, p) => acc + Number(p.valor), 0);
+      const parcelado = principal.parcelado === true && lista.length > 1;
+
+      resultado.push({
+        chave,
+        despesaPrincipal: principal,
+        parcelas: ordenadas,
+        valorTotal,
+        parcelado,
+        numeroParcelas: parcelado ? lista.length : 1,
+      });
+    }
+
+    return resultado
+      .filter((g) => {
+        const d = g.despesaPrincipal;
         if (filterStatus !== "todos" && d.status_aprovacao !== filterStatus) return false;
         if (search) {
           const term = search.toLowerCase();
@@ -66,87 +100,90 @@ export default function AprovacaoPageSupabase() {
         }
         return true;
       })
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      .sort((a, b) =>
+        new Date(b.despesaPrincipal.created_at).getTime() -
+        new Date(a.despesaPrincipal.created_at).getTime()
+      );
   }, [despesas, currentUser, profiles, search, filterStatus, tiposDespesa]);
 
-  const pendentes = despesasEquipe.filter((d) => d.status_aprovacao === "AguardandoGestor").length;
+  const pendentes = grupos.filter((g) => g.despesaPrincipal.status_aprovacao === "AguardandoGestor").length;
 
-  const handleAprovar = async (id: string) => {
+  // Aprova todas as parcelas do grupo
+  const handleAprovar = async (grupo: GrupoDespesa) => {
     const supabase = createClient();
-    if (!supabase) {
-      setFeedback({ type: "error", msg: "Supabase não disponível" });
-      return;
+    if (!supabase) { setFeedback({ type: "error", msg: "Supabase não disponível" }); return; }
+
+    for (const parcela of grupo.parcelas) {
+      const { error } = await supabase
+        .from("despesas")
+        .update({
+          status_aprovacao: "AprovadoGestor",
+          status_erp: "AprovadoGestorERPAtualizado",
+          gestor_aprovador_id: currentUser?.id,
+          data_aprovacao: new Date().toISOString(),
+        })
+        .eq("id", parcela.id);
+
+      if (error) { setFeedback({ type: "error", msg: error.message }); return; }
     }
 
-    const { error } = await supabase
-      .from("despesas")
-      .update({
-        status_aprovacao: "AprovadoGestor",
-        status_erp: "AprovadoGestorERPAtualizado",
-        gestor_aprovador_id: currentUser?.id,
-        data_aprovacao: new Date().toISOString(),
-      })
-      .eq("id", id);
+    await registrarAuditoria({
+      acao: "APPROVE",
+      entidade: "despesa",
+      entidadeId: grupo.chave,
+      usuarioId: currentUser?.id || "sistema",
+      detalhes: grupo.parcelado
+        ? `Grupo de ${grupo.numeroParcelas} parcelas aprovado pelo gestor`
+        : "Despesa aprovada pelo gestor",
+    });
 
-    if (error) {
-      setFeedback({ type: "error", msg: error.message });
-    } else {
-      // Registrar auditoria
-      await registrarAuditoria({
-        acao: "APPROVE",
-        entidade: "despesa",
-        entidadeId: id,
-        usuarioId: currentUser?.id || "sistema",
-        detalhes: "Despesa aprovada pelo gestor",
-      });
-      
-      setFeedback({ type: "success", msg: "Despesa aprovada!" });
-      await mutate();
-      setTimeout(() => setFeedback(null), 3000);
-    }
+    const msg = grupo.parcelado ? `${grupo.numeroParcelas} parcelas aprovadas!` : "Despesa aprovada!";
+    setFeedback({ type: "success", msg });
+    await mutate();
+    setTimeout(() => setFeedback(null), 3000);
   };
 
-  const handleReprovar = async (id: string) => {
+  // Reprova todas as parcelas do grupo
+  const handleReprovar = async (grupo: GrupoDespesa) => {
     if (!justificativa.trim()) {
       setFeedback({ type: "error", msg: "Informe a justificativa da reprovação" });
       return;
     }
-    
+
     const supabase = createClient();
-    if (!supabase) {
-      setFeedback({ type: "error", msg: "Supabase não disponível" });
-      return;
+    if (!supabase) { setFeedback({ type: "error", msg: "Supabase não disponível" }); return; }
+
+    for (const parcela of grupo.parcelas) {
+      const { error } = await supabase
+        .from("despesas")
+        .update({
+          status_aprovacao: "Reprovado",
+          status_erp: "ErroAtualizarERP",
+          gestor_aprovador_id: currentUser?.id,
+          justificativa_reprovacao: justificativa,
+          data_aprovacao: new Date().toISOString(),
+        })
+        .eq("id", parcela.id);
+
+      if (error) { setFeedback({ type: "error", msg: error.message }); return; }
     }
 
-    const { error } = await supabase
-      .from("despesas")
-      .update({
-        status_aprovacao: "Reprovado",
-        status_erp: "ErroAtualizarERP",
-        gestor_aprovador_id: currentUser?.id,
-        justificativa_reprovacao: justificativa,
-        data_aprovacao: new Date().toISOString(),
-      })
-      .eq("id", id);
+    await registrarAuditoria({
+      acao: "REJECT",
+      entidade: "despesa",
+      entidadeId: grupo.chave,
+      usuarioId: currentUser?.id || "sistema",
+      detalhes: grupo.parcelado
+        ? `Grupo de ${grupo.numeroParcelas} parcelas reprovado: ${justificativa}`
+        : `Despesa reprovada: ${justificativa}`,
+    });
 
-    if (error) {
-      setFeedback({ type: "error", msg: error.message });
-    } else {
-      // Registrar auditoria
-      await registrarAuditoria({
-        acao: "REJECT",
-        entidade: "despesa",
-        entidadeId: id,
-        usuarioId: currentUser?.id || "sistema",
-        detalhes: `Despesa reprovada: ${justificativa}`,
-      });
-      
-      setFeedback({ type: "success", msg: "Despesa reprovada" });
-      setReprovandoId(null);
-      setJustificativa("");
-      await mutate();
-      setTimeout(() => setFeedback(null), 3000);
-    }
+    const msg = grupo.parcelado ? `${grupo.numeroParcelas} parcelas reprovadas` : "Despesa reprovada";
+    setFeedback({ type: "success", msg });
+    setReprovandoChave(null);
+    setJustificativa("");
+    await mutate();
+    setTimeout(() => setFeedback(null), 3000);
   };
 
   if (isLoading) {
@@ -172,7 +209,7 @@ export default function AprovacaoPageSupabase() {
       {/* Feedback */}
       {feedback && (
         <div className={`rounded-lg px-4 py-3 text-sm ${
-          feedback.type === "success" 
+          feedback.type === "success"
             ? "bg-success/10 border border-success/20 text-success"
             : "bg-destructive/10 border border-destructive/20 text-destructive"
         }`}>
@@ -209,7 +246,7 @@ export default function AprovacaoPageSupabase() {
       </div>
 
       {/* Lista */}
-      {despesasEquipe.length === 0 ? (
+      {grupos.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
             <CheckCircle className="w-8 h-8 text-muted-foreground" />
@@ -219,20 +256,21 @@ export default function AprovacaoPageSupabase() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {despesasEquipe.map((d) => {
-            const tipo       = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
+          {grupos.map((grupo) => {
+            const d = grupo.despesaPrincipal;
+            const tipo        = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
             const funcionario = profiles.find((p) => p.id === d.tecnico_id);
-            const gestor     = profiles.find((p) => p.id === d.gestor_aprovador_id);
-            const sg      = getStatusGeral(d.status_erp, d.status_aprovacao);
-            const status  = statusGeralConfig[sg];
-            const isExpanded  = expandedId === d.id;
-            const isReprovando = reprovandoId === d.id;
+            const gestor      = profiles.find((p) => p.id === d.gestor_aprovador_id);
+            const sg          = getStatusGeral(d.status_erp, d.status_aprovacao);
+            const status      = statusGeralConfig[sg];
+            const isExpanded  = expandedId === grupo.chave;
+            const isReprovando = reprovandoChave === grupo.chave;
 
             return (
-              <div key={d.id} className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+              <div key={grupo.chave} className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
                 {/* Cabeçalho do card */}
                 <button
-                  onClick={() => setExpandedId(isExpanded ? null : d.id)}
+                  onClick={() => setExpandedId(isExpanded ? null : grupo.chave)}
                   className="w-full p-4 flex items-center gap-3 text-left"
                 >
                   {/* Avatar técnico */}
@@ -241,21 +279,38 @@ export default function AprovacaoPageSupabase() {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    {/* Linha 1: tipo + valor */}
+                    {/* Linha 1: tipo + badge parcelas + valor total */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-foreground">{tipo?.nome || "Despesa"}</span>
-                      <span className="text-base font-bold text-foreground shrink-0">{formatCurrency(Number(d.valor))}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-semibold text-foreground truncate">{tipo?.nome || "Despesa"}</span>
+                        {grupo.parcelado && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
+                            <Layers className="w-3 h-3" />
+                            {grupo.numeroParcelas}x
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-base font-bold text-foreground shrink-0">
+                        {formatCurrency(grupo.valorTotal)}
+                      </span>
                     </div>
-                    {/* Linha 2: técnico • cliente • OS • data */}
+                    {/* Linha 2: técnico • cliente • OS • data • valor/parcela */}
                     <div className="flex items-center gap-2 mt-0.5 text-sm text-muted-foreground flex-wrap">
                       <span className="font-medium text-foreground/70">{funcionario?.nome ?? "-"}</span>
-                      <span>•</span>
-                      <span>{d.cliente}</span>
+                      {d.cliente && <><span>•</span><span>{d.cliente}</span></>}
                       {d.numero_os && <><span>•</span><span>{d.numero_os}</span></>}
                       <span>•</span>
                       <span>{new Date(d.data_despesa).toLocaleDateString("pt-BR")}</span>
+                      {grupo.parcelado && (
+                        <>
+                          <span>•</span>
+                          <span className="text-primary font-medium">
+                            {formatCurrency(grupo.valorTotal / grupo.numeroParcelas)}/parcela
+                          </span>
+                        </>
+                      )}
                     </div>
-                    {/* Linha 3: status geral único */}
+                    {/* Linha 3: status */}
                     <div className="mt-2">
                       <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${status.color}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
@@ -271,6 +326,31 @@ export default function AprovacaoPageSupabase() {
                 {isExpanded && (
                   <div className="px-4 pb-4 border-t border-border pt-4 space-y-4">
 
+                    {/* Parcelas detalhadas */}
+                    {grupo.parcelado && (
+                      <div className="flex flex-col gap-1.5">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                          <CreditCard className="w-3.5 h-3.5" />
+                          Parcelas
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {grupo.parcelas.map((p) => (
+                            <div key={p.id} className="flex flex-col gap-0.5 p-2.5 rounded-lg bg-muted/40 border border-border text-xs">
+                              <span className="text-muted-foreground font-medium">
+                                {p.parcela_atual}/{grupo.numeroParcelas}
+                              </span>
+                              <span className="font-semibold text-foreground">{formatCurrency(Number(p.valor))}</span>
+                              {p.data_vencimento && (
+                                <span className="text-primary">
+                                  Vence: {new Date(p.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR")}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Grid de informações */}
                     <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
                       <div>
@@ -283,8 +363,6 @@ export default function AprovacaoPageSupabase() {
                           <p className="text-foreground">{new Date(d.data_envio).toLocaleString("pt-BR")}</p>
                         </div>
                       )}
-
-                      {/* Hospedagem */}
                       {d.data_checkin && d.data_checkout && (
                         <>
                           <div>
@@ -311,8 +389,6 @@ export default function AprovacaoPageSupabase() {
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Comprovante</p>
                         <p className="text-foreground">{d.comprovante_nome || "Não anexado"}</p>
                       </div>
-
-                      {/* Aprovação */}
                       {d.status_aprovacao === "AprovadoGestor" && d.data_aprovacao && (
                         <>
                           <div>
@@ -327,8 +403,6 @@ export default function AprovacaoPageSupabase() {
                           </div>
                         </>
                       )}
-
-                      {/* Reprovação */}
                       {d.status_aprovacao === "Reprovado" && d.data_aprovacao && (
                         <>
                           <div>
@@ -341,7 +415,6 @@ export default function AprovacaoPageSupabase() {
                           </div>
                         </>
                       )}
-
                       {d.observacao && (
                         <div className="col-span-2">
                           <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Observação</p>
@@ -364,6 +437,11 @@ export default function AprovacaoPageSupabase() {
                         <label className="text-sm font-medium text-foreground flex items-center gap-2">
                           <MessageSquare className="w-4 h-4" />
                           Justificativa da Reprovação
+                          {grupo.parcelado && (
+                            <span className="text-xs font-normal text-muted-foreground ml-1">
+                              (será aplicada às {grupo.numeroParcelas} parcelas)
+                            </span>
+                          )}
                         </label>
                         <textarea
                           value={justificativa}
@@ -374,13 +452,13 @@ export default function AprovacaoPageSupabase() {
                         />
                         <div className="flex gap-2">
                           <button
-                            onClick={() => { setReprovandoId(null); setJustificativa(""); }}
+                            onClick={() => { setReprovandoChave(null); setJustificativa(""); }}
                             className="flex-1 py-2 rounded-lg border border-input text-sm hover:bg-muted transition"
                           >
                             Cancelar
                           </button>
                           <button
-                            onClick={() => handleReprovar(d.id)}
+                            onClick={() => handleReprovar(grupo)}
                             className="flex-1 py-2 rounded-lg bg-destructive text-white text-sm hover:bg-destructive/90 transition font-medium"
                           >
                             Confirmar Reprovação
@@ -403,18 +481,18 @@ export default function AprovacaoPageSupabase() {
                       {d.status_aprovacao === "AguardandoGestor" && !isReprovando && (
                         <>
                           <button
-                            onClick={() => setReprovandoId(d.id)}
+                            onClick={() => setReprovandoChave(grupo.chave)}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive text-sm hover:bg-destructive/10 transition"
                           >
                             <XCircle className="w-4 h-4" />
-                            Reprovar
+                            {grupo.parcelado ? `Reprovar ${grupo.numeroParcelas} Parcelas` : "Reprovar"}
                           </button>
                           <button
-                            onClick={() => handleAprovar(d.id)}
+                            onClick={() => handleAprovar(grupo)}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-success text-white text-sm hover:bg-success/90 transition font-medium"
                           >
                             <CheckCircle className="w-4 h-4" />
-                            Aprovar
+                            {grupo.parcelado ? `Aprovar ${grupo.numeroParcelas} Parcelas` : "Aprovar"}
                           </button>
                         </>
                       )}
@@ -429,3 +507,4 @@ export default function AprovacaoPageSupabase() {
     </div>
   );
 }
+

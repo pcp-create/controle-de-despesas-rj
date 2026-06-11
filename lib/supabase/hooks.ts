@@ -60,6 +60,12 @@ export interface Despesa {
   erp_resposta: Record<string, unknown> | null;
   frota_id: string | null;
   km_atual: number | null;
+  // Parcelamento
+  parcelado: boolean;
+  numero_parcelas: number;
+  parcela_atual: number;
+  grupo_parcela_id: string | null;
+  data_vencimento: string | null;
   created_at: string;
   updated_at: string;
   // Joins
@@ -307,6 +313,20 @@ export function useDespesas(userId?: string, perfil?: string) {
     return { error: null };
   };
 
+  const updateDespesaVencimento = async (id: string, data_vencimento: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+
+    const { error } = await supabase
+      .from("despesas")
+      .update({ data_vencimento, updated_at: new Date().toISOString() })
+      .eq("id", id);
+
+    if (error) return { error: error.message };
+    mutate();
+    return { error: null };
+  };
+
   const deleteDespesa = async (id: string) => {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
@@ -469,6 +489,7 @@ export function useDespesas(userId?: string, perfil?: string) {
     mutate,
     addDespesa,
     updateDespesa,
+    updateDespesaVencimento,
     deleteDespesa,
     enviarDespesa,
     aprovarDespesa,

@@ -4,12 +4,25 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
-import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car } from "lucide-react";
+import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp } from "lucide-react";
 import { formatCurrency } from "@/lib/helpers";
 
 interface Props {
   onBack: () => void;
   editDespesa?: Despesa | null;
+}
+
+// ─── Regra de vencimento ─────────────────────────────────────────────────────
+// Lançado ATÉ dia 08: vence no dia 19 do mesmo mês
+// Lançado APÓS dia 08: vence no dia 19 do mês seguinte
+function calcularVencimento(dataDespesa: string, offsetMeses: number = 0): string {
+  const dt = new Date(dataDespesa + "T12:00:00");
+  const dia = dt.getDate();
+  // Determina o mês base: se dia > 8, vai pro mês seguinte; depois soma os offsets de parcela
+  const mesBase = dia <= 8 ? 0 : 1;
+  const totalOffset = mesBase + offsetMeses;
+  const venc = new Date(dt.getFullYear(), dt.getMonth() + totalOffset, 19);
+  return venc.toISOString().slice(0, 10);
 }
 
 export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) {
@@ -35,6 +48,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     frotaId: editDespesa?.frota_id || "",
     kmAtual: editDespesa?.km_atual?.toString() || "",
   });
+
+  // ─── Parcelamento ────────────────────────────────────────────────────────────
+  const [parcelado, setParcelado] = useState(editDespesa?.parcelado ?? false);
+  const [numeroParcelas, setNumeroParcelas] = useState(editDespesa?.numero_parcelas ?? 2);
 
   const [comprovante, setComprovante] = useState<{ nome: string; url: string; path?: string } | null>(
     editDespesa?.comprovante_nome ? { nome: editDespesa.comprovante_nome, url: editDespesa.comprovante_url || "" } : null
@@ -77,6 +94,20 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     return valor <= limite ? "ok" : "excede";
   }, [tipoSelecionado, calculaDiarias, valorPorDiaria, form.valor]);
 
+  // ─── Cálculo de parcelas ─────────────────────────────────────────────────────
+  const valorTotal = Number(form.valor) || 0;
+  const qtdParcelas = parcelado ? Math.max(2, numeroParcelas) : 1;
+  const valorParcela = valorTotal > 0 && qtdParcelas > 0 ? valorTotal / qtdParcelas : 0;
+
+  const previewParcelas = useMemo(() => {
+    if (!parcelado || !form.dataDespesa || valorTotal <= 0) return [];
+    return Array.from({ length: qtdParcelas }, (_, i) => ({
+      numero: i + 1,
+      valor: valorParcela,
+      vencimento: calcularVencimento(form.dataDespesa, i),
+    }));
+  }, [parcelado, form.dataDespesa, valorTotal, qtdParcelas, valorParcela]);
+
   const validate = () => {
     const errs: Record<string, string> = {};
     if (!form.tipoDespesaId) errs.tipoDespesaId = "Selecione o tipo";
@@ -84,6 +115,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     if (!form.documento) errs.documento = "Selecione o tipo de documento";
     if (!form.valor || isNaN(Number(form.valor)) || Number(form.valor) <= 0) errs.valor = "Valor inválido";
     if (!form.dataDespesa) errs.dataDespesa = "Informe a data";
+    if (parcelado && numeroParcelas < 2) errs.numeroParcelas = "Mínimo de 2 parcelas";
+    if (parcelado && numeroParcelas > 48) errs.numeroParcelas = "Máximo de 48 parcelas";
     if (statusLimite === "excede" && !form.observacao.trim()) {
       errs.observacao = "Observação obrigatória quando o valor excede o limite";
     }
@@ -116,12 +149,12 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     setLoading(true);
     setErrors({});
 
-    const despesaData = {
+    // Base da despesa compartilhada por todas as parcelas
+    const baseData = {
       tipo_despesa_id: form.tipoDespesaId,
       cartao_id: form.cartaoId || null,
       cliente: form.cliente,
       numero_os: form.numeroOS,
-      valor: Number(form.valor),
       documento: form.documento || null,
       observacao: form.observacao || null,
       data_despesa: form.dataDespesa,
@@ -143,18 +176,66 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       erp_resposta: null,
     };
 
-    let result;
     if (editDespesa) {
-      result = await updateDespesa(editDespesa.id, despesaData);
-    } else {
-      result = await addDespesa(despesaData);
-    }
+      // Edição: atualiza somente a despesa existente (sem regerar parcelas)
+      const result = await updateDespesa(editDespesa.id, {
+        ...baseData,
+        valor: Number(form.valor),
+        parcelado: parcelado,
+        numero_parcelas: parcelado ? qtdParcelas : 1,
+        parcela_atual: editDespesa.parcela_atual ?? 1,
+        grupo_parcela_id: editDespesa.grupo_parcela_id ?? null,
+        data_vencimento: calcularVencimento(form.dataDespesa, 0),
+      });
+      if (result.error) {
+        setFeedback({ type: "error", msg: result.error });
+      } else {
+        setFeedback({ type: "success", msg: "Despesa atualizada! Redirecionando..." });
+        setTimeout(() => onBack(), 1500);
+      }
+    } else if (parcelado) {
+      // Criação parcelada: gera um grupo de parcelas com UUID compartilhado
+      const grupoId = crypto.randomUUID();
+      let hasError = false;
 
-    if (result.error) {
-      setFeedback({ type: "error", msg: result.error });
+      for (let i = 0; i < qtdParcelas; i++) {
+        const result = await addDespesa({
+          ...baseData,
+          valor: Number((valorParcela).toFixed(2)),
+          parcelado: true,
+          numero_parcelas: qtdParcelas,
+          parcela_atual: i + 1,
+          grupo_parcela_id: grupoId,
+          data_vencimento: calcularVencimento(form.dataDespesa, i),
+        });
+        if (result.error) {
+          setFeedback({ type: "error", msg: `Erro na parcela ${i + 1}: ${result.error}` });
+          hasError = true;
+          break;
+        }
+      }
+
+      if (!hasError) {
+        setFeedback({ type: "success", msg: `${qtdParcelas} parcelas criadas! Redirecionando...` });
+        setTimeout(() => onBack(), 1500);
+      }
     } else {
-      setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
-      setTimeout(() => onBack(), 1500);
+      // Criação simples
+      const result = await addDespesa({
+        ...baseData,
+        valor: Number(form.valor),
+        parcelado: false,
+        numero_parcelas: 1,
+        parcela_atual: 1,
+        grupo_parcela_id: null,
+        data_vencimento: calcularVencimento(form.dataDespesa, 0),
+      });
+      if (result.error) {
+        setFeedback({ type: "error", msg: result.error });
+      } else {
+        setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
+        setTimeout(() => onBack(), 1500);
+      }
     }
 
     setLoading(false);
@@ -303,6 +384,124 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             />
             {errors.dataDespesa && <span className="text-xs text-destructive">{errors.dataDespesa}</span>}
           </div>
+        </div>
+
+        {/* -------- Bloco de Parcelamento -------- */}
+        <div className="rounded-xl border border-border bg-muted/30 p-4 flex flex-col gap-3">
+          {/* Toggle parcelado */}
+          <label className="flex items-center justify-between cursor-pointer select-none">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-sm font-medium text-foreground">Despesa parcelada?</span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={parcelado}
+              onClick={() => setParcelado((v) => !v)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40 ${
+                parcelado ? "bg-primary" : "bg-muted-foreground/30"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                  parcelado ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </label>
+
+          {/* Campos expandidos quando parcelado */}
+          {parcelado && (
+            <div className="flex flex-col gap-3 pt-1 border-t border-border">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Número de parcelas */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">Número de Parcelas *</label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNumeroParcelas((v) => Math.max(2, v - 1))}
+                      className="w-9 h-9 rounded-lg border border-input bg-background flex items-center justify-center hover:bg-muted transition"
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                    <input
+                      type="number"
+                      min={2}
+                      max={48}
+                      value={numeroParcelas}
+                      onChange={(e) => setNumeroParcelas(Math.max(2, Math.min(48, Number(e.target.value))))}
+                      className="flex-1 px-3 py-2 rounded-lg border border-input bg-background text-sm text-center focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setNumeroParcelas((v) => Math.min(48, v + 1))}
+                      className="w-9 h-9 rounded-lg border border-input bg-background flex items-center justify-center hover:bg-muted transition"
+                    >
+                      <ChevronUp className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {errors.numeroParcelas && <span className="text-xs text-destructive">{errors.numeroParcelas}</span>}
+                </div>
+
+                {/* Valor por parcela */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">Valor por Parcela</label>
+                  <div className="px-3 py-2.5 rounded-lg border border-input bg-muted/50 text-sm font-semibold text-primary">
+                    {valorParcela > 0 ? formatCurrency(valorParcela) : "—"}
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {valorTotal > 0 && qtdParcelas > 0
+                      ? `${qtdParcelas}x de ${formatCurrency(valorParcela)} = ${formatCurrency(valorTotal)}`
+                      : "Informe o valor total acima"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Preview das parcelas */}
+              {previewParcelas.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Vencimentos calculados
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-36 overflow-y-auto pr-1">
+                    {previewParcelas.map((p) => (
+                      <div
+                        key={p.numero}
+                        className="flex flex-col gap-0.5 p-2 rounded-lg bg-white border border-border text-xs"
+                      >
+                        <span className="text-muted-foreground font-medium">
+                          Parcela {p.numero}/{qtdParcelas}
+                        </span>
+                        <span className="font-semibold text-foreground">{formatCurrency(p.valor)}</span>
+                        <span className="text-primary">
+                          Vence: {new Date(p.vencimento + "T12:00:00").toLocaleDateString("pt-BR")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Regra: lançado até dia 08 vence no dia 19 do mesmo mês; após dia 08 vence no dia 19 do mês seguinte. O Financeiro pode ajustar o vencimento após confirmação.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Resumo de vencimento para despesa simples */}
+          {!parcelado && form.dataDespesa && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Info className="w-3.5 h-3.5 shrink-0" />
+              <span>
+                Vencimento previsto:{" "}
+                <strong className="text-foreground">
+                  {new Date(calcularVencimento(form.dataDespesa) + "T12:00:00").toLocaleDateString("pt-BR")}
+                </strong>
+                {" — editável pelo Financeiro após lançamento"}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* -------- Bloco de Hospedagem -------- */}

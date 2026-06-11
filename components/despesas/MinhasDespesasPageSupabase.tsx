@@ -13,12 +13,25 @@ import {
   Trash2,
   Eye,
   ChevronDown,
+  CreditCard,
+  Layers,
 } from "lucide-react";
 
 interface Props {
   onNova: () => void;
   onEditar: (despesa: Despesa) => void;
   initialStatus?: string;
+}
+
+// ─── Tipo de agrupamento ──────────────────────────────────────────────────────
+interface GrupoDespesa {
+  // Chave única: grupo_parcela_id para parceladas, id para simples
+  chave: string;
+  despesaPrincipal: Despesa;       // parcela 1 (ou a única despesa)
+  parcelas: Despesa[];             // todas as parcelas (ordenadas)
+  valorTotal: number;
+  parcelado: boolean;
+  numeroParcelas: number;
 }
 
 export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialStatus }: Props) {
@@ -32,10 +45,38 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
 
-  const minhasDespesas = useMemo(() => {
-    return despesas
-      .filter((d) => d.tecnico_id === currentUser?.id)
-      .filter((d) => {
+  // ─── Agrupa despesas parceladas pelo grupo_parcela_id ────────────────────────
+  const grupos = useMemo<GrupoDespesa[]>(() => {
+    const minhas = despesas.filter((d) => d.tecnico_id === currentUser?.id);
+
+    const mapa = new Map<string, Despesa[]>();
+    for (const d of minhas) {
+      const chave = d.grupo_parcela_id ?? d.id;
+      const lista = mapa.get(chave) ?? [];
+      lista.push(d);
+      mapa.set(chave, lista);
+    }
+
+    const resultado: GrupoDespesa[] = [];
+    for (const [chave, lista] of mapa.entries()) {
+      const ordenadas = lista.sort((a, b) => a.parcela_atual - b.parcela_atual);
+      const principal = ordenadas[0];
+      const valorTotal = ordenadas.reduce((acc, p) => acc + Number(p.valor), 0);
+      const parcelado = principal.parcelado === true && lista.length > 1;
+
+      resultado.push({
+        chave,
+        despesaPrincipal: principal,
+        parcelas: ordenadas,
+        valorTotal,
+        parcelado,
+        numeroParcelas: parcelado ? lista.length : 1,
+      });
+    }
+
+    return resultado
+      .filter((g) => {
+        const d = g.despesaPrincipal;
         if (filterStatus !== "todos") {
           const sg = getStatusGeral(d.status_erp, d.status_aprovacao);
           if (sg !== filterStatus) return false;
@@ -51,7 +92,10 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
         }
         return true;
       })
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      .sort((a, b) =>
+        new Date(b.despesaPrincipal.created_at).getTime() -
+        new Date(a.despesaPrincipal.created_at).getTime()
+      );
   }, [despesas, currentUser, search, filterStatus, tiposDespesa]);
 
   const handleDelete = async (id: string) => {
@@ -66,12 +110,24 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
     }
   };
 
-  const handleEnviar = async (id: string) => {
-    const result = await enviarDespesa(id);
-    if (!result.ok) {
-      setFeedback({ type: "error", msg: result.msg });
-    } else {
-      setFeedback({ type: "success", msg: result.msg });
+  // Envia todas as parcelas do grupo de uma vez
+  const handleEnviar = async (grupo: GrupoDespesa) => {
+    let hasError = false;
+    for (const parcela of grupo.parcelas) {
+      if (parcela.status_erp === "Rascunho") {
+        const result = await enviarDespesa(parcela.id);
+        if (!result.ok) {
+          setFeedback({ type: "error", msg: result.msg });
+          hasError = true;
+          break;
+        }
+      }
+    }
+    if (!hasError) {
+      const msg = grupo.parcelado
+        ? `${grupo.numeroParcelas} parcelas enviadas para aprovação!`
+        : "Despesa enviada para aprovação!";
+      setFeedback({ type: "success", msg });
       await loadSupabaseData();
       setTimeout(() => setFeedback(null), 3000);
     }
@@ -91,7 +147,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-foreground">Minhas Despesas</h1>
-          <p className="text-sm text-muted-foreground">{minhasDespesas.length} lançamento(s)</p>
+          <p className="text-sm text-muted-foreground">{grupos.length} lançamento(s)</p>
         </div>
         <button
           onClick={onNova}
@@ -105,7 +161,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
       {/* Feedback */}
       {feedback && (
         <div className={`rounded-lg px-4 py-3 text-sm ${
-          feedback.type === "success" 
+          feedback.type === "success"
             ? "bg-success/10 border border-success/20 text-success"
             : "bg-destructive/10 border border-destructive/20 text-destructive"
         }`}>
@@ -144,7 +200,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
       </div>
 
       {/* Lista */}
-      {minhasDespesas.length === 0 ? (
+      {grupos.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
             <Send className="w-8 h-8 text-muted-foreground" />
@@ -154,32 +210,51 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {minhasDespesas.map((d) => {
+          {grupos.map((grupo) => {
+            const d = grupo.despesaPrincipal;
             const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
             const sg = getStatusGeral(d.status_erp, d.status_aprovacao);
             const status = statusGeralConfig[sg];
-            const isExpanded = expandedId === d.id;
+            const isExpanded = expandedId === grupo.chave;
 
             return (
-              <div key={d.id} className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+              <div key={grupo.chave} className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
                 <button
-                  onClick={() => setExpandedId(isExpanded ? null : d.id)}
+                  onClick={() => setExpandedId(isExpanded ? null : grupo.chave)}
                   className="w-full p-4 flex items-center gap-4 text-left"
                 >
                   <div className="flex-1 min-w-0">
-                    {/* Linha 1: tipo + valor */}
+                    {/* Linha 1: tipo + valor total */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-foreground">{tipo?.nome || "Despesa"}</span>
-                      <span className="text-base font-bold text-foreground shrink-0">{formatCurrency(Number(d.valor))}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-semibold text-foreground truncate">{tipo?.nome || "Despesa"}</span>
+                        {grupo.parcelado && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
+                            <Layers className="w-3 h-3" />
+                            {grupo.numeroParcelas}x
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-base font-bold text-foreground shrink-0">
+                        {formatCurrency(grupo.valorTotal)}
+                      </span>
                     </div>
                     {/* Linha 2: cliente • OS • data */}
                     <div className="flex items-center gap-2 mt-0.5 text-sm text-muted-foreground flex-wrap">
-                      <span>{d.cliente}</span>
+                      {d.cliente && <span>{d.cliente}</span>}
                       {d.numero_os && <><span>•</span><span>{d.numero_os}</span></>}
                       <span>•</span>
                       <span>{new Date(d.data_despesa).toLocaleDateString("pt-BR")}</span>
+                      {grupo.parcelado && (
+                        <>
+                          <span>•</span>
+                          <span className="text-primary font-medium">
+                            {formatCurrency(grupo.valorTotal / grupo.numeroParcelas)}/parcela
+                          </span>
+                        </>
+                      )}
                     </div>
-                    {/* Linha 3: status geral único */}
+                    {/* Linha 3: status */}
                     <div className="flex items-center gap-1.5 mt-2">
                       <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${status.color}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
@@ -192,6 +267,32 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
 
                 {isExpanded && (
                   <div className="px-4 pb-4 border-t border-border pt-4 space-y-4">
+
+                    {/* Parcelas (se parcelado) */}
+                    {grupo.parcelado && (
+                      <div className="flex flex-col gap-1.5">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                          <CreditCard className="w-3.5 h-3.5" />
+                          Parcelas
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {grupo.parcelas.map((p) => (
+                            <div key={p.id} className="flex flex-col gap-0.5 p-2.5 rounded-lg bg-muted/40 border border-border text-xs">
+                              <span className="text-muted-foreground font-medium">
+                                {p.parcela_atual}/{grupo.numeroParcelas}
+                              </span>
+                              <span className="font-semibold text-foreground">{formatCurrency(Number(p.valor))}</span>
+                              {p.data_vencimento && (
+                                <span className="text-primary">
+                                  Vence: {new Date(p.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR")}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Informações da despesa */}
                     <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                       <div>
@@ -221,7 +322,6 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                           <p className="text-foreground">{new Date(d.data_envio).toLocaleString("pt-BR")}</p>
                         </div>
                       )}
-
                       {/* Hospedagem */}
                       {d.data_checkin && d.data_checkout && (
                         <>
@@ -241,8 +341,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                           )}
                         </>
                       )}
-
-                      {/* Aprovação/Reprovação */}
+                      {/* Aprovação */}
                       {d.status_aprovacao === "AprovadoGestor" && d.data_aprovacao && (
                         <>
                           <div>
@@ -273,7 +372,6 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                           </div>
                         </>
                       )}
-
                       {d.observacao && (
                         <div className="col-span-2">
                           <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Observação</p>
@@ -309,11 +407,11 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                             Excluir
                           </button>
                           <button
-                            onClick={() => handleEnviar(d.id)}
+                            onClick={() => handleEnviar(grupo)}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-sm hover:bg-accent/90 transition"
                           >
                             <Send className="w-4 h-4" />
-                            Enviar Despesa
+                            {grupo.parcelado ? `Enviar ${grupo.numeroParcelas} Parcelas` : "Enviar Despesa"}
                           </button>
                         </>
                       )}

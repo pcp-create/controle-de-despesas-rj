@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { formatCurrency, getStatusGeral, statusGeralConfig } from "@/lib/helpers";
-import { DollarSign, TrendingUp, Search, Eye, CalendarDays } from "lucide-react";
+import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -25,11 +25,14 @@ const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
 type ModoFiltro = "mes" | "periodo";
 
 export default function FinanceiroPageSupabase() {
-  const { despesas, isLoading } = useDespesas();
+  const { despesas, isLoading, updateDespesaVencimento } = useDespesas();
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
 
   const [search, setSearch] = useState("");
+  // Estado para edição inline de vencimento: { [despesaId]: string }
+  const [editandoVencimento, setEditandoVencimento] = useState<Record<string, string>>({});
+  const [salvandoVencimento, setSalvandoVencimento] = useState<Record<string, boolean>>({});
   const now = new Date();
   const [modoFiltro, setModoFiltro] = useState<ModoFiltro>("mes");
   const [mesSelecionado, setMesSelecionado] = useState(now.getMonth());
@@ -115,6 +118,8 @@ export default function FinanceiroPageSupabase() {
         : "-";
       return {
         Data: new Date(d.data_despesa).toLocaleDateString("pt-BR"),
+        Vencimento: d.data_vencimento ? new Date(d.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR") : "-",
+        "Parcela": d.parcelado ? `${d.parcela_atual}/${d.numero_parcelas}` : "-",
         Funcionário: tecnico?.nome || "-",
         Tipo: tipo?.nome || "-",
         Cliente: d.cliente,
@@ -172,6 +177,8 @@ export default function FinanceiroPageSupabase() {
       const statusLabel = statusGeralConfig[sg].label;
       return [
         new Date(d.data_despesa).toLocaleDateString("pt-BR"),
+        d.data_vencimento ? new Date(d.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR") : "-",
+        d.parcelado ? `${d.parcela_atual}/${d.numero_parcelas}` : "-",
         tecnico?.nome.split(" ").slice(0, 2).join(" ") || "-",
         tipo?.nome || "-",
         d.cliente,
@@ -189,7 +196,7 @@ export default function FinanceiroPageSupabase() {
 
     autoTable(doc, {
       startY: 36,
-      head: [["Data", "Funcionário", "Tipo", "Cliente", "OS", "Valor", "Doc.", "Cartão", "Status", "Comprovante", "Status ERP", "Envio", "ERP ID"]],
+      head: [["Data", "Vencimento", "Parcela", "Funcionário", "Tipo", "Cliente", "OS", "Valor", "Doc.", "Cartão", "Status", "Comprovante", "Status ERP", "Envio", "ERP ID"]],
       body: rows,
       styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
       headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: "bold", fontSize: 7.5 },
@@ -223,6 +230,31 @@ export default function FinanceiroPageSupabase() {
 
     const nomeArquivo = `Despesas_${new Date().toLocaleDateString("pt-BR").replace(/\//g, "-")}.pdf`;
     doc.save(nomeArquivo);
+  };
+
+  const handleEditarVencimento = (id: string, dataAtual: string | null) => {
+    setEditandoVencimento((prev) => ({ ...prev, [id]: dataAtual || "" }));
+  };
+
+  const handleCancelarVencimento = (id: string) => {
+    setEditandoVencimento((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const handleSalvarVencimento = async (id: string) => {
+    const novaData = editandoVencimento[id];
+    if (!novaData) return;
+    setSalvandoVencimento((prev) => ({ ...prev, [id]: true }));
+    await updateDespesaVencimento(id, novaData);
+    setSalvandoVencimento((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    handleCancelarVencimento(id);
   };
 
   if (isLoading) {
@@ -425,6 +457,7 @@ export default function FinanceiroPageSupabase() {
             <thead className="bg-muted/50 sticky top-0 z-10">
               <tr>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Data</th>
+                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Vencimento</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Funcionário</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Tipo</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Cliente</th>
@@ -462,6 +495,51 @@ export default function FinanceiroPageSupabase() {
                 return (
                   <tr key={d.id} className="border-t border-border hover:bg-muted/20 transition">
                     <td className="px-3 py-2 whitespace-nowrap">{new Date(d.data_despesa).toLocaleDateString("pt-BR")}</td>
+                    {/* Vencimento editável */}
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {editandoVencimento[d.id] !== undefined ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="date"
+                            value={editandoVencimento[d.id]}
+                            onChange={(e) =>
+                              setEditandoVencimento((prev) => ({ ...prev, [d.id]: e.target.value }))
+                            }
+                            className="px-2 py-1 rounded border border-input bg-background text-xs focus:outline-none focus:ring-1 focus:ring-primary w-32"
+                          />
+                          <button
+                            onClick={() => handleSalvarVencimento(d.id)}
+                            disabled={!editandoVencimento[d.id] || salvandoVencimento[d.id]}
+                            title="Salvar"
+                            className="p-1 rounded hover:bg-success/10 text-success disabled:opacity-40 transition"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleCancelarVencimento(d.id)}
+                            title="Cancelar"
+                            className="p-1 rounded hover:bg-destructive/10 text-destructive transition"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 group">
+                          <span className={d.data_vencimento ? "text-foreground" : "text-muted-foreground"}>
+                            {d.data_vencimento
+                              ? new Date(d.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR")
+                              : "—"}
+                          </span>
+                          <button
+                            onClick={() => handleEditarVencimento(d.id, d.data_vencimento)}
+                            title="Editar vencimento"
+                            className="p-0.5 rounded opacity-0 group-hover:opacity-100 transition hover:bg-muted text-muted-foreground"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-3 py-2 whitespace-nowrap">{tecnico?.nome.split(" ")[0] || "-"}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{tipo?.nome || "-"}</td>
                     <td className="px-3 py-2 max-w-32 truncate">{d.cliente}</td>
@@ -519,7 +597,7 @@ export default function FinanceiroPageSupabase() {
               })}
               {despesasFiltradas.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="px-3 py-10 text-center text-muted-foreground">
+                  <td colSpan={14} className="px-3 py-10 text-center text-muted-foreground">
                     Nenhuma despesa encontrada no período
                   </td>
                 </tr>
