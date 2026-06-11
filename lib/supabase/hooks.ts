@@ -384,12 +384,47 @@ export function useDespesas(userId?: string, perfil?: string) {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
+    // 1. Atualiza a parcela editada
     const { error } = await supabase
       .from("despesas")
       .update({ data_vencimento, updated_at: new Date().toISOString() })
       .eq("id", id);
 
     if (error) return { error: error.message };
+
+    // 2. Busca dados da parcela para verificar se pertence a um grupo
+    const { data: parcela } = await supabase
+      .from("despesas")
+      .select("grupo_parcela_id, parcela_atual, numero_parcelas")
+      .eq("id", id)
+      .single();
+
+    // 3. Se for parcelada, propaga o vencimento para as parcelas POSTERIORES
+    //    adicionando +1 mês a partir da data escolhida para cada parcela seguinte
+    if (parcela?.grupo_parcela_id && parcela.numero_parcelas > 1) {
+      const { data: posteriores } = await supabase
+        .from("despesas")
+        .select("id, parcela_atual")
+        .eq("grupo_parcela_id", parcela.grupo_parcela_id)
+        .gt("parcela_atual", parcela.parcela_atual)
+        .order("parcela_atual", { ascending: true });
+
+      if (posteriores && posteriores.length > 0) {
+        const baseDate = new Date(data_vencimento + "T12:00:00");
+
+        for (const p of posteriores) {
+          const offset = p.parcela_atual - parcela.parcela_atual;
+          const novaData = new Date(baseDate.getFullYear(), baseDate.getMonth() + offset, baseDate.getDate());
+          const novaDataStr = novaData.toISOString().slice(0, 10);
+
+          await supabase
+            .from("despesas")
+            .update({ data_vencimento: novaDataStr, updated_at: new Date().toISOString() })
+            .eq("id", p.id);
+        }
+      }
+    }
+
     mutate();
     return { error: null };
   };
