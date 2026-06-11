@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { useAppStore } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
+import { useTipoDespesaCentroCusto } from "@/lib/supabase/hooks";
 import { formatCurrency } from "@/lib/helpers";
 import {
   Search,
@@ -15,8 +16,148 @@ import {
   X,
   Loader2,
   BedDouble,
+  Building2,
+  Pencil,
+  Save,
 } from "lucide-react";
 
+// ─── Áreas disponíveis ────────────────────────────────────────────────────────
+const AREAS = ["Administrativo", "Comercial", "Manutenção"] as const;
+type Area = (typeof AREAS)[number];
+
+// ─── Sub-componente: painel de CC por área ────────────────────────────────────
+function CentroCustoPanel({ tipoDespesaId }: { tipoDespesaId: string }) {
+  const { centrosCusto, isLoading, upsertCentroCusto, deleteCentroCusto } =
+    useTipoDespesaCentroCusto(tipoDespesaId);
+
+  // Estado de edição local: area → valor editando
+  const [editing, setEditing] = useState<Partial<Record<Area, string>>>({});
+  const [saving, setSaving] = useState<Partial<Record<Area, boolean>>>({});
+
+  const getValor = (area: Area) => {
+    const cc = centrosCusto.find((c) => c.area === area);
+    return cc?.centro_custo_erp || "";
+  };
+
+  const handleEdit = (area: Area) => {
+    setEditing((prev) => ({ ...prev, [area]: getValor(area) }));
+  };
+
+  const handleCancel = (area: Area) => {
+    setEditing((prev) => {
+      const next = { ...prev };
+      delete next[area];
+      return next;
+    });
+  };
+
+  const handleSave = async (area: Area) => {
+    const valor = editing[area] ?? "";
+    setSaving((prev) => ({ ...prev, [area]: true }));
+
+    if (!valor.trim()) {
+      // Sem valor → remover o registro se existir
+      const cc = centrosCusto.find((c) => c.area === area);
+      if (cc) await deleteCentroCusto(cc.id);
+    } else {
+      await upsertCentroCusto(area, valor.trim());
+    }
+
+    setSaving((prev) => { const n = { ...prev }; delete n[area]; return n; });
+    handleCancel(area);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground p-2">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        Carregando...
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 border border-border rounded-lg overflow-hidden">
+      <div className="px-3 py-2 bg-muted/50 border-b border-border flex items-center gap-2">
+        <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          Centro de Custo ERP (M8) por Área / Setor
+        </span>
+      </div>
+      <div className="divide-y divide-border">
+        {AREAS.map((area) => {
+          const valor = getValor(area);
+          const isEditing = editing[area] !== undefined;
+          const isSaving = saving[area] === true;
+
+          return (
+            <div key={area} className="flex items-center gap-3 px-3 py-2.5">
+              <span className="text-sm font-medium text-foreground w-32 shrink-0">{area}</span>
+
+              {isEditing ? (
+                <div className="flex items-center gap-1.5 flex-1">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={editing[area] ?? ""}
+                    onChange={(e) =>
+                      setEditing((prev) => ({ ...prev, [area]: e.target.value }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSave(area);
+                      if (e.key === "Escape") handleCancel(area);
+                    }}
+                    placeholder="Ex: CC-001"
+                    className="flex-1 px-2 py-1 rounded border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+                    disabled={isSaving}
+                  />
+                  <button
+                    onClick={() => handleSave(area)}
+                    disabled={isSaving}
+                    title="Salvar"
+                    className="p-1 rounded hover:bg-success/10 text-success disabled:opacity-40 transition"
+                  >
+                    {isSaving ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleCancel(area)}
+                    title="Cancelar"
+                    className="p-1 rounded hover:bg-destructive/10 text-destructive transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 flex-1 group">
+                  {valor ? (
+                    <span className="text-sm font-mono text-primary bg-primary/8 px-2 py-0.5 rounded">
+                      {valor}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground italic">Não definido</span>
+                  )}
+                  <button
+                    onClick={() => handleEdit(area)}
+                    title="Editar"
+                    className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-muted text-muted-foreground transition"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Componente principal ─────────────────────────────────────────────────────
 export default function TiposDespesaPageSupabase() {
   const { tiposDespesa, loadSupabaseData } = useAppStore();
   const formRef = useRef<HTMLDivElement>(null);
@@ -26,7 +167,9 @@ export default function TiposDespesaPageSupabase() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({
+  const [savedId, setSavedId] = useState<string | null>(null); // ID do tipo recém-salvo, para exibir painel CC
+
+  const emptyForm = {
     nome: "",
     descricao: "",
     limite_maximo: "",
@@ -34,9 +177,9 @@ export default function TiposDespesaPageSupabase() {
     calcula_diarias: false,
     exige_comprovante: true,
     documento_padrao: "",
-    centro_custo_erp_id: "",
     ativo: true,
-  });
+  };
+  const [form, setForm] = useState(emptyForm);
 
   const tiposFiltrados = tiposDespesa
     .filter((t) => {
@@ -52,12 +195,7 @@ export default function TiposDespesaPageSupabase() {
     try {
       setLoading(true);
       const supabase = createClient();
-
-      const { error } = await supabase
-        .from("tipos_despesa")
-        .update({ ativo: !ativo })
-        .eq("id", id);
-
+      const { error } = await supabase.from("tipos_despesa").update({ ativo: !ativo }).eq("id", id);
       if (error) {
         setFeedback({ type: "error", msg: error.message });
       } else {
@@ -65,36 +203,25 @@ export default function TiposDespesaPageSupabase() {
         await loadSupabaseData();
         setTimeout(() => setFeedback(null), 3000);
       }
-    } catch (err) {
-      setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Erro ao atualizar" });
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Tem certeza que deseja excluir este tipo de despesa? Esta ação não pode ser desfeita.")) {
-      return;
-    }
-
+    if (!window.confirm("Tem certeza que deseja excluir este tipo de despesa? Esta ação não pode ser desfeita.")) return;
     try {
       setLoading(true);
       const supabase = createClient();
-
-      const { error } = await supabase
-        .from("tipos_despesa")
-        .delete()
-        .eq("id", id);
-
+      const { error } = await supabase.from("tipos_despesa").delete().eq("id", id);
       if (error) {
         setFeedback({ type: "error", msg: error.message });
       } else {
         setFeedback({ type: "success", msg: "Tipo de despesa excluído com sucesso!" });
+        if (savedId === id) setSavedId(null);
         await loadSupabaseData();
         setTimeout(() => setFeedback(null), 3000);
       }
-    } catch (err) {
-      setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Erro ao excluir" });
     } finally {
       setLoading(false);
     }
@@ -105,58 +232,52 @@ export default function TiposDespesaPageSupabase() {
       setFeedback({ type: "error", msg: "Nome é obrigatório" });
       return;
     }
-
     try {
       setLoading(true);
       const supabase = createClient();
-
       const data = {
         nome: form.nome,
         descricao: form.descricao || null,
         limite_maximo: form.limite_maximo ? Number(form.limite_maximo) : null,
-        limite_ocorrencias_diarias: form.limite_ocorrencias_diarias ? Number(form.limite_ocorrencias_diarias) : null,
+        limite_ocorrencias_diarias: form.limite_ocorrencias_diarias
+          ? Number(form.limite_ocorrencias_diarias)
+          : null,
         calcula_diarias: form.calcula_diarias,
         exige_comprovante: form.exige_comprovante,
         documento_padrao: form.documento_padrao || null,
-        centro_custo_erp_id: form.centro_custo_erp_id || null,
         ativo: form.ativo,
       };
 
       if (editingId) {
-        const { error } = await supabase
-          .from("tipos_despesa")
-          .update(data)
-          .eq("id", editingId)
-          .select();
-
+        const { error } = await supabase.from("tipos_despesa").update(data).eq("id", editingId).select();
         if (error) {
           setFeedback({ type: "error", msg: `Erro: ${error.message}` });
         } else {
-          setFeedback({ type: "success", msg: "Tipo atualizado com sucesso!" });
+          setFeedback({ type: "success", msg: "Tipo atualizado! Agora configure os Centros de Custo por área abaixo." });
+          setSavedId(editingId);
           setEditingId(null);
           setShowNew(false);
-          setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", calcula_diarias: false, exige_comprovante: true, documento_padrao: "", centro_custo_erp_id: "", ativo: true });
+          setForm(emptyForm);
           await loadSupabaseData();
-          setTimeout(() => setFeedback(null), 3000);
+          setTimeout(() => setFeedback(null), 4000);
         }
       } else {
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from("tipos_despesa")
           .insert([data])
-          .select();
-
+          .select()
+          .single();
         if (error) {
           setFeedback({ type: "error", msg: `Erro: ${error.message}` });
         } else {
-          setFeedback({ type: "success", msg: "Tipo criado com sucesso!" });
+          setFeedback({ type: "success", msg: "Tipo criado! Agora configure os Centros de Custo por área abaixo." });
+          setSavedId(inserted.id);
           setShowNew(false);
-          setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", calcula_diarias: false, exige_comprovante: true, documento_padrao: "", centro_custo_erp_id: "", ativo: true });
+          setForm(emptyForm);
           await loadSupabaseData();
-          setTimeout(() => setFeedback(null), 3000);
+          setTimeout(() => setFeedback(null), 4000);
         }
       }
-    } catch (err) {
-      setFeedback({ type: "error", msg: err instanceof Error ? err.message : "Erro ao salvar" });
     } finally {
       setLoading(false);
     }
@@ -171,10 +292,10 @@ export default function TiposDespesaPageSupabase() {
       calcula_diarias: (tipo as any).calculaDiarias === true,
       exige_comprovante: tipo.exigeComprovante,
       documento_padrao: tipo.documentoPadrao || "",
-      centro_custo_erp_id: (tipo as any).centroCustoErpId || "",
       ativo: tipo.ativo,
     });
     setEditingId(tipo.id);
+    setSavedId(tipo.id); // abre painel CC imediatamente ao editar
     setShowNew(false);
     setTimeout(() => {
       formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -184,7 +305,7 @@ export default function TiposDespesaPageSupabase() {
   const cancelEdit = () => {
     setEditingId(null);
     setShowNew(false);
-    setForm({ nome: "", descricao: "", limite_maximo: "", limite_ocorrencias_diarias: "", calcula_diarias: false, exige_comprovante: true, documento_padrao: "", centro_custo_erp_id: "", ativo: true });
+    setForm(emptyForm);
   };
 
   return (
@@ -196,10 +317,7 @@ export default function TiposDespesaPageSupabase() {
           <p className="text-sm text-muted-foreground">{tiposDespesa.length} tipo(s) cadastrado(s)</p>
         </div>
         <button
-          onClick={() => {
-            setShowNew(true);
-            setEditingId(null);
-          }}
+          onClick={() => { setShowNew(true); setEditingId(null); setSavedId(null); }}
           disabled={loading}
           className="hidden lg:flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 disabled:bg-accent/50 transition"
         >
@@ -210,21 +328,21 @@ export default function TiposDespesaPageSupabase() {
 
       {/* Feedback */}
       {feedback && (
-        <div
-          className={`rounded-lg px-4 py-3 text-sm ${
-            feedback.type === "success"
-              ? "bg-success/10 border border-success/20 text-success"
-              : "bg-destructive/10 border border-destructive/20 text-destructive"
-          }`}
-        >
+        <div className={`rounded-lg px-4 py-3 text-sm ${
+          feedback.type === "success"
+            ? "bg-success/10 border border-success/20 text-success"
+            : "bg-destructive/10 border border-destructive/20 text-destructive"
+        }`}>
           {feedback.msg}
         </div>
       )}
 
       {/* Formulário */}
       {(showNew || editingId) && (
-        <div ref={formRef} className="bg-white rounded-xl border border-border shadow-sm p-5">
-          <h2 className="font-semibold text-foreground mb-4">{editingId ? "Editar Tipo" : "Novo Tipo"}</h2>
+        <div ref={formRef} className="bg-white rounded-xl border border-border shadow-sm p-5 flex flex-col gap-5">
+          <h2 className="font-semibold text-foreground">{editingId ? "Editar Tipo" : "Novo Tipo"}</h2>
+
+          {/* Campos gerais */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Nome *</label>
@@ -276,20 +394,6 @@ export default function TiposDespesaPageSupabase() {
                 disabled={loading}
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Centro de Custo ERP (M8)</label>
-              <input
-                type="text"
-                value={form.centro_custo_erp_id}
-                onChange={(e) => setForm({ ...form, centro_custo_erp_id: e.target.value })}
-                className="px-3 py-2 rounded-lg border border-input bg-background text-sm"
-                placeholder="Ex: CC-001"
-                disabled={loading}
-              />
-              <p className="text-xs text-muted-foreground">
-                Código utilizado para sincronização com o ERP M8.
-              </p>
-            </div>
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -339,7 +443,18 @@ export default function TiposDespesaPageSupabase() {
               <label htmlFor="ativo" className="text-sm">Ativo</label>
             </div>
           </div>
-          <div className="flex gap-2 mt-4">
+
+          {/* Painel de Centro de Custo por área — visível ao editar tipo existente */}
+          {savedId && <CentroCustoPanel tipoDespesaId={savedId} />}
+
+          {/* Aviso quando é tipo novo ainda não salvo */}
+          {!savedId && showNew && (
+            <p className="text-xs text-muted-foreground border border-dashed border-border rounded-lg p-3">
+              Salve o tipo primeiro para configurar o Centro de Custo ERP por área.
+            </p>
+          )}
+
+          <div className="flex gap-2">
             <button
               onClick={cancelEdit}
               disabled={loading}
@@ -371,7 +486,7 @@ export default function TiposDespesaPageSupabase() {
         />
       </div>
 
-      {/* Lista — cards no mobile, tabela no desktop */}
+      {/* Lista */}
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         {tiposFiltrados.length > 0 ? (
           <>
@@ -379,7 +494,6 @@ export default function TiposDespesaPageSupabase() {
             <ul className="sm:hidden divide-y divide-border">
               {tiposFiltrados.map((t) => (
                 <li key={t.id} className={`p-4 space-y-3 ${!t.ativo ? "opacity-60" : ""}`}>
-                  {/* Linha 1: ícone + nome + badges */}
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                       <FileText className="w-4 h-4" />
@@ -395,7 +509,6 @@ export default function TiposDespesaPageSupabase() {
                     </span>
                   </div>
 
-                  {/* Linha 2: atributos */}
                   <div className="flex flex-wrap gap-2">
                     {t.limiteMaximo !== null && t.limiteMaximo !== undefined ? (
                       <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-warning/10 text-warning">
@@ -420,17 +533,11 @@ export default function TiposDespesaPageSupabase() {
                       {t.exigeComprovante ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                       {t.exigeComprovante ? "Exige comprovante" : "Sem comprovante"}
                     </span>
-                    {t.documentoPadrao && (
-                      <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">{t.documentoPadrao}</span>
-                    )}
-                    {(t as any).centroCustoErpId && (
-                      <span className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-mono">
-                        ERP: {(t as any).centroCustoErpId}
-                      </span>
-                    )}
                   </div>
 
-                  {/* Linha 3: ações */}
+                  {/* CC por área inline no card mobile */}
+                  {savedId === t.id && <CentroCustoPanel tipoDespesaId={t.id} />}
+
                   <div className="flex gap-2">
                     <button
                       onClick={() => startEdit(t)}
@@ -462,7 +569,6 @@ export default function TiposDespesaPageSupabase() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Descrição</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">Limite Máximo</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Limite/dia</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-foreground">CC ERP (M8)</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Comprovante</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Status</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-foreground">Ações</th>
@@ -470,77 +576,82 @@ export default function TiposDespesaPageSupabase() {
                 </thead>
                 <tbody>
                   {tiposFiltrados.map((t) => (
-                    <tr key={t.id} className={`border-b border-border hover:bg-muted/30 transition ${!t.ativo ? "opacity-60" : ""}`}>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                            <FileText className="w-4 h-4" />
+                    <>
+                      <tr
+                        key={t.id}
+                        className={`border-b border-border hover:bg-muted/30 transition ${!t.ativo ? "opacity-60" : ""}`}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                            <span className="font-medium text-foreground text-sm">{t.nome}</span>
                           </div>
-                          <span className="font-medium text-foreground text-sm">{t.nome}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-sm text-muted-foreground">{t.descricao || "—"}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {t.limiteMaximo !== null && t.limiteMaximo !== undefined ? (
-                          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-warning/10 text-warning">
-                            <DollarSign className="w-3 h-3" />
-                            {formatCurrency(t.limiteMaximo)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-sm text-muted-foreground">{t.descricao || "—"}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          {t.limiteMaximo !== null && t.limiteMaximo !== undefined ? (
+                            <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-warning/10 text-warning">
+                              <DollarSign className="w-3 h-3" />
+                              {formatCurrency(t.limiteMaximo)}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {(t as any).limiteOcorrenciasDiarias != null ? (
+                            <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                              {(t as any).limiteOcorrenciasDiarias}x
+                            </span>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${t.exigeComprovante ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
+                            {t.exigeComprovante ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                           </span>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {(t as any).limiteOcorrenciasDiarias != null ? (
-                          <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                            {(t as any).limiteOcorrenciasDiarias}x
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`inline-flex text-xs px-2 py-0.5 rounded ${t.ativo ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
+                            {t.ativo ? "Ativo" : "Inativo"}
                           </span>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {(t as any).centroCustoErpId ? (
-                          <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-mono">
-                            {(t as any).centroCustoErpId}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${t.exigeComprovante ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
-                          {t.exigeComprovante ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className={`inline-flex text-xs px-2 py-0.5 rounded ${t.ativo ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
-                          {t.ativo ? "Ativo" : "Inativo"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => startEdit(t)}
-                            disabled={loading}
-                            className="p-1.5 rounded-lg border border-input hover:bg-muted disabled:opacity-50 transition"
-                            title="Editar"
-                          >
-                            <Edit2 className="w-4 h-4 text-foreground" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(t.id)}
-                            disabled={loading}
-                            className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 disabled:opacity-50 transition"
-                            title="Excluir"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => startEdit(t)}
+                              disabled={loading}
+                              className="p-1.5 rounded-lg border border-input hover:bg-muted disabled:opacity-50 transition"
+                              title="Editar"
+                            >
+                              <Edit2 className="w-4 h-4 text-foreground" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(t.id)}
+                              disabled={loading}
+                              className="p-1.5 rounded-lg border border-destructive/30 text-destructive hover:bg-destructive/10 disabled:opacity-50 transition"
+                              title="Excluir"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Linha expandida com painel CC — aparece ao clicar em Editar */}
+                      {savedId === t.id && !editingId && (
+                        <tr key={`${t.id}-cc`} className="bg-muted/20">
+                          <td colSpan={7} className="px-4 py-3">
+                            <CentroCustoPanel tipoDespesaId={t.id} />
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   ))}
                 </tbody>
               </table>

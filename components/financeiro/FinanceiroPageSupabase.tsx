@@ -47,7 +47,7 @@ export default function FinanceiroPageSupabase() {
 
   const todasDespesas = useMemo(() => {
     return despesas.filter((d) => {
-      const dataStr = (d.data_despesa || d.created_at || "").slice(0, 10);
+      const dataStr = (d.data_vencimento || d.data_despesa || d.created_at || "").slice(0, 10);
       if (modoFiltro === "mes") {
         const dt = new Date(dataStr + "T00:00:00");
         return dt.getMonth() === mesSelecionado && dt.getFullYear() === anoSelecionado;
@@ -383,7 +383,7 @@ export default function FinanceiroPageSupabase() {
         )}
         {byTecnico.length > 0 && (
           <div className="bg-white rounded-xl border border-border shadow-sm p-5">
-            <h2 className="text-sm font-semibold text-foreground mb-4">Por Funcionário</h2>
+            <h2 className="text-sm font-semibold text-foreground mb-4">Por Funcion��rio</h2>
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
                 <Pie data={byTecnico} dataKey="total" nameKey="nome" cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={2}>
@@ -541,7 +541,14 @@ export default function FinanceiroPageSupabase() {
                       )}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">{tecnico?.nome.split(" ")[0] || "-"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{tipo?.nome || "-"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span>{tipo?.nome || "-"}</span>
+                      {d.parcelado && d.numero_parcelas > 1 && (
+                        <span className="ml-1.5 text-xs font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                          {d.parcela_atual}/{d.numero_parcelas}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 max-w-32 truncate">{d.cliente}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{d.numero_os || "-"}</td>
                     <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{formatCurrency(Number(d.valor))}</td>
