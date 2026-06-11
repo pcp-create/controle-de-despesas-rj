@@ -477,14 +477,10 @@ export function useDespesas(userId?: string, perfil?: string) {
 }
 
 const fetchFrotas = async (): Promise<Frota[]> => {
-  const supabase = getSupabase();
-  if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("frotas")
-    .select("*")
-    .order("placa");
-  if (error) throw error;
-  return data || [];
+  const res = await fetch("/api/frotas");
+  if (!res.ok) return [];
+  const json = await res.json();
+  return json.data || [];
 };
 
 export function useFrotas() {
@@ -493,38 +489,37 @@ export function useFrotas() {
   });
 
   const addFrota = async (frota: Omit<Frota, "id" | "created_at" | "updated_at">) => {
-    const supabase = getSupabase();
-    if (!supabase) return { error: "Supabase não disponível" };
-    const { data, error } = await supabase
-      .from("frotas")
-      .insert(frota)
-      .select()
-      .single();
-    if (error) return { error: error.message };
+    const res = await fetch("/api/frotas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(frota),
+    });
+    const json = await res.json();
+    if (!res.ok) return { error: json.error || "Erro ao cadastrar veículo" };
     mutate();
-    return { data };
+    return { data: json.data };
   };
 
   const updateFrota = async (id: string, updates: Partial<Frota>) => {
-    const supabase = getSupabase();
-    if (!supabase) return { error: "Supabase não disponível" };
-    const { error } = await supabase
-      .from("frotas")
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq("id", id);
-    if (error) return { error: error.message };
+    const res = await fetch("/api/frotas", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...updates }),
+    });
+    const json = await res.json();
+    if (!res.ok) return { error: json.error || "Erro ao atualizar veículo" };
     mutate();
     return { error: null };
   };
 
   const deleteFrota = async (id: string) => {
-    const supabase = getSupabase();
-    if (!supabase) return { error: "Supabase não disponível" };
-    const { error } = await supabase
-      .from("frotas")
-      .update({ ativo: false, updated_at: new Date().toISOString() })
-      .eq("id", id);
-    if (error) return { error: error.message };
+    const res = await fetch("/api/frotas", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ativo: false }),
+    });
+    const json = await res.json();
+    if (!res.ok) return { error: json.error || "Erro ao remover veículo" };
     mutate();
     return { error: null };
   };
