@@ -47,7 +47,7 @@ export default function FinanceiroPageSupabase() {
 
   const todasDespesas = useMemo(() => {
     return despesas.filter((d) => {
-      const dataStr = (d.data_despesa || d.created_at || "").slice(0, 10);
+      const dataStr = (d.data_vencimento || d.data_despesa || d.created_at || "").slice(0, 10);
       if (modoFiltro === "mes") {
         const dt = new Date(dataStr + "T00:00:00");
         return dt.getMonth() === mesSelecionado && dt.getFullYear() === anoSelecionado;
