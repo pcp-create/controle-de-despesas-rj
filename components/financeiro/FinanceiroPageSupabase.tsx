@@ -555,6 +555,11 @@ export default function FinanceiroPageSupabase() {
                           Faturado
                         </span>
                       )}
+                      {d.pagamento_tipo === "boleto" && (
+                        <span className="ml-1.5 text-xs font-semibold text-warning bg-warning/10 px-1.5 py-0.5 rounded-full">
+                          Boleto
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2 max-w-32 truncate">{d.cliente}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{d.numero_os || "-"}</td>
