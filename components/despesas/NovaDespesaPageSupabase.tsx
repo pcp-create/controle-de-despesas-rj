@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
-import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2 } from "lucide-react";
+import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2, Receipt } from "lucide-react";
 import { formatCurrency } from "@/lib/helpers";
 
 interface Props {
@@ -50,7 +50,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   });
 
   // ─── Tipo de pagamento ───────────────────────────────────────────────────────
-  const [pagamentoTipo, setPagamentoTipo] = useState<"cartao" | "dinheiro" | "faturado">(
+  const [pagamentoTipo, setPagamentoTipo] = useState<"cartao" | "dinheiro" | "faturado" | "boleto">(
     editDespesa?.pagamento_tipo ?? "cartao"
   );
 
@@ -341,6 +341,18 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               <Building2 className="w-4 h-4" />
               Faturado
             </button>
+            <button
+              type="button"
+              onClick={() => { setPagamentoTipo("boleto"); setForm((f) => ({ ...f, cartaoId: "" })); setParcelado(false); }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors border-l border-input ${
+                pagamentoTipo === "boleto"
+                  ? "bg-warning text-white"
+                  : "bg-background text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              <Receipt className="w-4 h-4" />
+              Boleto
+            </button>
           </div>
           {pagamentoTipo === "dinheiro" && (
             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -352,6 +364,12 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
               <Info className="w-3.5 h-3.5 shrink-0" />
               Despesa faturada diretamente para a empresa. Você não precisa pagar no ato — o financeiro irá conferir.
+            </p>
+          )}
+          {pagamentoTipo === "boleto" && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Info className="w-3.5 h-3.5 shrink-0" />
+              Pagamento via boleto. A despesa será registrada no Financeiro / ERP para conferência.
             </p>
           )}
         </div>
