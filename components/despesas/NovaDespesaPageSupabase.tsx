@@ -245,8 +245,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     const file = e.target.files?.[0];
     if (!file || !currentUser?.id) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      setErrors({ ...errors, comprovante: "Arquivo deve ter no máximo 5MB" });
+    if (file.size > 13 * 1024 * 1024) {
+      setErrors({ ...errors, comprovante: "Arquivo deve ter no máximo 13MB" });
       return;
     }
 
