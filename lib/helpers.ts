@@ -75,3 +75,10 @@ export const perfilLabel: Record<string, string> = {
   financeiro: "Financeiro",
   tecnico: "Técnico",
 };
+
+export const pagamentoTipoConfig: Record<string, { label: string; color: string }> = {
+  cartao:   { label: "Cartão",           color: "bg-primary/10 text-primary border border-primary/20" },
+  dinheiro: { label: "Dinheiro",         color: "bg-success/10 text-success border border-success/20" },
+  faturado: { label: "Faturado",         color: "bg-accent/10 text-accent border border-accent/20" },
+  boleto:   { label: "Boleto",           color: "bg-warning/10 text-warning border border-warning/20" },
+};

@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles, type Despesa } from "@/lib/supabase/hooks";
-import { formatCurrency, getStatusGeral, statusGeralConfig } from "@/lib/helpers";
+import { formatCurrency, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
 import {
   PlusCircle,
   Search,
@@ -254,12 +254,20 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                         </>
                       )}
                     </div>
-                    {/* Linha 3: status */}
-                    <div className="flex items-center gap-1.5 mt-2">
+                    {/* Linha 3: status + forma de pagamento */}
+                    <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                       <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${status.color}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
                         {status.label}
                       </span>
+                      {(() => {
+                        const pc = pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"];
+                        return pc ? (
+                          <span className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full ${pc.color}`}>
+                            {pc.label}
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                   <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform shrink-0 ${isExpanded ? "rotate-180" : ""}`} />
