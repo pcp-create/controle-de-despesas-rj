@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useDespesas, useTiposDespesa } from "@/lib/supabase/hooks";
-import { formatCurrency } from "@/lib/helpers";
+import { formatCurrency, pagamentoTipoConfig } from "@/lib/helpers";
 import {
   RefreshCw,
   AlertTriangle,
@@ -154,6 +154,7 @@ export default function IntegracoesERPPageSupabase() {
             <thead className="bg-muted/50 sticky top-0">
               <tr>
                 <th className="text-left px-4 py-2 font-medium text-muted-foreground">Despesa</th>
+                <th className="text-left px-4 py-2 font-medium text-muted-foreground">Pagamento</th>
                 <th className="text-left px-4 py-2 font-medium text-muted-foreground">ERP ID</th>
                 <th className="text-left px-4 py-2 font-medium text-muted-foreground">Status</th>
                 <th className="text-left px-4 py-2 font-medium text-muted-foreground">Data Envio</th>
@@ -173,6 +174,16 @@ export default function IntegracoesERPPageSupabase() {
                     <td className="px-4 py-3">
                       <p className="font-medium text-foreground">{tipo?.nome || "Despesa"}</p>
                       <p className="text-xs text-muted-foreground">{d.cliente} • {d.numero_os}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const pc = pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"];
+                        return pc ? (
+                          <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${pc.color}`}>
+                            {pc.label}
+                          </span>
+                        ) : <span className="text-muted-foreground">—</span>;
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs">{d.erp_id || "-"}</span>

@@ -34,9 +34,10 @@ export default function BottomNav({ currentPage, onNavigate }: Props) {
     ];
     if (perfil === "financeiro") return [
       { key: "dashboard" as PageKey, icon: <LayoutDashboard className="w-5 h-5" />, label: "Início" },
+      { key: "nova-despesa" as PageKey, icon: <PlusCircle className="w-5 h-5" />, label: "Nova" },
+      { key: "minhas-despesas" as PageKey, icon: <FileText className="w-5 h-5" />, label: "Despesas" },
       { key: "financeiro" as PageKey, icon: <TrendingUp className="w-5 h-5" />, label: "Financeiro" },
       { key: "reembolso" as PageKey, icon: <Banknote className="w-5 h-5" />, label: "Reembolso" },
-      { key: "relatorios" as PageKey, icon: <BarChart3 className="w-5 h-5" />, label: "Relatórios" },
     ];
     return [
       { key: "dashboard" as PageKey, icon: <LayoutDashboard className="w-5 h-5" />, label: "Início" },

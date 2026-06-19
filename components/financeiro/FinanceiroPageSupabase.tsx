@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
-import { formatCurrency, getStatusGeral, statusGeralConfig } from "@/lib/helpers";
+import { formatCurrency, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
 import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -462,6 +462,7 @@ export default function FinanceiroPageSupabase() {
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Vencimento</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Funcionário</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Tipo</th>
+                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Pagamento</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Cliente</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">OS</th>
                 <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Valor</th>
@@ -560,6 +561,16 @@ export default function FinanceiroPageSupabase() {
                           Boleto
                         </span>
                       )}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {(() => {
+                        const pc = pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"];
+                        return pc ? (
+                          <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${pc.color}`}>
+                            {pc.label}
+                          </span>
+                        ) : <span className="text-muted-foreground">—</span>;
+                      })()}
                     </td>
                     <td className="px-3 py-2 max-w-32 truncate">{d.cliente}</td>
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{d.numero_os || "-"}</td>
