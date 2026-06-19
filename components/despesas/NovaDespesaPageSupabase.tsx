@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
-import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote } from "lucide-react";
 import { formatCurrency } from "@/lib/helpers";
 
 interface Props {
@@ -48,6 +48,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     frotaId: editDespesa?.frota_id || "",
     kmAtual: editDespesa?.km_atual?.toString() || "",
   });
+
+  // ─── Tipo de pagamento ───────────────────────────────────────────────────────
+  const [pagamentoTipo, setPagamentoTipo] = useState<"cartao" | "dinheiro">(
+    editDespesa?.pagamento_tipo ?? "cartao"
+  );
 
   // ─── Parcelamento ────────────────────────────────────────────────────────────
   const [parcelado, setParcelado] = useState(editDespesa?.parcelado ?? false);
@@ -111,7 +116,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   const validate = () => {
     const errs: Record<string, string> = {};
     if (!form.tipoDespesaId) errs.tipoDespesaId = "Selecione o tipo";
-    if (!form.cartaoId) errs.cartaoId = "Selecione o cartão";
+    if (pagamentoTipo === "cartao" && !form.cartaoId) errs.cartaoId = "Selecione o cartão";
     if (!form.documento) errs.documento = "Selecione o tipo de documento";
     if (!form.valor || isNaN(Number(form.valor)) || Number(form.valor) <= 0) errs.valor = "Valor inválido";
     if (!form.dataDespesa) errs.dataDespesa = "Informe a data";
@@ -152,7 +157,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     // Base da despesa compartilhada por todas as parcelas
     const baseData = {
       tipo_despesa_id: form.tipoDespesaId,
-      cartao_id: form.cartaoId || null,
+      pagamento_tipo: pagamentoTipo,
+      cartao_id: pagamentoTipo === "cartao" ? (form.cartaoId || null) : null,
       cliente: form.cliente,
       numero_os: form.numeroOS,
       documento: form.documento || null,
@@ -294,6 +300,44 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       )}
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-border shadow-sm p-5 flex flex-col gap-4">
+
+        {/* -------- Forma de Pagamento -------- */}
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-foreground">Forma de Pagamento *</label>
+          <div className="flex rounded-lg border border-input overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setPagamentoTipo("cartao")}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors ${
+                pagamentoTipo === "cartao"
+                  ? "bg-primary text-white"
+                  : "bg-background text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              <CreditCard className="w-4 h-4" />
+              Cartão
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPagamentoTipo("dinheiro"); setForm((f) => ({ ...f, cartaoId: "" })); setParcelado(false); }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors border-l border-input ${
+                pagamentoTipo === "dinheiro"
+                  ? "bg-success text-white"
+                  : "bg-background text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              <Banknote className="w-4 h-4" />
+              Dinheiro (Reembolso)
+            </button>
+          </div>
+          {pagamentoTipo === "dinheiro" && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Info className="w-3.5 h-3.5 shrink-0" />
+              Esta despesa irá para a aba de Reembolso. O financeiro processará o reembolso para você.
+            </p>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
           {/* Tipo */}
@@ -312,26 +356,28 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             {errors.tipoDespesaId && <span className="text-xs text-destructive">{errors.tipoDespesaId}</span>}
           </div>
 
-          {/* Cartão */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-foreground">Cartão *</label>
-            <select
-              value={form.cartaoId}
-              onChange={(e) => setForm({ ...form, cartaoId: e.target.value })}
-              className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">Selecione o cartão...</option>
-              {cartoes.filter((c) => c.ativo).map((c) => {
-                const label = c.apelido
-                  ? `${c.apelido} — ${c.banco} ${c.bandeira} *${c.ultimos_digitos}`
-                  : `${c.banco} ${c.bandeira} *${c.ultimos_digitos}`;
-                return (
-                  <option key={c.id} value={c.id}>{label}</option>
-                );
-              })}
-            </select>
-            {errors.cartaoId && <span className="text-xs text-destructive">{errors.cartaoId}</span>}
-          </div>
+          {/* Cartão — só exibido quando pagamento for cartão */}
+          {pagamentoTipo === "cartao" && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-foreground">Cartão *</label>
+              <select
+                value={form.cartaoId}
+                onChange={(e) => setForm({ ...form, cartaoId: e.target.value })}
+                className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">Selecione o cartão...</option>
+                {cartoes.filter((c) => c.ativo).map((c) => {
+                  const label = c.apelido
+                    ? `${c.apelido} — ${c.banco} ${c.bandeira} *${c.ultimos_digitos}`
+                    : `${c.banco} ${c.bandeira} *${c.ultimos_digitos}`;
+                  return (
+                    <option key={c.id} value={c.id}>{label}</option>
+                  );
+                })}
+              </select>
+              {errors.cartaoId && <span className="text-xs text-destructive">{errors.cartaoId}</span>}
+            </div>
+          )}
 
           {/* Cliente */}
           <div className="flex flex-col gap-1.5">
@@ -386,7 +432,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           </div>
         </div>
 
-        {/* -------- Bloco de Parcelamento -------- */}
+        {/* -------- Bloco de Parcelamento — apenas para cartão -------- */}
+        {pagamentoTipo === "cartao" && (
         <div className="rounded-xl border border-border bg-muted/30 p-4 flex flex-col gap-3">
           {/* Toggle parcelado */}
           <label className="flex items-center justify-between cursor-pointer select-none">
@@ -503,6 +550,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             </div>
           )}
         </div>
+        )}
 
         {/* -------- Bloco de Hospedagem -------- */}
         {calculaDiarias && (

@@ -19,6 +19,7 @@ import {
   X,
   Server,
   Car,
+  Banknote,
 } from "lucide-react";
 
 interface NavItem {
@@ -35,6 +36,7 @@ const NAV: NavItem[] = [
   { key: "todas-despesas",   label: "Todas as Despesas",  icon: <Files    className="w-5 h-5 shrink-0" />, profiles: ["gestor","financeiro","administrador"] },
   { key: "aprovacao",       label: "Aprovações",        icon: <CheckSquare     className="w-5 h-5 shrink-0" />, profiles: ["gestor","administrador"] },
   { key: "financeiro",      label: "Financeiro / ERP",  icon: <TrendingUp      className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador","gestor"] },
+  { key: "reembolso",       label: "Reembolso",         icon: <Banknote        className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador","gestor"] },
   { key: "integracoes-erp", label: "Integrações ERP",   icon: <Server          className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador"] },
   { key: "relatorios",      label: "Relatórios",        icon: <BarChart3       className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador","gestor","funcionario"] },
   { key: "usuarios",        label: "Usuários",          icon: <Users           className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
