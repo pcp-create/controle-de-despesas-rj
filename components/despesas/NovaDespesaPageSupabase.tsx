@@ -468,8 +468,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           </div>
         </div>
 
-        {/* -------- Bloco de Parcelamento — apenas para cartão -------- */}
-        {pagamentoTipo === "cartao" && (
+        {/* -------- Bloco de Parcelamento — cartão e boleto -------- */}
+        {(pagamentoTipo === "cartao" || pagamentoTipo === "boleto") && (
         <div className="rounded-xl border border-border bg-muted/30 p-4 flex flex-col gap-3">
           {/* Toggle parcelado */}
           <label className="flex items-center justify-between cursor-pointer select-none">
