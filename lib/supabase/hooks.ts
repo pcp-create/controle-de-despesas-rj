@@ -66,6 +66,11 @@ export interface Despesa {
   parcela_atual: number;
   grupo_parcela_id: string | null;
   data_vencimento: string | null;
+  // Pagamento
+  pagamento_tipo: "cartao" | "dinheiro" | "faturado";
+  reembolso_processado: boolean;
+  reembolso_processado_em: string | null;
+  reembolso_processado_por: string | null;
   created_at: string;
   updated_at: string;
   // Joins
@@ -584,6 +589,53 @@ export function useDespesas(userId?: string, perfil?: string) {
     return { error: null };
   };
 
+  const processarReembolso = async (id: string, processadoPor: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        reembolso_processado: true,
+        reembolso_processado_em: new Date().toISOString(),
+        reembolso_processado_por: processadoPor,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) return { error: error.message };
+
+    await registrarAuditoria({
+      acao: "UPDATE",
+      entidade: "despesa",
+      entidadeId: id,
+      usuarioId: processadoPor,
+      detalhes: "Reembolso processado pelo financeiro",
+    });
+
+    mutate();
+    return { error: null };
+  };
+
+  const estornarReembolso = async (id: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        reembolso_processado: false,
+        reembolso_processado_em: null,
+        reembolso_processado_por: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) return { error: error.message };
+    mutate();
+    return { error: null };
+  };
+
   return {
     despesas: data || [],
     isLoading,
@@ -596,6 +648,8 @@ export function useDespesas(userId?: string, perfil?: string) {
     enviarDespesa,
     aprovarDespesa,
     reprovarDespesa,
+    processarReembolso,
+    estornarReembolso,
   };
 }
 

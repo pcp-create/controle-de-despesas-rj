@@ -20,6 +20,7 @@ import TiposDespesaPageSupabase from "@/components/admin/TiposDespesaPageSupabas
 import FrotasPageSupabase from "@/components/admin/FrotasPageSupabase";
 import AlterarSenhaModalSupabase from "@/components/auth/AlterarSenhaModalSupabase";
 import AuditoriaPageSupabase from "@/components/admin/AuditoriaPageSupabase";
+import ReembolsoPage from "@/components/reembolso/ReembolsoPage";
 import { useAppStore } from "@/lib/store";
 
 export type PageKey =
@@ -28,6 +29,7 @@ export type PageKey =
   | "minhas-despesas"
   | "aprovacao"
   | "financeiro"
+  | "reembolso"
   | "integracoes-erp"
   | "relatorios"
   | "usuarios"
@@ -83,6 +85,7 @@ export default function AppShellSupabase() {
       );
       case "aprovacao": return <AprovacaoPageSupabase />;
       case "financeiro": return <FinanceiroPageSupabase />;
+      case "reembolso": return <ReembolsoPage />;
       case "integracoes-erp": return <IntegracoesERPPageSupabase />;
       case "relatorios": return <RelatoriosPageSupabase />;
       case "usuarios": return <UsuariosPageSupabase />;

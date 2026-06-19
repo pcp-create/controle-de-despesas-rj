@@ -10,6 +10,7 @@ import {
   TrendingUp,
   BarChart3,
   Users,
+  Banknote,
 } from "lucide-react";
 
 interface Props {
@@ -34,6 +35,7 @@ export default function BottomNav({ currentPage, onNavigate }: Props) {
     if (perfil === "financeiro") return [
       { key: "dashboard" as PageKey, icon: <LayoutDashboard className="w-5 h-5" />, label: "Início" },
       { key: "financeiro" as PageKey, icon: <TrendingUp className="w-5 h-5" />, label: "Financeiro" },
+      { key: "reembolso" as PageKey, icon: <Banknote className="w-5 h-5" />, label: "Reembolso" },
       { key: "relatorios" as PageKey, icon: <BarChart3 className="w-5 h-5" />, label: "Relatórios" },
     ];
     return [

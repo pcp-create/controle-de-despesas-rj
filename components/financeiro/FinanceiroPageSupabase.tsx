@@ -47,6 +47,8 @@ export default function FinanceiroPageSupabase() {
 
   const todasDespesas = useMemo(() => {
     return despesas.filter((d) => {
+      // Despesas em dinheiro vão para a aba Reembolso, não aparecem aqui
+      if (d.pagamento_tipo === "dinheiro") return false;
       const dataStr = (d.data_vencimento || d.data_despesa || d.created_at || "").slice(0, 10);
       if (modoFiltro === "mes") {
         const dt = new Date(dataStr + "T00:00:00");
@@ -546,6 +548,11 @@ export default function FinanceiroPageSupabase() {
                       {d.parcelado && d.numero_parcelas > 1 && (
                         <span className="ml-1.5 text-xs font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                           {d.parcela_atual}/{d.numero_parcelas}
+                        </span>
+                      )}
+                      {d.pagamento_tipo === "faturado" && (
+                        <span className="ml-1.5 text-xs font-semibold text-accent bg-accent/10 px-1.5 py-0.5 rounded-full">
+                          Faturado
                         </span>
                       )}
                     </td>
