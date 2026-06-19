@@ -67,7 +67,7 @@ export interface Despesa {
   grupo_parcela_id: string | null;
   data_vencimento: string | null;
   // Pagamento
-  pagamento_tipo: "cartao" | "dinheiro";
+  pagamento_tipo: "cartao" | "dinheiro" | "faturado";
   reembolso_processado: boolean;
   reembolso_processado_em: string | null;
   reembolso_processado_por: string | null;
