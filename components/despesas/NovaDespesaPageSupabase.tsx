@@ -304,53 +304,53 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         {/* -------- Forma de Pagamento -------- */}
         <div className="flex flex-col gap-2">
           <label className="text-sm font-medium text-foreground">Forma de Pagamento *</label>
-          <div className="flex rounded-lg border border-input overflow-hidden">
+          <div className="grid grid-cols-2 sm:grid-cols-4 rounded-lg border border-input overflow-hidden">
             <button
               type="button"
               onClick={() => setPagamentoTipo("cartao")}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors ${
+              className={`flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-medium transition-colors ${
                 pagamentoTipo === "cartao"
                   ? "bg-primary text-white"
                   : "bg-background text-muted-foreground hover:bg-muted"
               }`}
             >
-              <CreditCard className="w-4 h-4" />
+              <CreditCard className="w-4 h-4 shrink-0" />
               Cartão
             </button>
             <button
               type="button"
               onClick={() => { setPagamentoTipo("dinheiro"); setForm((f) => ({ ...f, cartaoId: "" })); setParcelado(false); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors border-l border-input ${
+              className={`flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-medium transition-colors border-l border-input ${
                 pagamentoTipo === "dinheiro"
                   ? "bg-success text-white"
                   : "bg-background text-muted-foreground hover:bg-muted"
               }`}
             >
-              <Banknote className="w-4 h-4" />
+              <Banknote className="w-4 h-4 shrink-0" />
               Dinheiro
             </button>
             <button
               type="button"
               onClick={() => { setPagamentoTipo("faturado"); setForm((f) => ({ ...f, cartaoId: "" })); setParcelado(false); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors border-l border-input ${
+              className={`flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-medium transition-colors border-t sm:border-t-0 border-l sm:border-l border-input ${
                 pagamentoTipo === "faturado"
                   ? "bg-accent text-white"
                   : "bg-background text-muted-foreground hover:bg-muted"
               }`}
             >
-              <Building2 className="w-4 h-4" />
+              <Building2 className="w-4 h-4 shrink-0" />
               Faturado
             </button>
             <button
               type="button"
               onClick={() => { setPagamentoTipo("boleto"); setForm((f) => ({ ...f, cartaoId: "" })); setParcelado(false); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors border-l border-input ${
+              className={`flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-medium transition-colors border-t sm:border-t-0 border-l border-input ${
                 pagamentoTipo === "boleto"
                   ? "bg-warning text-white"
                   : "bg-background text-muted-foreground hover:bg-muted"
               }`}
             >
-              <Receipt className="w-4 h-4" />
+              <Receipt className="w-4 h-4 shrink-0" />
               Boleto
             </button>
           </div>
