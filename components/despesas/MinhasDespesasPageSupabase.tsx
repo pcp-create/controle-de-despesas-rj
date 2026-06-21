@@ -244,7 +244,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                       {d.cliente && <span>{d.cliente}</span>}
                       {d.numero_os && <><span>•</span><span>{d.numero_os}</span></>}
                       <span>•</span>
-                      <span>{new Date(d.data_despesa).toLocaleDateString("pt-BR")}</span>
+                      <span>{new Date(d.data_despesa + "T12:00:00").toLocaleDateString("pt-BR")}</span>
                       {grupo.parcelado && (
                         <>
                           <span>•</span>
@@ -320,9 +320,13 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                           </p>
                         </div>
                       )}
-                      <div>
+                      <div className={d.comprovante_nome ? "col-span-2" : ""}>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Comprovante</p>
-                        <p className="text-foreground">{d.comprovante_nome || "Não anexado"}</p>
+                        {d.comprovante_nome ? (
+                          <p className="text-foreground text-sm break-all leading-snug">{d.comprovante_nome}</p>
+                        ) : (
+                          <p className="text-muted-foreground">Não anexado</p>
+                        )}
                       </div>
                       {d.data_envio && (
                         <div>
