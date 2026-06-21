@@ -320,9 +320,13 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                           </p>
                         </div>
                       )}
-                      <div>
+                      <div className={d.comprovante_nome ? "col-span-2" : ""}>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Comprovante</p>
-                        <p className="text-foreground">{d.comprovante_nome || "Não anexado"}</p>
+                        {d.comprovante_nome ? (
+                          <p className="text-foreground text-sm break-all leading-snug">{d.comprovante_nome}</p>
+                        ) : (
+                          <p className="text-muted-foreground">Não anexado</p>
+                        )}
                       </div>
                       {d.data_envio && (
                         <div>
