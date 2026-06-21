@@ -244,7 +244,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                       {d.cliente && <span>{d.cliente}</span>}
                       {d.numero_os && <><span>•</span><span>{d.numero_os}</span></>}
                       <span>•</span>
-                      <span>{new Date(d.data_despesa).toLocaleDateString("pt-BR")}</span>
+                      <span>{new Date(d.data_despesa + "T12:00:00").toLocaleDateString("pt-BR")}</span>
                       {grupo.parcelado && (
                         <>
                           <span>•</span>

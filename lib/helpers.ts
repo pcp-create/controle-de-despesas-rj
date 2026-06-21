@@ -6,7 +6,9 @@ export function formatCurrency(value: number): string {
 
 export function formatDate(dateStr: string): string {
   if (!dateStr) return "-";
-  const d = new Date(dateStr);
+  // Adiciona T12:00:00 para evitar deslocamento de fuso UTC → BRT
+  const normalized = dateStr.length === 10 ? dateStr + "T12:00:00" : dateStr;
+  const d = new Date(normalized);
   return d.toLocaleDateString("pt-BR");
 }
 
