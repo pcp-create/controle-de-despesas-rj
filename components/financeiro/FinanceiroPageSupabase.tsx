@@ -385,7 +385,7 @@ export default function FinanceiroPageSupabase() {
         )}
         {byTecnico.length > 0 && (
           <div className="bg-white rounded-xl border border-border shadow-sm p-5">
-            <h2 className="text-sm font-semibold text-foreground mb-4">Por Funcion��rio</h2>
+            <h2 className="text-sm font-semibold text-foreground mb-4">Por Funcionário</h2>
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
                 <Pie data={byTecnico} dataKey="total" nameKey="nome" cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={2}>
