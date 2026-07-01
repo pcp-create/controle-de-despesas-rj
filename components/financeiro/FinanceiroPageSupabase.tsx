@@ -587,6 +587,7 @@ export default function FinanceiroPageSupabase() {
               <tr>
                 {(
                   [
+                    { key: null,          label: "Lançar ERP",  align: "left"  },
                     { key: "data",        label: "Data",        align: "left"  },
                     { key: "vencimento",  label: "Vencimento",  align: "left"  },
                     { key: "funcionario", label: "Funcionário",  align: "left"  },
@@ -602,7 +603,6 @@ export default function FinanceiroPageSupabase() {
                     { key: null,          label: "Status ERP",  align: "left"  },
                     { key: null,          label: "Envio",       align: "left"  },
                     { key: null,          label: "ERP ID",      align: "left"  },
-                    { key: null,          label: "Lançar ERP",  align: "left"  },
                   ] as { key: SortKey | null; label: string; align: "left" | "right" }[]
                 ).map(({ key, label, align }) => (
                   <th
@@ -686,8 +686,45 @@ export default function FinanceiroPageSupabase() {
                   ErroEnvioERP:                "bg-destructive/10 text-destructive",
                 }[d.status_erp ?? ""] ?? "bg-muted/20 text-muted-foreground";
 
+                const aprovado = sg === "aprovado";
+
                 return (
                   <tr key={d.id} className="border-t border-border hover:bg-muted/20 transition">
+                    {/* Coluna Lançar ERP — primeira */}
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {d.lancado_erp ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                            <Check className="w-3.5 h-3.5" /> Lançado
+                          </span>
+                          <button
+                            type="button"
+                            title="Estornar lançamento"
+                            onClick={() => estornarLancamento(d.id)}
+                            className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : aprovado ? (
+                        <button
+                          type="button"
+                          disabled={lancando[d.id]}
+                          title="Lançar no ERP (M8)"
+                          onClick={() => setConfirmLancar(d.id)}
+                          className="inline-flex items-center justify-center p-1.5 rounded-lg text-primary border border-primary/20 bg-primary/10 hover:bg-primary hover:text-white transition disabled:opacity-50"
+                        >
+                          <SendHorizonal className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <span
+                          title="Despesa não aprovada — aguarde a aprovação para lançar"
+                          className="inline-flex items-center justify-center p-1.5 rounded-lg text-muted-foreground border border-border bg-muted/30 cursor-not-allowed opacity-50"
+                        >
+                          <SendHorizonal className="w-3.5 h-3.5" />
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 whitespace-nowrap">{new Date(d.data_despesa).toLocaleDateString("pt-BR")}</td>
                     {/* Vencimento editável */}
                     <td className="px-3 py-2 whitespace-nowrap">
@@ -812,33 +849,6 @@ export default function FinanceiroPageSupabase() {
                         ? <span className="text-success font-semibold">{d.erp_id}</span>
                         : <span className="text-muted-foreground">—</span>
                       }
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      {d.lancado_erp ? (
-                        <div className="flex items-center gap-1.5">
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
-                            <Check className="w-3.5 h-3.5" /> Lançado
-                          </span>
-                          <button
-                            type="button"
-                            title="Estornar lançamento"
-                            onClick={() => estornarLancamento(d.id)}
-                            className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
-                          >
-                            <RotateCcw className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={lancando[d.id]}
-                          onClick={() => setConfirmLancar(d.id)}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-white transition disabled:opacity-50"
-                        >
-                          <SendHorizonal className="w-3.5 h-3.5" />
-                          Lançar
-                        </button>
-                      )}
                     </td>
                   </tr>
                 );
