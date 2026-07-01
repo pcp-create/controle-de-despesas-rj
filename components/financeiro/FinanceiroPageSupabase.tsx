@@ -454,9 +454,9 @@ export default function FinanceiroPageSupabase() {
         </div>
 
         {/* Tabela */}
-        <div className="overflow-x-auto max-h-96 overflow-y-auto">
+        <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "calc(100vh - 320px)", minHeight: "400px" }}>
           <table className="w-full text-xs">
-            <thead className="bg-muted/50 sticky top-0 z-10">
+            <thead className="bg-muted sticky top-0 z-10">
               <tr>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Data</th>
                 <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Vencimento</th>
