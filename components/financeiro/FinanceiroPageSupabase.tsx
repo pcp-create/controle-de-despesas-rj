@@ -45,9 +45,12 @@ export default function FinanceiroPageSupabase() {
   const [colFilters, setColFilters] = useState<Partial<Record<SortKey, string>>>({});
   const [filterOpen, setFilterOpen] = useState<SortKey | null>(null);
   const filterRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
+      // Não fechar filtros se o clique foi dentro do modal de lançamento
+      if (modalRef.current && modalRef.current.contains(e.target as Node)) return;
       if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
         setFilterOpen(null);
       }
@@ -889,7 +892,7 @@ export default function FinanceiroPageSupabase() {
     {/* ── Modal de lançamento ── */}
     {confirmLancar && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-        <div className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md p-6 flex flex-col gap-5">
+        <div ref={modalRef} className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md p-6 flex flex-col gap-5">
 
           {/* Cabeçalho */}
           <div className="flex items-start gap-3">
