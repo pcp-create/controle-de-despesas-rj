@@ -32,7 +32,7 @@ export default function FinanceiroPageSupabase() {
 
   const [search, setSearch] = useState("");
   // Lançamento ERP
-  const [mostrarLancadas, setMostrarLancadas] = useState(false);
+  const [filtroLancamento, setFiltroLancamento] = useState<"todos" | "lancado" | "pendente">("pendente");
   const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
   const [lancando, setLancando] = useState<Record<string, boolean>>({});
   const { currentUser } = useAppStore();
@@ -159,8 +159,9 @@ export default function FinanceiroPageSupabase() {
   const despesasExibidas = useMemo(() => {
     let list = despesasFiltradas;
 
-    // Filtro pendentes × lançadas
-    list = list.filter((d) => mostrarLancadas ? d.lancado_erp : !d.lancado_erp);
+    // Filtro lançamento
+    if (filtroLancamento === "lancado")  list = list.filter((d) => d.lancado_erp);
+    if (filtroLancamento === "pendente") list = list.filter((d) => !d.lancado_erp);
 
     // Filtros por coluna
     Object.entries(colFilters).forEach(([key, val]) => {
@@ -224,7 +225,7 @@ export default function FinanceiroPageSupabase() {
       });
     }
     return list;
-  }, [despesasFiltradas, colFilters, sortKey, sortDir, tiposDespesa, profiles, mostrarLancadas]);
+  }, [despesasFiltradas, colFilters, sortKey, sortDir, tiposDespesa, profiles, filtroLancamento]);
 
   const totalFiltrado = despesasExibidas.reduce((s, d) => s + Number(d.valor), 0);
 
@@ -537,18 +538,19 @@ export default function FinanceiroPageSupabase() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
-            <button
-              type="button"
-              onClick={() => setMostrarLancadas((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-colors shrink-0 ${
-                mostrarLancadas
-                  ? "bg-success text-white border-success"
-                  : "bg-background border-input text-muted-foreground hover:bg-muted"
-              }`}
-            >
-              <SendHorizonal className="w-3.5 h-3.5" />
-              {mostrarLancadas ? "Ver Pendentes" : "Ver Lançadas"}
-            </button>
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <select
+                value={filtroLancamento}
+                onChange={(e) => setFiltroLancamento(e.target.value as "todos" | "lancado" | "pendente")}
+                className="pl-9 pr-8 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
+              >
+                <option value="todos">Todos</option>
+                <option value="lancado">Lançado</option>
+                <option value="pendente">Pendentes</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               <input
