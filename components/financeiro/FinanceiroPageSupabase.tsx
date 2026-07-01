@@ -112,6 +112,17 @@ export default function FinanceiroPageSupabase() {
   const totalAprovado = despesasAprovadas.reduce((s, d) => s + Number(d.valor), 0);
   const qtdLancamentos = despesasAprovadas.length;
 
+  // Cards: Total de Despesas, Total Aprovado, Total Lançado
+  const totalDespesasQtd = todasDespesas.length;
+  const totalDespesasValor = todasDespesas.reduce((s, d) => s + Number(d.valor), 0);
+
+  const totalAprovadoQtd = despesasAprovadas.length;
+  // totalAprovado já calculado acima
+
+  const despesasLancadas = todasDespesas.filter((d) => d.lancado_erp);
+  const totalLancadoQtd = despesasLancadas.length;
+  const totalLancadoValor = despesasLancadas.reduce((s, d) => s + Number(d.valor), 0);
+
   const byTipo = tiposDespesa.map((t) => ({
     name: t.nome,
     valor: despesasAprovadas
@@ -467,20 +478,47 @@ export default function FinanceiroPageSupabase() {
       </div>
 
       {/* ── Cards de métricas ── */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Total de Despesas */}
+        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
+          <div className="w-9 h-9 rounded-lg bg-muted text-muted-foreground flex items-center justify-center mb-3">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+          <p className="text-2xl font-bold text-foreground">{formatCurrency(totalDespesasValor)}</p>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-xs text-muted-foreground">Total de Despesas</p>
+            <span className="text-xs font-semibold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+              {totalDespesasQtd} {totalDespesasQtd === 1 ? "despesa" : "despesas"}
+            </span>
+          </div>
+        </div>
+
+        {/* Total Aprovado */}
         <div className="bg-white rounded-xl border border-border shadow-sm p-4">
           <div className="w-9 h-9 rounded-lg bg-success/10 text-success flex items-center justify-center mb-3">
             <DollarSign className="w-5 h-5" />
           </div>
           <p className="text-2xl font-bold text-foreground">{formatCurrency(totalAprovado)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Total Aprovado</p>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-xs text-muted-foreground">Total Aprovado</p>
+            <span className="text-xs font-semibold bg-success/10 text-success px-2 py-0.5 rounded-full">
+              {totalAprovadoQtd} {totalAprovadoQtd === 1 ? "despesa" : "despesas"}
+            </span>
+          </div>
         </div>
+
+        {/* Total Lançado */}
         <div className="bg-white rounded-xl border border-border shadow-sm p-4">
           <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-3">
-            <TrendingUp className="w-5 h-5" />
+            <SendHorizonal className="w-5 h-5" />
           </div>
-          <p className="text-2xl font-bold text-foreground">{qtdLancamentos}</p>
-          <p className="text-xs text-muted-foreground mt-1">Lançamentos</p>
+          <p className="text-2xl font-bold text-foreground">{formatCurrency(totalLancadoValor)}</p>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-xs text-muted-foreground">Total Lançado</p>
+            <span className="text-xs font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+              {totalLancadoQtd} {totalLancadoQtd === 1 ? "despesa" : "despesas"}
+            </span>
+          </div>
         </div>
       </div>
 
