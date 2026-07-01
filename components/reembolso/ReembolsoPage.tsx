@@ -394,14 +394,23 @@ export default function ReembolsoPage() {
                       )}
 
                       {!d.reembolso_processado ? (
-                        <button
-                          onClick={() => handleProcessar(d.id)}
-                          disabled={isLoading}
-                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-success text-white text-sm font-medium hover:bg-success/90 disabled:opacity-60 transition"
-                        >
-                          <CheckCircle className="w-4 h-4" />
-                          {isLoading ? "Processando..." : "Marcar como Reembolsado"}
-                        </button>
+                        <>
+                          <button
+                            disabled={isLoading}
+                            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            Aprovado Financeiro
+                          </button>
+                          <button
+                            onClick={() => handleProcessar(d.id)}
+                            disabled={isLoading}
+                            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-success text-white text-sm font-medium hover:bg-success/90 disabled:opacity-60 transition"
+                          >
+                            <Banknote className="w-4 h-4" />
+                            {isLoading ? "Processando..." : "Lançar Reembolso"}
+                          </button>
+                        </>
                       ) : (
                         <button
                           onClick={() => handleEstornar(d.id)}
