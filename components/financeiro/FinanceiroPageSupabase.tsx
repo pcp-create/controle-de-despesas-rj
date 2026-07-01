@@ -656,7 +656,17 @@ export default function FinanceiroPageSupabase() {
                   AprovadoGestorERPAtualizado: "bg-success/10 text-success",
                   ErroAtualizarERP:            "bg-destructive/10 text-destructive",
                   ErroEnvioERP:                "bg-destructive/10 text-destructive",
+                  NaoEnviadoERP:               "bg-muted/30 text-muted-foreground",
                 }[d.status_erp ?? ""] ?? "bg-muted/20 text-muted-foreground";
+
+                const statusErpLabel: Record<string, string> = {
+                  Rascunho:                    "Rascunho",
+                  EnviadoAguardandoGestor:     "Aguardando Gestor",
+                  AprovadoGestorERPAtualizado: "Aprovado",
+                  ErroAtualizarERP:            "Erro ao Atualizar",
+                  ErroEnvioERP:                "Erro de Envio",
+                  NaoEnviadoERP:               "Não Enviado ao ERP",
+                };
 
                 const aprovado = sg === "aprovado";
 
@@ -832,7 +842,7 @@ export default function FinanceiroPageSupabase() {
                         <span className="text-muted-foreground">—</span>
                       ) : d.status_erp ? (
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusErpCls}`}>
-                          {d.status_erp}
+                          {statusErpLabel[d.status_erp] ?? d.status_erp}
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-muted/30 text-muted-foreground">
