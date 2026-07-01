@@ -382,6 +382,7 @@ export default function FinanceiroPageSupabase() {
   }
 
   return (
+    <>
     <div className="flex flex-col gap-5">
 
       {/* ── Header ── */}
@@ -897,5 +898,6 @@ export default function FinanceiroPageSupabase() {
         </div>
       </div>
     )}
+    </>
   );
 }
