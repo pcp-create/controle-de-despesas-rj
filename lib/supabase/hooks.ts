@@ -71,6 +71,9 @@ export interface Despesa {
   reembolso_processado: boolean;
   reembolso_processado_em: string | null;
   reembolso_processado_por: string | null;
+  aprovado_financeiro: boolean;
+  aprovado_financeiro_em: string | null;
+  aprovado_financeiro_por: string | null;
   // Lançamento ERP
   lancado_erp: boolean;
   lancado_erp_em: string | null;
@@ -593,6 +596,34 @@ export function useDespesas(userId?: string, perfil?: string) {
     return { error: null };
   };
 
+  const aprovarFinanceiro = async (id: string, aprovadoPor: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        aprovado_financeiro: true,
+        aprovado_financeiro_em: new Date().toISOString(),
+        aprovado_financeiro_por: aprovadoPor,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) return { error: error.message };
+
+    await registrarAuditoria({
+      acao: "UPDATE",
+      entidade: "despesa",
+      entidadeId: id,
+      usuarioId: aprovadoPor,
+      detalhes: "Reembolso aprovado pelo financeiro",
+    });
+
+    mutate();
+    return { error: null };
+  };
+
   const processarReembolso = async (id: string, processadoPor: string) => {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
@@ -631,6 +662,9 @@ export function useDespesas(userId?: string, perfil?: string) {
         reembolso_processado: false,
         reembolso_processado_em: null,
         reembolso_processado_por: null,
+        aprovado_financeiro: false,
+        aprovado_financeiro_em: null,
+        aprovado_financeiro_por: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -699,6 +733,7 @@ export function useDespesas(userId?: string, perfil?: string) {
     enviarDespesa,
     aprovarDespesa,
     reprovarDespesa,
+    aprovarFinanceiro,
     processarReembolso,
     estornarReembolso,
     lancarERP,
