@@ -35,7 +35,7 @@ export default function FinanceiroPageSupabase() {
   const [mostrarLancadas, setMostrarLancadas] = useState(false);
   const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
   const [lancando, setLancando] = useState<Record<string, boolean>>({});
-  const { user, profile: authProfile } = useAuth();
+  const { user } = useAuth();
 
   // Ordenação
   type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status" | "documento" | "cartao";
@@ -57,7 +57,8 @@ export default function FinanceiroPageSupabase() {
   }, []);
 
   const handleLancar = async (id: string) => {
-    const lancadoPor = authProfile?.id ?? user?.id;
+    // user.id do Supabase Auth === profiles.id (mesmo UUID)
+    const lancadoPor = user?.id;
     if (!lancadoPor) return;
     setLancando((prev) => ({ ...prev, [id]: true }));
     await lancarERP(id, lancadoPor);
