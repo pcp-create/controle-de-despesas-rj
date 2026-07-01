@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { formatCurrency, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
-import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X } from "lucide-react";
+import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -30,6 +30,35 @@ export default function FinanceiroPageSupabase() {
   const { profiles } = useProfiles();
 
   const [search, setSearch] = useState("");
+
+  // Ordenação
+  type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status";
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  // Filtros por coluna
+  const [colFilters, setColFilters] = useState<Partial<Record<SortKey, string>>>({});
+  const [filterOpen, setFilterOpen] = useState<SortKey | null>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
   // Estado para edição inline de vencimento: { [despesaId]: string }
   const [editandoVencimento, setEditandoVencimento] = useState<Record<string, string>>({});
   const [salvandoVencimento, setSalvandoVencimento] = useState<Record<string, boolean>>({});
@@ -108,7 +137,62 @@ export default function FinanceiroPageSupabase() {
     );
   });
 
-  const totalFiltrado = despesasFiltradas.reduce((s, d) => s + Number(d.valor), 0);
+  // Aplica filtros por coluna e ordenação
+  const despesasExibidas = useMemo(() => {
+    let list = despesasFiltradas;
+
+    // Filtros por coluna
+    Object.entries(colFilters).forEach(([key, val]) => {
+      if (!val) return;
+      const v = val.toLowerCase();
+      list = list.filter((d) => {
+        const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
+        const tecnico = profiles.find((p) => p.id === d.tecnico_id);
+        const sg = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
+        switch (key as SortKey) {
+          case "data":        return new Date(d.data_despesa + "T12:00:00").toLocaleDateString("pt-BR").includes(v);
+          case "vencimento":  return d.data_vencimento ? new Date(d.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR").includes(v) : false;
+          case "funcionario": return (tecnico?.nome || "").toLowerCase().includes(v);
+          case "tipo":        return (tipo?.nome || "").toLowerCase().includes(v);
+          case "pagamento":   return (pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"]?.label || "").toLowerCase().includes(v);
+          case "cliente":     return d.cliente.toLowerCase().includes(v);
+          case "os":          return (d.numero_os || "").toLowerCase().includes(v);
+          case "valor":       return formatCurrency(Number(d.valor)).includes(v);
+          case "status":      return (statusGeralConfig[sg]?.label || "").toLowerCase().includes(v);
+          default: return true;
+        }
+      });
+    });
+
+    // Ordenação
+    if (sortKey) {
+      list = [...list].sort((a, b) => {
+        const tipo_a = tiposDespesa.find((t) => t.id === a.tipo_despesa_id);
+        const tipo_b = tiposDespesa.find((t) => t.id === b.tipo_despesa_id);
+        const tec_a  = profiles.find((p) => p.id === a.tecnico_id);
+        const tec_b  = profiles.find((p) => p.id === b.tecnico_id);
+        let va: string | number = "";
+        let vb: string | number = "";
+        switch (sortKey) {
+          case "data":        va = a.data_despesa;  vb = b.data_despesa; break;
+          case "vencimento":  va = a.data_vencimento || ""; vb = b.data_vencimento || ""; break;
+          case "funcionario": va = tec_a?.nome || ""; vb = tec_b?.nome || ""; break;
+          case "tipo":        va = tipo_a?.nome || ""; vb = tipo_b?.nome || ""; break;
+          case "pagamento":   va = pagamentoTipoConfig[a.pagamento_tipo ?? "cartao"]?.label || ""; vb = pagamentoTipoConfig[b.pagamento_tipo ?? "cartao"]?.label || ""; break;
+          case "cliente":     va = a.cliente; vb = b.cliente; break;
+          case "os":          va = a.numero_os || ""; vb = b.numero_os || ""; break;
+          case "valor":       va = Number(a.valor); vb = Number(b.valor); break;
+          case "status":      va = getStatusGeral(a.status_erp ?? "", a.status_aprovacao); vb = getStatusGeral(b.status_erp ?? "", b.status_aprovacao); break;
+        }
+        if (va < vb) return sortDir === "asc" ? -1 : 1;
+        if (va > vb) return sortDir === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+    return list;
+  }, [despesasFiltradas, colFilters, sortKey, sortDir, tiposDespesa, profiles]);
+
+  const totalFiltrado = despesasExibidas.reduce((s, d) => s + Number(d.valor), 0);
 
   const handleExportarXLSX = () => {
     const dados = despesasFiltradas.map((d) => {
@@ -410,7 +494,7 @@ export default function FinanceiroPageSupabase() {
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold text-foreground">Todas as Despesas — Confronto com Comprovante</h2>
             <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-              <p className="text-xs text-muted-foreground">{despesasFiltradas.length} despesa{despesasFiltradas.length !== 1 ? "s" : ""} no período</p>
+              <p className="text-xs text-muted-foreground">{despesasExibidas.length} despesa{despesasExibidas.length !== 1 ? "s" : ""} no período</p>
               <span className="text-xs text-muted-foreground">•</span>
               <p className="text-xs font-semibold text-foreground">
                 Total filtrado: <span className="text-primary">{formatCurrency(totalFiltrado)}</span>
@@ -454,29 +538,92 @@ export default function FinanceiroPageSupabase() {
         </div>
 
         {/* Tabela */}
-        <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "calc(100vh - 320px)", minHeight: "400px" }}>
+        <div ref={filterRef} className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "calc(100vh - 320px)", minHeight: "400px" }}>
           <table className="w-full text-xs">
             <thead className="bg-muted sticky top-0 z-10">
               <tr>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Data</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Vencimento</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Funcionário</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Tipo</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Pagamento</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Cliente</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">OS</th>
-                <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Valor</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Documento</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Cartão</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Status</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Comprovante</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Status ERP</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Envio</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">ERP ID</th>
+                {(
+                  [
+                    { key: "data",        label: "Data",        align: "left"  },
+                    { key: "vencimento",  label: "Vencimento",  align: "left"  },
+                    { key: "funcionario", label: "Funcionário",  align: "left"  },
+                    { key: "tipo",        label: "Tipo",        align: "left"  },
+                    { key: "pagamento",   label: "Pagamento",   align: "left"  },
+                    { key: "cliente",     label: "Cliente",     align: "left"  },
+                    { key: "os",          label: "OS",          align: "left"  },
+                    { key: "valor",       label: "Valor",       align: "right" },
+                    { key: null,          label: "Documento",   align: "left"  },
+                    { key: null,          label: "Cartão",      align: "left"  },
+                    { key: "status",      label: "Status",      align: "left"  },
+                    { key: null,          label: "Comprovante", align: "left"  },
+                    { key: null,          label: "Status ERP",  align: "left"  },
+                    { key: null,          label: "Envio",       align: "left"  },
+                    { key: null,          label: "ERP ID",      align: "left"  },
+                  ] as { key: SortKey | null; label: string; align: "left" | "right" }[]
+                ).map(({ key, label, align }) => (
+                  <th
+                    key={label}
+                    className={`px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"}`}
+                  >
+                    <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>
+                      {key ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSort(key)}
+                          className="flex items-center gap-0.5 hover:text-foreground transition-colors"
+                        >
+                          <span>{label}</span>
+                          {sortKey === key ? (
+                            sortDir === "asc"
+                              ? <ChevronUp className="w-3 h-3" />
+                              : <ChevronDown className="w-3 h-3" />
+                          ) : (
+                            <ChevronsUpDown className="w-3 h-3 opacity-40" />
+                          )}
+                        </button>
+                      ) : (
+                        <span>{label}</span>
+                      )}
+                      {key && (
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setFilterOpen(filterOpen === key ? null : key); }}
+                            className={`p-0.5 rounded hover:bg-background transition-colors ${colFilters[key] ? "text-primary" : "text-muted-foreground opacity-50 hover:opacity-100"}`}
+                            title="Filtrar"
+                          >
+                            <Filter className="w-3 h-3" />
+                          </button>
+                          {filterOpen === key && (
+                            <div className="absolute left-0 top-full mt-1 z-50 bg-background border border-input rounded-lg shadow-lg p-2 min-w-36">
+                              <input
+                                autoFocus
+                                type="text"
+                                placeholder={`Filtrar ${label}...`}
+                                value={colFilters[key] || ""}
+                                onChange={(e) => setColFilters((f) => ({ ...f, [key]: e.target.value }))}
+                                className="w-full px-2 py-1 text-xs rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                              />
+                              {colFilters[key] && (
+                                <button
+                                  type="button"
+                                  onClick={() => { setColFilters((f) => { const n = { ...f }; delete n[key]; return n; }); setFilterOpen(null); }}
+                                  className="mt-1 text-xs text-destructive hover:underline w-full text-left"
+                                >
+                                  Limpar filtro
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {despesasFiltradas.map((d) => {
+              {despesasExibidas.map((d) => {
                 const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
                 const tecnico = profiles.find((p) => p.id === d.tecnico_id);
                 const cartao = d.cartao;
@@ -625,7 +772,7 @@ export default function FinanceiroPageSupabase() {
                   </tr>
                 );
               })}
-              {despesasFiltradas.length === 0 && (
+              {despesasExibidas.length === 0 && (
                 <tr>
                   <td colSpan={14} className="px-3 py-10 text-center text-muted-foreground">
                     Nenhuma despesa encontrada no período
