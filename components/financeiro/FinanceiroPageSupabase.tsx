@@ -909,8 +909,8 @@ export default function FinanceiroPageSupabase() {
             {/* Lançar apenas */}
             <button
               type="button"
-              disabled={lancando[confirmLancar]}
-              onClick={() => handleLancar(confirmLancar)}
+              disabled={!!lancando[confirmLancar as string]}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (confirmLancar) handleLancar(confirmLancar); }}
               className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition text-left disabled:opacity-50"
             >
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center mt-0.5">
@@ -918,7 +918,7 @@ export default function FinanceiroPageSupabase() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-foreground">
-                  {lancando[confirmLancar] ? "Lançando..." : "Lançar"}
+                  {lancando[confirmLancar as string] ? "Lançando..." : "Lançar"}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Registra o lançamento da despesa no sistema. O status é atualizado para Lançado e a despesa fica disponível para conferência pelo financeiro.
@@ -929,8 +929,8 @@ export default function FinanceiroPageSupabase() {
             {/* Lançar e enviar ao ERP */}
             <button
               type="button"
-              disabled={lancando[confirmLancar]}
-              onClick={() => handleLancar(confirmLancar)}
+              disabled={!!lancando[confirmLancar as string]}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (confirmLancar) handleLancar(confirmLancar); }}
               className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-accent/30 bg-accent/5 hover:bg-accent/10 transition text-left disabled:opacity-50"
             >
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center mt-0.5">
