@@ -44,14 +44,15 @@ export default function FinanceiroPageSupabase() {
   // Filtros por coluna
   const [colFilters, setColFilters] = useState<Partial<Record<SortKey, string>>>({});
   const [filterOpen, setFilterOpen] = useState<SortKey | null>(null);
-  const filterRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      // Não fechar filtros se o clique foi dentro do modal de lançamento
+      // Fechar popover de filtro ao clicar fora — mas nunca ao clicar no modal de lançamento
       if (modalRef.current && modalRef.current.contains(e.target as Node)) return;
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      // Fechar se o clique não foi num popover de filtro de coluna
+      if (!target.closest("[data-filter-popover]")) {
         setFilterOpen(null);
       }
     }
@@ -586,7 +587,7 @@ export default function FinanceiroPageSupabase() {
         </div>
 
         {/* Tabela */}
-        <div ref={filterRef} className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "calc(100vh - 320px)", minHeight: "400px" }}>
+        <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "calc(100vh - 320px)", minHeight: "400px" }}>
           <table className="w-full text-xs">
             <thead className="bg-muted sticky top-0 z-10">
               <tr>
@@ -644,7 +645,7 @@ export default function FinanceiroPageSupabase() {
                             <Filter className="w-3 h-3" />
                           </button>
                           {filterOpen === key && (
-                            <div className="absolute left-0 top-full mt-1 z-50 bg-background border border-input rounded-lg shadow-lg p-2 min-w-36">
+                            <div data-filter-popover className="absolute left-0 top-full mt-1 z-50 bg-background border border-input rounded-lg shadow-lg p-2 min-w-36">
                               <input
                                 autoFocus
                                 type="text"
