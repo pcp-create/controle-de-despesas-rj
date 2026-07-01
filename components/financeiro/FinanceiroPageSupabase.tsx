@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
+import { useAppStore } from "@/lib/store";
 import { formatCurrency, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
-import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X } from "lucide-react";
+import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -25,11 +26,57 @@ const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
 type ModoFiltro = "mes" | "periodo";
 
 export default function FinanceiroPageSupabase() {
-  const { despesas, isLoading, updateDespesaVencimento } = useDespesas();
+  const { despesas, isLoading, updateDespesaVencimento, lancarERP, estornarLancamento } = useDespesas();
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
 
   const [search, setSearch] = useState("");
+  // Lançamento ERP
+  const [filtroLancamento, setFiltroLancamento] = useState<"todos" | "lancado" | "pendente">("pendente");
+  const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
+  const [lancando, setLancando] = useState<Record<string, boolean>>({});
+  const { currentUser } = useAppStore();
+
+  // Ordenação
+  type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status" | "documento" | "cartao";
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  // Filtros por coluna
+  const [colFilters, setColFilters] = useState<Partial<Record<SortKey, string>>>({});
+  const [filterOpen, setFilterOpen] = useState<SortKey | null>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      // Fechar popover de filtro ao clicar fora — mas nunca ao clicar no modal de lançamento
+      if (modalRef.current && modalRef.current.contains(e.target as Node)) return;
+      const target = e.target as HTMLElement;
+      // Fechar se o clique não foi num popover de filtro de coluna
+      if (!target.closest("[data-filter-popover]")) {
+        setFilterOpen(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const handleLancar = async (id: string) => {
+    if (!currentUser?.id) return;
+    setLancando((prev) => ({ ...prev, [id]: true }));
+    await lancarERP(id, currentUser.id);
+    setLancando((prev) => ({ ...prev, [id]: false }));
+    setConfirmLancar(null);
+  };
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
   // Estado para edição inline de vencimento: { [despesaId]: string }
   const [editandoVencimento, setEditandoVencimento] = useState<Record<string, string>>({});
   const [salvandoVencimento, setSalvandoVencimento] = useState<Record<string, boolean>>({});
@@ -64,6 +111,17 @@ export default function FinanceiroPageSupabase() {
   const despesasAprovadas = todasDespesas.filter((d) => d.status_aprovacao === "AprovadoGestor");
   const totalAprovado = despesasAprovadas.reduce((s, d) => s + Number(d.valor), 0);
   const qtdLancamentos = despesasAprovadas.length;
+
+  // Cards: Total de Despesas, Total Aprovado, Total Lançado
+  const totalDespesasQtd = todasDespesas.length;
+  const totalDespesasValor = todasDespesas.reduce((s, d) => s + Number(d.valor), 0);
+
+  const totalAprovadoQtd = despesasAprovadas.length;
+  // totalAprovado já calculado acima
+
+  const despesasLancadas = todasDespesas.filter((d) => d.lancado_erp);
+  const totalLancadoQtd = despesasLancadas.length;
+  const totalLancadoValor = despesasLancadas.reduce((s, d) => s + Number(d.valor), 0);
 
   const byTipo = tiposDespesa.map((t) => ({
     name: t.nome,
@@ -108,7 +166,79 @@ export default function FinanceiroPageSupabase() {
     );
   });
 
-  const totalFiltrado = despesasFiltradas.reduce((s, d) => s + Number(d.valor), 0);
+  // Aplica filtros por coluna e ordenação
+  const despesasExibidas = useMemo(() => {
+    let list = despesasFiltradas;
+
+    // Filtro lançamento
+    if (filtroLancamento === "lancado")  list = list.filter((d) => d.lancado_erp);
+    if (filtroLancamento === "pendente") list = list.filter((d) => !d.lancado_erp);
+
+    // Filtros por coluna
+    Object.entries(colFilters).forEach(([key, val]) => {
+      if (!val) return;
+      const v = val.toLowerCase();
+      list = list.filter((d) => {
+        const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
+        const tecnico = profiles.find((p) => p.id === d.tecnico_id);
+        const sg = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
+        switch (key as SortKey) {
+          case "data":        return new Date(d.data_despesa + "T12:00:00").toLocaleDateString("pt-BR").includes(v);
+          case "vencimento":  return d.data_vencimento ? new Date(d.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR").includes(v) : false;
+          case "funcionario": return (tecnico?.nome || "").toLowerCase().includes(v);
+          case "tipo":        return (tipo?.nome || "").toLowerCase().includes(v);
+          case "pagamento":   return (pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"]?.label || "").toLowerCase().includes(v);
+          case "cliente":     return d.cliente.toLowerCase().includes(v);
+          case "os":          return (d.numero_os || "").toLowerCase().includes(v);
+          case "valor":       return formatCurrency(Number(d.valor)).includes(v);
+          case "status":      return (statusGeralConfig[sg]?.label || "").toLowerCase().includes(v);
+          case "documento":   return (d.documento || "").toLowerCase().includes(v);
+          case "cartao": {
+            const c = d.cartao;
+            const label = c ? `${c.banco} ${c.bandeira} ${c.ultimos_digitos}`.toLowerCase() : "";
+            return label.includes(v);
+          }
+          default: return true;
+        }
+      });
+    });
+
+    // Ordenação
+    if (sortKey) {
+      list = [...list].sort((a, b) => {
+        const tipo_a = tiposDespesa.find((t) => t.id === a.tipo_despesa_id);
+        const tipo_b = tiposDespesa.find((t) => t.id === b.tipo_despesa_id);
+        const tec_a  = profiles.find((p) => p.id === a.tecnico_id);
+        const tec_b  = profiles.find((p) => p.id === b.tecnico_id);
+        let va: string | number = "";
+        let vb: string | number = "";
+        switch (sortKey) {
+          case "data":        va = a.data_despesa;  vb = b.data_despesa; break;
+          case "vencimento":  va = a.data_vencimento || ""; vb = b.data_vencimento || ""; break;
+          case "funcionario": va = tec_a?.nome || ""; vb = tec_b?.nome || ""; break;
+          case "tipo":        va = tipo_a?.nome || ""; vb = tipo_b?.nome || ""; break;
+          case "pagamento":   va = pagamentoTipoConfig[a.pagamento_tipo ?? "cartao"]?.label || ""; vb = pagamentoTipoConfig[b.pagamento_tipo ?? "cartao"]?.label || ""; break;
+          case "cliente":     va = a.cliente; vb = b.cliente; break;
+          case "os":          va = a.numero_os || ""; vb = b.numero_os || ""; break;
+          case "valor":       va = Number(a.valor); vb = Number(b.valor); break;
+          case "status":      va = getStatusGeral(a.status_erp ?? "", a.status_aprovacao); vb = getStatusGeral(b.status_erp ?? "", b.status_aprovacao); break;
+          case "documento":   va = a.documento || ""; vb = b.documento || ""; break;
+          case "cartao": {
+            const ca = a.cartao; const cb = b.cartao;
+            va = ca ? `${ca.banco} ${ca.bandeira} ${ca.ultimos_digitos}` : "";
+            vb = cb ? `${cb.banco} ${cb.bandeira} ${cb.ultimos_digitos}` : "";
+            break;
+          }
+        }
+        if (va < vb) return sortDir === "asc" ? -1 : 1;
+        if (va > vb) return sortDir === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+    return list;
+  }, [despesasFiltradas, colFilters, sortKey, sortDir, tiposDespesa, profiles, filtroLancamento]);
+
+  const totalFiltrado = despesasExibidas.reduce((s, d) => s + Number(d.valor), 0);
 
   const handleExportarXLSX = () => {
     const dados = despesasFiltradas.map((d) => {
@@ -268,6 +398,7 @@ export default function FinanceiroPageSupabase() {
   }
 
   return (
+    <>
     <div className="flex flex-col gap-5">
 
       {/* ── Header ── */}
@@ -347,20 +478,47 @@ export default function FinanceiroPageSupabase() {
       </div>
 
       {/* ── Cards de métricas ── */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Total de Despesas */}
+        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
+          <div className="w-9 h-9 rounded-lg bg-muted text-muted-foreground flex items-center justify-center mb-3">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+          <p className="text-2xl font-bold text-foreground">{formatCurrency(totalDespesasValor)}</p>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-xs text-muted-foreground">Total de Despesas</p>
+            <span className="text-xs font-semibold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
+              {totalDespesasQtd} {totalDespesasQtd === 1 ? "despesa" : "despesas"}
+            </span>
+          </div>
+        </div>
+
+        {/* Total Aprovado */}
         <div className="bg-white rounded-xl border border-border shadow-sm p-4">
           <div className="w-9 h-9 rounded-lg bg-success/10 text-success flex items-center justify-center mb-3">
             <DollarSign className="w-5 h-5" />
           </div>
           <p className="text-2xl font-bold text-foreground">{formatCurrency(totalAprovado)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Total Aprovado</p>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-xs text-muted-foreground">Total Aprovado</p>
+            <span className="text-xs font-semibold bg-success/10 text-success px-2 py-0.5 rounded-full">
+              {totalAprovadoQtd} {totalAprovadoQtd === 1 ? "despesa" : "despesas"}
+            </span>
+          </div>
         </div>
+
+        {/* Total Lançado */}
         <div className="bg-white rounded-xl border border-border shadow-sm p-4">
           <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-3">
-            <TrendingUp className="w-5 h-5" />
+            <SendHorizonal className="w-5 h-5" />
           </div>
-          <p className="text-2xl font-bold text-foreground">{qtdLancamentos}</p>
-          <p className="text-xs text-muted-foreground mt-1">Lançamentos</p>
+          <p className="text-2xl font-bold text-foreground">{formatCurrency(totalLancadoValor)}</p>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-xs text-muted-foreground">Total Lançado</p>
+            <span className="text-xs font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+              {totalLancadoQtd} {totalLancadoQtd === 1 ? "despesa" : "despesas"}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -410,7 +568,7 @@ export default function FinanceiroPageSupabase() {
           <div className="flex-1 min-w-0">
             <h2 className="text-sm font-semibold text-foreground">Todas as Despesas — Confronto com Comprovante</h2>
             <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-              <p className="text-xs text-muted-foreground">{despesasFiltradas.length} despesa{despesasFiltradas.length !== 1 ? "s" : ""} no período</p>
+              <p className="text-xs text-muted-foreground">{despesasExibidas.length} despesa{despesasExibidas.length !== 1 ? "s" : ""} no período</p>
               <span className="text-xs text-muted-foreground">•</span>
               <p className="text-xs font-semibold text-foreground">
                 Total filtrado: <span className="text-primary">{formatCurrency(totalFiltrado)}</span>
@@ -427,6 +585,19 @@ export default function FinanceiroPageSupabase() {
                 placeholder="Buscar..."
                 className="pl-9 pr-4 py-2 rounded-lg border border-input bg-background text-sm w-full sm:w-48 focus:outline-none focus:ring-2 focus:ring-ring"
               />
+            </div>
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <select
+                value={filtroLancamento}
+                onChange={(e) => setFiltroLancamento(e.target.value as "todos" | "lancado" | "pendente")}
+                className="pl-9 pr-8 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
+              >
+                <option value="todos">Todos</option>
+                <option value="lancado">Lançado</option>
+                <option value="pendente">Pendentes</option>
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             </div>
             <button
               onClick={handleExportarXLSX}
@@ -454,29 +625,93 @@ export default function FinanceiroPageSupabase() {
         </div>
 
         {/* Tabela */}
-        <div className="overflow-x-auto max-h-96 overflow-y-auto">
+        <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "calc(100vh - 320px)", minHeight: "400px" }}>
           <table className="w-full text-xs">
-            <thead className="bg-muted/50 sticky top-0 z-10">
+            <thead className="bg-muted sticky top-0 z-10">
               <tr>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Data</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Vencimento</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Funcionário</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Tipo</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Pagamento</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Cliente</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">OS</th>
-                <th className="text-right px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Valor</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Documento</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Cartão</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Status</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Comprovante</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Status ERP</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">Envio</th>
-                <th className="text-left px-3 py-2.5 font-semibold text-muted-foreground whitespace-nowrap">ERP ID</th>
+                {(
+                  [
+                    { key: null,          label: "Lançar",      align: "left"  },
+                    { key: "data",        label: "Data",        align: "left"  },
+                    { key: "vencimento",  label: "Vencimento",  align: "left"  },
+                    { key: "funcionario", label: "Funcionário",  align: "left"  },
+                    { key: "tipo",        label: "Tipo",        align: "left"  },
+                    { key: "pagamento",   label: "Pagamento",   align: "left"  },
+                    { key: "cliente",     label: "Cliente",     align: "left"  },
+                    { key: "os",          label: "OS",          align: "left"  },
+                    { key: "valor",       label: "Valor",       align: "right" },
+                    { key: "documento",    label: "Documento",   align: "left"  },
+                    { key: "cartao",      label: "Cartão",      align: "left"  },
+                    { key: "status",      label: "Status",      align: "left"  },
+                    { key: null,          label: "Comprovante", align: "left"  },
+                    { key: null,          label: "Status ERP",  align: "left"  },
+                    { key: null,          label: "Envio",       align: "left"  },
+                    { key: null,          label: "ERP ID",      align: "left"  },
+                  ] as { key: SortKey | null; label: string; align: "left" | "right" }[]
+                ).map(({ key, label, align }) => (
+                  <th
+                    key={label}
+                    className={`px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"}`}
+                  >
+                    <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>
+                      {key ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSort(key)}
+                          className="flex items-center gap-0.5 hover:text-foreground transition-colors"
+                        >
+                          <span>{label}</span>
+                          {sortKey === key ? (
+                            sortDir === "asc"
+                              ? <ChevronUp className="w-3 h-3" />
+                              : <ChevronDown className="w-3 h-3" />
+                          ) : (
+                            <ChevronsUpDown className="w-3 h-3 opacity-40" />
+                          )}
+                        </button>
+                      ) : (
+                        <span>{label}</span>
+                      )}
+                      {key && (
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setFilterOpen(filterOpen === key ? null : key); }}
+                            className={`p-0.5 rounded hover:bg-background transition-colors ${colFilters[key] ? "text-primary" : "text-muted-foreground opacity-50 hover:opacity-100"}`}
+                            title="Filtrar"
+                          >
+                            <Filter className="w-3 h-3" />
+                          </button>
+                          {filterOpen === key && (
+                            <div data-filter-popover className="absolute left-0 top-full mt-1 z-50 bg-background border border-input rounded-lg shadow-lg p-2 min-w-36">
+                              <input
+                                autoFocus
+                                type="text"
+                                placeholder={`Filtrar ${label}...`}
+                                value={colFilters[key] || ""}
+                                onChange={(e) => setColFilters((f) => ({ ...f, [key]: e.target.value }))}
+                                className="w-full px-2 py-1 text-xs rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                              />
+                              {colFilters[key] && (
+                                <button
+                                  type="button"
+                                  onClick={() => { setColFilters((f) => { const n = { ...f }; delete n[key]; return n; }); setFilterOpen(null); }}
+                                  className="mt-1 text-xs text-destructive hover:underline w-full text-left"
+                                >
+                                  Limpar filtro
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {despesasFiltradas.map((d) => {
+              {despesasExibidas.map((d) => {
                 const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
                 const tecnico = profiles.find((p) => p.id === d.tecnico_id);
                 const cartao = d.cartao;
@@ -495,8 +730,63 @@ export default function FinanceiroPageSupabase() {
                   ErroEnvioERP:                "bg-destructive/10 text-destructive",
                 }[d.status_erp ?? ""] ?? "bg-muted/20 text-muted-foreground";
 
+                const aprovado = sg === "aprovado";
+
                 return (
                   <tr key={d.id} className="border-t border-border hover:bg-muted/20 transition">
+                    {/* Coluna Lançar — primeira */}
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {d.lancado_erp ? (() => {
+                        const lancadoPorProfile = profiles.find((p) => p.id === d.lancado_erp_por);
+                        const lancadoEm = d.lancado_erp_em
+                          ? new Date(d.lancado_erp_em).toLocaleString("pt-BR")
+                          : null;
+                        return (
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-success">
+                                <Check className="w-3.5 h-3.5" /> Lançado
+                              </span>
+                              <button
+                                type="button"
+                                title="Estornar lançamento"
+                                onClick={() => estornarLancamento(d.id)}
+                                className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                              </button>
+                            </div>
+                            {lancadoPorProfile && (
+                              <span className="text-[10px] text-muted-foreground leading-tight">
+                                {lancadoPorProfile.nome}
+                              </span>
+                            )}
+                            {lancadoEm && (
+                              <span className="text-[10px] text-muted-foreground leading-tight">
+                                {lancadoEm}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })() : aprovado ? (
+                        <button
+                          type="button"
+                          disabled={lancando[d.id]}
+                          title="Lançar no ERP (M8)"
+                          onClick={() => setConfirmLancar(d.id)}
+                          className="inline-flex items-center justify-center p-1.5 rounded-lg text-primary border border-primary/20 bg-primary/10 hover:bg-primary hover:text-white transition disabled:opacity-50"
+                        >
+                          <SendHorizonal className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <span
+                          title="Despesa não aprovada — aguarde a aprovação para lançar"
+                          className="inline-flex items-center justify-center p-1.5 rounded-lg text-muted-foreground border border-border bg-muted/30 cursor-not-allowed opacity-50"
+                        >
+                          <SendHorizonal className="w-3.5 h-3.5" />
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 whitespace-nowrap">{new Date(d.data_despesa).toLocaleDateString("pt-BR")}</td>
                     {/* Vencimento editável */}
                     <td className="px-3 py-2 whitespace-nowrap">
@@ -625,9 +915,9 @@ export default function FinanceiroPageSupabase() {
                   </tr>
                 );
               })}
-              {despesasFiltradas.length === 0 && (
+              {despesasExibidas.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="px-3 py-10 text-center text-muted-foreground">
+                  <td colSpan={16} className="px-3 py-10 text-center text-muted-foreground">
                     Nenhuma despesa encontrada no período
                   </td>
                 </tr>
@@ -637,5 +927,80 @@ export default function FinanceiroPageSupabase() {
         </div>
       </div>
     </div>
+
+    {/* ── Modal de lançamento ── */}
+    {confirmLancar && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div ref={modalRef} className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md p-6 flex flex-col gap-5">
+
+          {/* Cabeçalho */}
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <AlertCircle className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-foreground">Lançar despesa</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Escolha como deseja registrar esta despesa. O status será atualizado para <strong>Lançado</strong> e o responsável e data/hora do lançamento serão registrados.
+              </p>
+            </div>
+          </div>
+
+          {/* Opções */}
+          <div className="flex flex-col gap-3">
+            {/* Lançar apenas */}
+            <button
+              type="button"
+              disabled={!!lancando[confirmLancar as string]}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (confirmLancar) handleLancar(confirmLancar); }}
+              className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition text-left disabled:opacity-50"
+            >
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center mt-0.5">
+                <Check className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {lancando[confirmLancar as string] ? "Lançando..." : "Lançar"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Registra o lançamento da despesa no sistema. O status é atualizado para Lançado e a despesa fica disponível para conferência pelo financeiro.
+                </p>
+              </div>
+            </button>
+
+            {/* Lançar e enviar ao ERP */}
+            <button
+              type="button"
+              disabled={!!lancando[confirmLancar as string]}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (confirmLancar) handleLancar(confirmLancar); }}
+              className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-accent/30 bg-accent/5 hover:bg-accent/10 transition text-left disabled:opacity-50"
+            >
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center mt-0.5">
+                <SendHorizonal className="w-4 h-4 text-accent" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Lançar e Enviar ao ERP</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Lança a despesa e envia automaticamente ao sistema ERP (M8). A integração automática está em desenvolvimento — o lançamento será registrado e a sincronização ocorrerá em breve.
+                </p>
+              </div>
+            </button>
+          </div>
+
+          {/* Cancelar */}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setConfirmLancar(null)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-input bg-background text-sm font-medium text-muted-foreground hover:bg-muted transition"
+            >
+              <X className="w-4 h-4" /> Cancelar
+            </button>
+          </div>
+
+        </div>
+      </div>
+    )}
+    </>
   );
 }
