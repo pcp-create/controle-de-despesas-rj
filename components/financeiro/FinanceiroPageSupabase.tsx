@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
-import { useAuth } from "@/lib/supabase/auth-context";
+import { useAppStore } from "@/lib/store";
 import { formatCurrency, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
 import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -35,7 +35,7 @@ export default function FinanceiroPageSupabase() {
   const [mostrarLancadas, setMostrarLancadas] = useState(false);
   const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
   const [lancando, setLancando] = useState<Record<string, boolean>>({});
-  const { user } = useAuth();
+  const { currentUser } = useAppStore();
 
   // Ordenação
   type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status" | "documento" | "cartao";
@@ -61,11 +61,9 @@ export default function FinanceiroPageSupabase() {
   }, []);
 
   const handleLancar = async (id: string) => {
-    // user.id do Supabase Auth === profiles.id (mesmo UUID)
-    const lancadoPor = user?.id;
-    if (!lancadoPor) return;
+    if (!currentUser?.id) return;
     setLancando((prev) => ({ ...prev, [id]: true }));
-    await lancarERP(id, lancadoPor);
+    await lancarERP(id, currentUser.id);
     setLancando((prev) => ({ ...prev, [id]: false }));
     setConfirmLancar(null);
   };
