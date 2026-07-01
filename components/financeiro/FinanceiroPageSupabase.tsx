@@ -32,7 +32,7 @@ export default function FinanceiroPageSupabase() {
   const [search, setSearch] = useState("");
 
   // Ordenação
-  type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status";
+  type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status" | "documento" | "cartao";
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   // Filtros por coluna
@@ -159,6 +159,12 @@ export default function FinanceiroPageSupabase() {
           case "os":          return (d.numero_os || "").toLowerCase().includes(v);
           case "valor":       return formatCurrency(Number(d.valor)).includes(v);
           case "status":      return (statusGeralConfig[sg]?.label || "").toLowerCase().includes(v);
+          case "documento":   return (d.numero_documento || "").toLowerCase().includes(v);
+          case "cartao": {
+            const c = d.cartao;
+            const label = c ? `${c.banco} ${c.bandeira} ${c.ultimos_digitos}`.toLowerCase() : "";
+            return label.includes(v);
+          }
           default: return true;
         }
       });
@@ -183,6 +189,13 @@ export default function FinanceiroPageSupabase() {
           case "os":          va = a.numero_os || ""; vb = b.numero_os || ""; break;
           case "valor":       va = Number(a.valor); vb = Number(b.valor); break;
           case "status":      va = getStatusGeral(a.status_erp ?? "", a.status_aprovacao); vb = getStatusGeral(b.status_erp ?? "", b.status_aprovacao); break;
+          case "documento":   va = a.numero_documento || ""; vb = b.numero_documento || ""; break;
+          case "cartao": {
+            const ca = a.cartao; const cb = b.cartao;
+            va = ca ? `${ca.banco} ${ca.bandeira} ${ca.ultimos_digitos}` : "";
+            vb = cb ? `${cb.banco} ${cb.bandeira} ${cb.ultimos_digitos}` : "";
+            break;
+          }
         }
         if (va < vb) return sortDir === "asc" ? -1 : 1;
         if (va > vb) return sortDir === "asc" ? 1 : -1;
@@ -552,8 +565,8 @@ export default function FinanceiroPageSupabase() {
                     { key: "cliente",     label: "Cliente",     align: "left"  },
                     { key: "os",          label: "OS",          align: "left"  },
                     { key: "valor",       label: "Valor",       align: "right" },
-                    { key: null,          label: "Documento",   align: "left"  },
-                    { key: null,          label: "Cartão",      align: "left"  },
+                    { key: "documento",    label: "Documento",   align: "left"  },
+                    { key: "cartao",      label: "Cartão",      align: "left"  },
                     { key: "status",      label: "Status",      align: "left"  },
                     { key: null,          label: "Comprovante", align: "left"  },
                     { key: null,          label: "Status ERP",  align: "left"  },
