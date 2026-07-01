@@ -2,8 +2,9 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
+import { useAuth } from "@/lib/supabase/auth-context";
 import { formatCurrency, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
-import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter } from "lucide-react";
+import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -25,11 +26,16 @@ const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
 type ModoFiltro = "mes" | "periodo";
 
 export default function FinanceiroPageSupabase() {
-  const { despesas, isLoading, updateDespesaVencimento } = useDespesas();
+  const { despesas, isLoading, updateDespesaVencimento, lancarERP, estornarLancamento } = useDespesas();
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
 
   const [search, setSearch] = useState("");
+  // Lançamento ERP
+  const [mostrarLancadas, setMostrarLancadas] = useState(false);
+  const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
+  const [lancando, setLancando] = useState<Record<string, boolean>>({});
+  const { user } = useAuth();
 
   // Ordenação
   type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status" | "documento" | "cartao";
@@ -49,6 +55,14 @@ export default function FinanceiroPageSupabase() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  const handleLancar = async (id: string) => {
+    if (!user?.id) return;
+    setLancando((prev) => ({ ...prev, [id]: true }));
+    await lancarERP(id, user.id);
+    setLancando((prev) => ({ ...prev, [id]: false }));
+    setConfirmLancar(null);
+  };
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -141,6 +155,9 @@ export default function FinanceiroPageSupabase() {
   const despesasExibidas = useMemo(() => {
     let list = despesasFiltradas;
 
+    // Filtro pendentes × lançadas
+    list = list.filter((d) => mostrarLancadas ? d.lancado_erp : !d.lancado_erp);
+
     // Filtros por coluna
     Object.entries(colFilters).forEach(([key, val]) => {
       if (!val) return;
@@ -203,7 +220,7 @@ export default function FinanceiroPageSupabase() {
       });
     }
     return list;
-  }, [despesasFiltradas, colFilters, sortKey, sortDir, tiposDespesa, profiles]);
+  }, [despesasFiltradas, colFilters, sortKey, sortDir, tiposDespesa, profiles, mostrarLancadas]);
 
   const totalFiltrado = despesasExibidas.reduce((s, d) => s + Number(d.valor), 0);
 
@@ -515,6 +532,18 @@ export default function FinanceiroPageSupabase() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
+            <button
+              type="button"
+              onClick={() => setMostrarLancadas((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-colors shrink-0 ${
+                mostrarLancadas
+                  ? "bg-success text-white border-success"
+                  : "bg-background border-input text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              <SendHorizonal className="w-3.5 h-3.5" />
+              {mostrarLancadas ? "Ver Pendentes" : "Ver Lançadas"}
+            </button>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               <input
@@ -572,6 +601,7 @@ export default function FinanceiroPageSupabase() {
                     { key: null,          label: "Status ERP",  align: "left"  },
                     { key: null,          label: "Envio",       align: "left"  },
                     { key: null,          label: "ERP ID",      align: "left"  },
+                    { key: null,          label: "Lançar ERP",  align: "left"  },
                   ] as { key: SortKey | null; label: string; align: "left" | "right" }[]
                 ).map(({ key, label, align }) => (
                   <th
@@ -782,12 +812,39 @@ export default function FinanceiroPageSupabase() {
                         : <span className="text-muted-foreground">—</span>
                       }
                     </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {d.lancado_erp ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                            <Check className="w-3.5 h-3.5" /> Lançado
+                          </span>
+                          <button
+                            type="button"
+                            title="Estornar lançamento"
+                            onClick={() => estornarLancamento(d.id)}
+                            className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={lancando[d.id]}
+                          onClick={() => setConfirmLancar(d.id)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-white transition disabled:opacity-50"
+                        >
+                          <SendHorizonal className="w-3.5 h-3.5" />
+                          Lançar
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
               {despesasExibidas.length === 0 && (
                 <tr>
-                  <td colSpan={14} className="px-3 py-10 text-center text-muted-foreground">
+                  <td colSpan={16} className="px-3 py-10 text-center text-muted-foreground">
                     Nenhuma despesa encontrada no período
                   </td>
                 </tr>
@@ -797,5 +854,48 @@ export default function FinanceiroPageSupabase() {
         </div>
       </div>
     </div>
+
+    {/* ── Modal confirmação de lançamento ERP ── */}
+    {confirmLancar && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <AlertCircle className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-foreground">Enviar despesa ao ERP (M8)?</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Deseja enviar esta despesa ao sistema ERP M8? A integração será processada pelo financeiro.
+              </p>
+              <p className="text-xs text-muted-foreground mt-2 italic">
+                Nota: a integração automática com o M8 está em desenvolvimento. O status será marcado como <strong>Lançado</strong> e a sincronização ocorrerá em breve.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => setConfirmLancar(null)}
+              className="px-4 py-2 rounded-lg border border-input bg-background text-sm font-medium hover:bg-muted transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={lancando[confirmLancar]}
+              onClick={() => handleLancar(confirmLancar)}
+              className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition disabled:opacity-50 flex items-center gap-2"
+            >
+              {lancando[confirmLancar] ? (
+                <>Lançando...</>
+              ) : (
+                <><SendHorizonal className="w-4 h-4" /> Sim, lançar</>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   );
 }

@@ -71,6 +71,10 @@ export interface Despesa {
   reembolso_processado: boolean;
   reembolso_processado_em: string | null;
   reembolso_processado_por: string | null;
+  // Lançamento ERP
+  lancado_erp: boolean;
+  lancado_erp_em: string | null;
+  lancado_erp_por: string | null;
   created_at: string;
   updated_at: string;
   // Joins
@@ -636,6 +640,53 @@ export function useDespesas(userId?: string, perfil?: string) {
     return { error: null };
   };
 
+  const lancarERP = async (id: string, lancadoPor: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        lancado_erp: true,
+        lancado_erp_em: new Date().toISOString(),
+        lancado_erp_por: lancadoPor,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) return { error: error.message };
+
+    await registrarAuditoria({
+      acao: "UPDATE",
+      entidade: "despesa",
+      entidadeId: id,
+      usuarioId: lancadoPor,
+      detalhes: "Despesa marcada como lançada no ERP (M8)",
+    });
+
+    mutate();
+    return { error: null };
+  };
+
+  const estornarLancamento = async (id: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        lancado_erp: false,
+        lancado_erp_em: null,
+        lancado_erp_por: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) return { error: error.message };
+    mutate();
+    return { error: null };
+  };
+
   return {
     despesas: data || [],
     isLoading,
@@ -650,6 +701,8 @@ export function useDespesas(userId?: string, perfil?: string) {
     reprovarDespesa,
     processarReembolso,
     estornarReembolso,
+    lancarERP,
+    estornarLancamento,
   };
 }
 
