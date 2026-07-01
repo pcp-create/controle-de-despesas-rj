@@ -684,6 +684,7 @@ export function useDespesas(userId?: string, perfil?: string) {
         lancado_erp: true,
         lancado_erp_em: new Date().toISOString(),
         lancado_erp_por: lancadoPor,
+        status_erp: "NaoEnviadoERP",
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -712,6 +713,7 @@ export function useDespesas(userId?: string, perfil?: string) {
         lancado_erp: false,
         lancado_erp_em: null,
         lancado_erp_por: null,
+        status_erp: "Rascunho",
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);

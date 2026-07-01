@@ -8,18 +8,6 @@ import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, Ch
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  PieChart,
-  Pie,
-  Legend,
-} from "recharts";
 
 const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -123,28 +111,6 @@ export default function FinanceiroPageSupabase() {
   const totalLancadoQtd = despesasLancadas.length;
   const totalLancadoValor = despesasLancadas.reduce((s, d) => s + Number(d.valor), 0);
 
-  const byTipo = tiposDespesa.map((t) => ({
-    name: t.nome,
-    valor: despesasAprovadas
-      .filter((d) => d.tipo_despesa_id === t.id)
-      .reduce((s, d) => s + Number(d.valor), 0),
-  })).filter((x) => x.valor > 0);
-
-  const byTecnico = useMemo(() => {
-    const tecnicos = profiles;
-    return tecnicos
-      .map((u) => {
-        const du = despesasAprovadas.filter((d) => d.tecnico_id === u.id);
-        return {
-          id: u.id,
-          nome: u.nome.split(" ").slice(0, 2).join(" "),
-          total: du.reduce((s, d) => s + Number(d.valor), 0),
-          qtd: du.length,
-        };
-      })
-      .filter((u) => u.total > 0)
-      .sort((a, b) => b.total - a.total);
-  }, [profiles, despesasAprovadas]);
 
   const despesasFiltradas = todasDespesas.filter((d) => {
     if (!search) return true;
@@ -522,44 +488,6 @@ export default function FinanceiroPageSupabase() {
         </div>
       </div>
 
-      {/* ── Gráficos ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {byTipo.length > 0 && (
-          <div className="bg-white rounded-xl border border-border shadow-sm p-5">
-            <h2 className="text-sm font-semibold text-foreground mb-4">Por Tipo de Despesa</h2>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={byTipo} layout="vertical" barSize={20}>
-                <XAxis type="number" tick={{ fontSize: 11 }} axisLine={false} tickLine={false}
-                  tickFormatter={(v) => `R$${v}`} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={80} />
-                <Tooltip
-                  formatter={(v: number) => [formatCurrency(v), "Valor"]}
-                  contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }}
-                />
-                <Bar dataKey="valor" radius={[0, 4, 4, 0]} fill="oklch(0.55 0.18 255)" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-        {byTecnico.length > 0 && (
-          <div className="bg-white rounded-xl border border-border shadow-sm p-5">
-            <h2 className="text-sm font-semibold text-foreground mb-4">Por Funcionário</h2>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={byTecnico} dataKey="total" nameKey="nome" cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={2}>
-                  {byTecnico.map((_, i) => {
-                    const colors = ["oklch(0.55 0.18 255)", "oklch(0.35 0.12 255)", "oklch(0.52 0.17 155)", "oklch(0.62 0.18 60)"];
-                    return <Cell key={i} fill={colors[i % colors.length]} />;
-                  })}
-                </Pie>
-                <Tooltip formatter={(v: number) => [formatCurrency(v), "Total"]} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
-                <Legend iconType="circle" iconSize={8} formatter={(value) => <span style={{ fontSize: 11 }}>{value}</span>} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </div>
-
       {/* ── Lista de despesas ── */}
       <div className="bg-white rounded-xl border border-border shadow-sm">
 
@@ -728,7 +656,17 @@ export default function FinanceiroPageSupabase() {
                   AprovadoGestorERPAtualizado: "bg-success/10 text-success",
                   ErroAtualizarERP:            "bg-destructive/10 text-destructive",
                   ErroEnvioERP:                "bg-destructive/10 text-destructive",
+                  NaoEnviadoERP:               "bg-muted/30 text-muted-foreground",
                 }[d.status_erp ?? ""] ?? "bg-muted/20 text-muted-foreground";
+
+                const statusErpLabel: Record<string, string> = {
+                  Rascunho:                    "Rascunho",
+                  EnviadoAguardandoGestor:     "Aguardando Gestor",
+                  AprovadoGestorERPAtualizado: "Aprovado",
+                  ErroAtualizarERP:            "Erro ao Atualizar",
+                  ErroEnvioERP:                "Erro de Envio",
+                  NaoEnviadoERP:               "Não Enviado ao ERP",
+                };
 
                 const aprovado = sg === "aprovado";
 
@@ -898,14 +836,25 @@ export default function FinanceiroPageSupabase() {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
+                    {/* Status ERP */}
                     <td className="px-3 py-2 whitespace-nowrap">
-                      <span className={`px-2 py-0.5 rounded-full font-medium ${statusErpCls}`}>
-                        {d.status_erp || "Não enviado"}
-                      </span>
+                      {!d.lancado_erp ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : d.status_erp ? (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusErpCls}`}>
+                          {statusErpLabel[d.status_erp] ?? d.status_erp}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-muted/30 text-muted-foreground">
+                          Não Enviado ao ERP
+                        </span>
+                      )}
                     </td>
+                    {/* Envio — futuramente retorna a data de integração com o ERP */}
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
                       {d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "—"}
                     </td>
+                    {/* ERP ID — futuramente retorna o número do documento gerado pelo ERP */}
                     <td className="px-3 py-2 whitespace-nowrap font-mono">
                       {d.erp_id
                         ? <span className="text-success font-semibold">{d.erp_id}</span>
@@ -928,7 +877,7 @@ export default function FinanceiroPageSupabase() {
       </div>
     </div>
 
-    {/* ── Modal de lançamento ── */}
+    {/* ���─ Modal de lançamento ── */}
     {confirmLancar && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
         <div ref={modalRef} className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md p-6 flex flex-col gap-5">
