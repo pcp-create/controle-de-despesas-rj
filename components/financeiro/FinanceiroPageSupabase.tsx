@@ -826,14 +826,25 @@ export default function FinanceiroPageSupabase() {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
+                    {/* Status ERP */}
                     <td className="px-3 py-2 whitespace-nowrap">
-                      <span className={`px-2 py-0.5 rounded-full font-medium ${statusErpCls}`}>
-                        {d.status_erp || "Não enviado"}
-                      </span>
+                      {!d.lancado_erp ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : d.status_erp ? (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusErpCls}`}>
+                          {d.status_erp}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-muted/30 text-muted-foreground">
+                          Não Enviado ao ERP
+                        </span>
+                      )}
                     </td>
+                    {/* Envio — futuramente retorna a data de integração com o ERP */}
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
                       {d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "—"}
                     </td>
+                    {/* ERP ID — futuramente retorna o número do documento gerado pelo ERP */}
                     <td className="px-3 py-2 whitespace-nowrap font-mono">
                       {d.erp_id
                         ? <span className="text-success font-semibold">{d.erp_id}</span>
