@@ -35,7 +35,7 @@ export default function FinanceiroPageSupabase() {
   const [mostrarLancadas, setMostrarLancadas] = useState(false);
   const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
   const [lancando, setLancando] = useState<Record<string, boolean>>({});
-  const { user } = useAuth();
+  const { user, profile: authProfile } = useAuth();
 
   // Ordenação
   type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status" | "documento" | "cartao";
@@ -57,9 +57,10 @@ export default function FinanceiroPageSupabase() {
   }, []);
 
   const handleLancar = async (id: string) => {
-    if (!user?.id) return;
+    const lancadoPor = authProfile?.id ?? user?.id;
+    if (!lancadoPor) return;
     setLancando((prev) => ({ ...prev, [id]: true }));
-    await lancarERP(id, user.id);
+    await lancarERP(id, lancadoPor);
     setLancando((prev) => ({ ...prev, [id]: false }));
     setConfirmLancar(null);
   };
@@ -690,23 +691,41 @@ export default function FinanceiroPageSupabase() {
 
                 return (
                   <tr key={d.id} className="border-t border-border hover:bg-muted/20 transition">
-                    {/* Coluna Lançar ERP — primeira */}
+                    {/* Coluna Lançar — primeira */}
                     <td className="px-3 py-2 whitespace-nowrap">
-                      {d.lancado_erp ? (
-                        <div className="flex items-center gap-1.5">
-                          <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
-                            <Check className="w-3.5 h-3.5" /> Lançado
-                          </span>
-                          <button
-                            type="button"
-                            title="Estornar lançamento"
-                            onClick={() => estornarLancamento(d.id)}
-                            className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
-                          >
-                            <RotateCcw className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ) : aprovado ? (
+                      {d.lancado_erp ? (() => {
+                        const lancadoPorProfile = profiles.find((p) => p.id === d.lancado_erp_por);
+                        const lancadoEm = d.lancado_erp_em
+                          ? new Date(d.lancado_erp_em).toLocaleString("pt-BR")
+                          : null;
+                        return (
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-success">
+                                <Check className="w-3.5 h-3.5" /> Lançado
+                              </span>
+                              <button
+                                type="button"
+                                title="Estornar lançamento"
+                                onClick={() => estornarLancamento(d.id)}
+                                className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                              </button>
+                            </div>
+                            {lancadoPorProfile && (
+                              <span className="text-[10px] text-muted-foreground leading-tight">
+                                {lancadoPorProfile.nome}
+                              </span>
+                            )}
+                            {lancadoEm && (
+                              <span className="text-[10px] text-muted-foreground leading-tight">
+                                {lancadoEm}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })() : aprovado ? (
                         <button
                           type="button"
                           disabled={lancando[d.id]}
