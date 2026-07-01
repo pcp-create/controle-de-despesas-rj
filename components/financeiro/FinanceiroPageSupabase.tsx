@@ -587,7 +587,7 @@ export default function FinanceiroPageSupabase() {
               <tr>
                 {(
                   [
-                    { key: null,          label: "Lançar ERP",  align: "left"  },
+                    { key: null,          label: "Lançar",      align: "left"  },
                     { key: "data",        label: "Data",        align: "left"  },
                     { key: "vencimento",  label: "Vencimento",  align: "left"  },
                     { key: "funcionario", label: "Funcionário",  align: "left"  },
@@ -866,45 +866,76 @@ export default function FinanceiroPageSupabase() {
       </div>
     </div>
 
-    {/* ── Modal confirmação de lançamento ERP ── */}
+    {/* ── Modal de lançamento ── */}
     {confirmLancar && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-        <div className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
+        <div className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md p-6 flex flex-col gap-5">
+
+          {/* Cabeçalho */}
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
               <AlertCircle className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-foreground">Enviar despesa ao ERP (M8)?</h3>
+              <h3 className="text-base font-semibold text-foreground">Lançar despesa</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                Deseja enviar esta despesa ao sistema ERP M8? A integração será processada pelo financeiro.
-              </p>
-              <p className="text-xs text-muted-foreground mt-2 italic">
-                Nota: a integração automática com o M8 está em desenvolvimento. O status será marcado como <strong>Lançado</strong> e a sincronização ocorrerá em breve.
+                Escolha como deseja registrar esta despesa. O status será atualizado para <strong>Lançado</strong> e o responsável e data/hora do lançamento serão registrados.
               </p>
             </div>
           </div>
-          <div className="flex justify-end gap-2 mt-2">
-            <button
-              type="button"
-              onClick={() => setConfirmLancar(null)}
-              className="px-4 py-2 rounded-lg border border-input bg-background text-sm font-medium hover:bg-muted transition"
-            >
-              Cancelar
-            </button>
+
+          {/* Opções */}
+          <div className="flex flex-col gap-3">
+            {/* Lançar apenas */}
             <button
               type="button"
               disabled={lancando[confirmLancar]}
               onClick={() => handleLancar(confirmLancar)}
-              className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition disabled:opacity-50 flex items-center gap-2"
+              className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition text-left disabled:opacity-50"
             >
-              {lancando[confirmLancar] ? (
-                <>Lançando...</>
-              ) : (
-                <><SendHorizonal className="w-4 h-4" /> Sim, lançar</>
-              )}
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center mt-0.5">
+                <Check className="w-4 h-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  {lancando[confirmLancar] ? "Lançando..." : "Lançar"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Registra o lançamento da despesa no sistema. O status é atualizado para Lançado e a despesa fica disponível para conferência pelo financeiro.
+                </p>
+              </div>
+            </button>
+
+            {/* Lançar e enviar ao ERP */}
+            <button
+              type="button"
+              disabled={lancando[confirmLancar]}
+              onClick={() => handleLancar(confirmLancar)}
+              className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-accent/30 bg-accent/5 hover:bg-accent/10 transition text-left disabled:opacity-50"
+            >
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center mt-0.5">
+                <SendHorizonal className="w-4 h-4 text-accent" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Lançar e Enviar ao ERP</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Lança a despesa e envia automaticamente ao sistema ERP (M8). A integração automática está em desenvolvimento — o lançamento será registrado e a sincronização ocorrerá em breve.
+                </p>
+              </div>
             </button>
           </div>
+
+          {/* Cancelar */}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setConfirmLancar(null)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-input bg-background text-sm font-medium text-muted-foreground hover:bg-muted transition"
+            >
+              <X className="w-4 h-4" /> Cancelar
+            </button>
+          </div>
+
         </div>
       </div>
     )}
