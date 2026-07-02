@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useControleKm, useFrotas, useProfiles, type ControleKm } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import {
@@ -93,8 +93,6 @@ export default function ControleKmPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const modalRef = useRef<HTMLDivElement>(null);
 
   // Registro aberto do usuário logado
   const registroAberto = useMemo(
@@ -525,7 +523,7 @@ export default function ControleKmPage() {
     {/* ── Modal Iniciar Viagem ── */}
     {modal === "iniciar" && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-        <div ref={modalRef} className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto" onMouseDown={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <div className="flex items-center gap-2.5">
               <Play className="w-5 h-5 text-accent" />
@@ -644,7 +642,7 @@ export default function ControleKmPage() {
       const frota = frotas.find((f) => f.id === targetRegistro.frota_id);
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div ref={modalRef} className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md">
+          <div className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md" onMouseDown={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <div className="flex items-center gap-2.5">
                 <Square className="w-5 h-5 text-warning" />
@@ -740,7 +738,7 @@ export default function ControleKmPage() {
     {/* ── Modal Excluir ── */}
     {modal === "delete" && targetRegistro && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-        <div ref={modalRef} className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-sm p-6 flex flex-col gap-4">
+        <div className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-sm p-6 flex flex-col gap-4" onMouseDown={(e) => e.stopPropagation()}>
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
               <Trash2 className="w-5 h-5 text-destructive" />
