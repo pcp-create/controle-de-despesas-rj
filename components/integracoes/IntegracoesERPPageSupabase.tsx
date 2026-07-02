@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useDespesas, useTiposDespesa } from "@/lib/supabase/hooks";
 import { formatCurrency, pagamentoTipoConfig } from "@/lib/helpers";
 import {
@@ -14,8 +14,9 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-const statusConfig = {
+const statusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   Rascunho: { label: "Rascunho", color: "bg-muted text-muted-foreground", icon: Clock },
+  NaoEnviadoERP: { label: "Não Enviado", color: "bg-muted/50 text-muted-foreground", icon: Clock },
   EnviadoAguardandoGestor: { label: "Enviado", color: "bg-primary/10 text-primary", icon: Send },
   AprovadoGestorERPAtualizado: { label: "Integrado", color: "bg-success/10 text-success", icon: CheckCircle },
   ErroEnvioERP: { label: "Erro Envio", color: "bg-destructive/10 text-destructive", icon: AlertTriangle },
@@ -165,7 +166,7 @@ export default function IntegracoesERPPageSupabase() {
             <tbody>
               {despesasErp.map((d) => {
                 const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
-                const status = statusConfig[d.status_erp];
+                const status = statusConfig[d.status_erp] ?? { label: d.status_erp ?? "—", color: "bg-muted text-muted-foreground", icon: Clock };
                 const StatusIcon = status.icon;
                 const isError = d.status_erp === "ErroEnvioERP" || d.status_erp === "ErroAtualizarERP";
 
