@@ -21,6 +21,7 @@ import FrotasPageSupabase from "@/components/admin/FrotasPageSupabase";
 import AlterarSenhaModalSupabase from "@/components/auth/AlterarSenhaModalSupabase";
 import AuditoriaPageSupabase from "@/components/admin/AuditoriaPageSupabase";
 import ReembolsoPage from "@/components/reembolso/ReembolsoPage";
+import ControleKmPage from "@/components/km/ControleKmPage";
 import { useAppStore } from "@/lib/store";
 
 export type PageKey =
@@ -35,6 +36,7 @@ export type PageKey =
   | "usuarios"
   | "tipos-despesa"
   | "frotas"
+  | "controle-km"
   | "auditoria"
   | "alterar-senha";
 
@@ -91,6 +93,7 @@ export default function AppShellSupabase() {
       case "usuarios": return <UsuariosPageSupabase />;
       case "tipos-despesa": return <TiposDespesaPageSupabase />;
       case "frotas": return <FrotasPageSupabase />;
+      case "controle-km": return <ControleKmPage />;
       case "todas-despesas": return <TodasDespesasPage initialStatus={initialStatusFilter} />;
       case "auditoria": return <AuditoriaPageSupabase />;
       default: return <DashboardSupabase onNavigate={navigate} />;
