@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { formatCurrency } from "@/lib/helpers";
 import {
@@ -18,20 +18,35 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { Calendar, Download, TrendingUp, DollarSign, Users, FileText, CalendarDays } from "lucide-react";
+import { Calendar, Download, TrendingUp, DollarSign, Users, FileText, CalendarDays, Gauge, Route, Clock, Car } from "lucide-react";
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 type ModoFiltro = "mes" | "periodo";
 
+function formatKmRel(val: number): string {
+  return val.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + " km";
+}
+
+function formatDuracaoRel(minutos: number): string {
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  return h > 0 ? `${h}h ${m}min` : `${m}min`;
+}
+
+const MESES_KM = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
 export default function RelatoriosPageSupabase() {
   const { currentUser } = useAppStore();
   const isFuncionario = currentUser?.perfil === "funcionario";
+  const isGestorOuAdmin = currentUser?.perfil === "administrador" || currentUser?.perfil === "gestor";
 
   const { despesas, isLoading } = useDespesas(isFuncionario ? currentUser?.id : undefined);
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
+  const { registros: registrosKm } = useControleKm();
+  const { frotas } = useFrotas();
   
   const now = new Date();
   const [modoFiltro, setModoFiltro] = useState<ModoFiltro>("mes");
@@ -111,6 +126,75 @@ export default function RelatoriosPageSupabase() {
       .sort((a, b) => b.total - a.total)
       .slice(0, 10);
   }, [profiles, despesasAno]);
+
+  // ─── Dados de KM filtrados por período ───────────────────
+  const registrosKmFiltrados = useMemo(() => {
+    return registrosKm.filter((r) => {
+      if (r.status !== "finalizado") return false;
+      // Restrição por perfil
+      if (!isGestorOuAdmin && currentUser?.id && r.usuario_id !== currentUser.id) return false;
+      const dataStr = r.data_inicio.slice(0, 10);
+      if (modoFiltro === "mes") {
+        const dt = new Date(dataStr + "T00:00:00");
+        return dt.getMonth() === mesSelecionado && dt.getFullYear() === anoSelecionado;
+      } else {
+        if (dataInicial && dataStr < dataInicial) return false;
+        if (dataFinal && dataStr > dataFinal) return false;
+        return true;
+      }
+    });
+  }, [registrosKm, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, isGestorOuAdmin, currentUser]);
+
+  // Métricas de KM
+  const totalKmPeriodo = useMemo(
+    () => registrosKmFiltrados.reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
+    [registrosKmFiltrados]
+  );
+  const totalViagens = registrosKmFiltrados.length;
+  const mediaKmViagem = totalViagens > 0 ? totalKmPeriodo / totalViagens : 0;
+  const totalMinutos = registrosKmFiltrados.reduce((s, r) => s + (r.duracao_minutos ?? 0), 0);
+
+  // KM por mês (gráfico de evolução — apenas ano atual)
+  const kmByMes = useMemo(() => {
+    return MESES_KM.map((m, i) => ({
+      mes: m,
+      km: registrosKm
+        .filter((r) => {
+          if (r.status !== "finalizado") return false;
+          if (!isGestorOuAdmin && currentUser?.id && r.usuario_id !== currentUser.id) return false;
+          const dt = new Date(r.data_inicio);
+          return dt.getMonth() === i && dt.getFullYear() === now.getFullYear();
+        })
+        .reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
+    }));
+  }, [registrosKm, isGestorOuAdmin, currentUser]);
+
+  // KM por veículo
+  const kmByFrota = useMemo(() => {
+    return frotas
+      .map((f) => ({
+        nome: `${f.placa}`,
+        km: registrosKmFiltrados.filter((r) => r.frota_id === f.id).reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
+        viagens: registrosKmFiltrados.filter((r) => r.frota_id === f.id).length,
+      }))
+      .filter((f) => f.km > 0)
+      .sort((a, b) => b.km - a.km)
+      .slice(0, 8);
+  }, [frotas, registrosKmFiltrados]);
+
+  // KM por funcionário (só para gestor/admin)
+  const kmByFuncionario = useMemo(() => {
+    if (!isGestorOuAdmin) return [];
+    return profiles
+      .map((p) => ({
+        nome: p.nome.split(" ").slice(0, 2).join(" "),
+        km: registrosKmFiltrados.filter((r) => r.usuario_id === p.id).reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
+        viagens: registrosKmFiltrados.filter((r) => r.usuario_id === p.id).length,
+      }))
+      .filter((p) => p.km > 0)
+      .sort((a, b) => b.km - a.km)
+      .slice(0, 8);
+  }, [profiles, registrosKmFiltrados, isGestorOuAdmin]);
 
   if (isLoading) {
     return (
@@ -292,6 +376,108 @@ export default function RelatoriosPageSupabase() {
                   contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }}
                 />
                 <Bar dataKey="total" radius={[0, 4, 4, 0]} fill="oklch(0.55 0.18 255)" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* ── Seção Controle de KM ── */}
+      <div className="flex items-center gap-3 pt-2">
+        <div className="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center">
+          <Gauge className="w-4 h-4" />
+        </div>
+        <h2 className="text-base font-bold text-foreground">Controle de KM</h2>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
+      {/* Cards KM */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
+          <div className="w-9 h-9 rounded-lg bg-accent/10 text-accent flex items-center justify-center mb-3">
+            <Route className="w-5 h-5" />
+          </div>
+          <p className="text-2xl font-bold text-foreground">{formatKmRel(totalKmPeriodo)}</p>
+          <p className="text-xs text-muted-foreground mt-1">KM Total Percorrido</p>
+        </div>
+        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
+          <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-3">
+            <Car className="w-5 h-5" />
+          </div>
+          <p className="text-2xl font-bold text-foreground">{totalViagens}</p>
+          <p className="text-xs text-muted-foreground mt-1">Viagens Finalizadas</p>
+        </div>
+        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
+          <div className="w-9 h-9 rounded-lg bg-success/10 text-success flex items-center justify-center mb-3">
+            <Gauge className="w-5 h-5" />
+          </div>
+          <p className="text-2xl font-bold text-foreground">{formatKmRel(mediaKmViagem)}</p>
+          <p className="text-xs text-muted-foreground mt-1">Média por Viagem</p>
+        </div>
+        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
+          <div className="w-9 h-9 rounded-lg bg-warning/10 text-warning flex items-center justify-center mb-3">
+            <Clock className="w-5 h-5" />
+          </div>
+          <p className="text-2xl font-bold text-foreground">{totalMinutos > 0 ? formatDuracaoRel(totalMinutos) : "—"}</p>
+          <p className="text-xs text-muted-foreground mt-1">Tempo Total em Rota</p>
+        </div>
+      </div>
+
+      {/* Gráfico KM por mês */}
+      {kmByMes.some((m) => m.km > 0) && (
+        <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+          <h3 className="text-sm font-semibold text-foreground mb-4">
+            KM Percorrido por Mês — {now.getFullYear()}
+          </h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={kmByMes} barSize={28}>
+              <XAxis dataKey="mes" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={60}
+                tickFormatter={(v) => `${v} km`} />
+              <Tooltip
+                formatter={(v: number) => [`${v.toLocaleString("pt-BR")} km`, "KM"]}
+                contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }}
+              />
+              <Bar dataKey="km" radius={[4, 4, 0, 0]} fill="oklch(0.52 0.17 155)" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* KM por veículo */}
+        {kmByFrota.length > 0 && (
+          <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+            <h3 className="text-sm font-semibold text-foreground mb-4">KM por Veículo</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={kmByFrota} layout="vertical" barSize={16}>
+                <XAxis type="number" tick={{ fontSize: 11 }} axisLine={false} tickLine={false}
+                  tickFormatter={(v) => `${v} km`} />
+                <YAxis type="category" dataKey="nome" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={65} />
+                <Tooltip
+                  formatter={(v: number) => [`${v.toLocaleString("pt-BR")} km`, "KM"]}
+                  contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }}
+                />
+                <Bar dataKey="km" radius={[0, 4, 4, 0]} fill="oklch(0.55 0.18 255)" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* KM por funcionário — apenas gestor/admin */}
+        {isGestorOuAdmin && kmByFuncionario.length > 0 && (
+          <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+            <h3 className="text-sm font-semibold text-foreground mb-4">KM por Funcionário</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={kmByFuncionario} layout="vertical" barSize={16}>
+                <XAxis type="number" tick={{ fontSize: 11 }} axisLine={false} tickLine={false}
+                  tickFormatter={(v) => `${v} km`} />
+                <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={75} />
+                <Tooltip
+                  formatter={(v: number) => [`${v.toLocaleString("pt-BR")} km`, "KM"]}
+                  contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }}
+                />
+                <Bar dataKey="km" radius={[0, 4, 4, 0]} fill="oklch(0.577 0.245 27.325)" />
               </BarChart>
             </ResponsiveContainer>
           </div>

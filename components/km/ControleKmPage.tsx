@@ -21,6 +21,7 @@ import {
   Route,
   CalendarDays,
   User,
+  Download,
 } from "lucide-react";
 
 function formatDuracao(minutos: number | null): string {
@@ -80,10 +81,14 @@ export default function ControleKmPage() {
   const { profiles } = useProfiles();
   const { currentUser } = useAppStore();
 
+  // Controle de perfil
+  const isGestorOuAdmin = currentUser?.perfil === "administrador" || currentUser?.perfil === "gestor";
+
   // Filtros
   const [search, setSearch] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "aberto" | "finalizado">("todos");
   const [filtroFrota, setFiltroFrota] = useState("");
+  const [filtroFuncionario, setFiltroFuncionario] = useState("");
 
   // Modal
   const [modal, setModal] = useState<ModalType>(null);
@@ -108,11 +113,20 @@ export default function ControleKmPage() {
 
   const frotasDisponiveis = frotas.filter((f) => f.ativo && !frotasComViagem.has(f.id));
 
-  // Lista filtrada
+  // Lista filtrada — funcionario/financeiro só veem os próprios registros
   const registrosFiltrados = useMemo(() => {
     let list = [...registros];
+
+    // Restrição por perfil
+    if (!isGestorOuAdmin && currentUser?.id) {
+      list = list.filter((r) => r.usuario_id === currentUser.id);
+    }
+
     if (filtroStatus !== "todos") list = list.filter((r) => r.status === filtroStatus);
     if (filtroFrota) list = list.filter((r) => r.frota_id === filtroFrota);
+    if (isGestorOuAdmin && filtroFuncionario) {
+      list = list.filter((r) => r.usuario_id === filtroFuncionario);
+    }
     if (search) {
       const t = search.toLowerCase();
       list = list.filter((r) => {
@@ -128,7 +142,7 @@ export default function ControleKmPage() {
       });
     }
     return list;
-  }, [registros, filtroStatus, filtroFrota, search, frotas, profiles]);
+  }, [registros, filtroStatus, filtroFrota, filtroFuncionario, search, frotas, profiles, isGestorOuAdmin, currentUser]);
 
   // Stats
   const totalKm = useMemo(
@@ -247,6 +261,38 @@ export default function ControleKmPage() {
     closeModal();
   };
 
+  // ─── Exportar CSV ───────────────────────────────────────
+  const exportarCSV = () => {
+    const rows = registrosFiltrados.map((r) => {
+      const frota = frotas.find((f) => f.id === r.frota_id);
+      const usuario = profiles.find((p) => p.id === r.usuario_id);
+      return [
+        new Date(r.data_inicio).toLocaleString("pt-BR"),
+        r.data_fim ? new Date(r.data_fim).toLocaleString("pt-BR") : "",
+        usuario?.nome ?? "",
+        frota ? `${frota.placa} - ${frota.marca} ${frota.modelo}` : "",
+        r.km_inicial,
+        r.km_final ?? "",
+        r.km_percorrido ?? "",
+        r.duracao_minutos != null ? formatDuracao(r.duracao_minutos) : "",
+        r.destino ?? "",
+        r.motivo ?? "",
+        r.observacao ?? "",
+        r.status === "aberto" ? "Em Andamento" : "Finalizado",
+      ];
+    });
+
+    const header = ["Início", "Fim", "Funcionário", "Veículo", "KM Inicial", "KM Final", "KM Percorrido", "Duração", "Destino", "Motivo", "Observação", "Status"];
+    const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `controle-km-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // ─── Render ─────────────────────────────────────────────
 
   return (
@@ -257,15 +303,30 @@ export default function ControleKmPage() {
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex-1">
           <h1 className="text-xl font-bold text-foreground">Controle de KM</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Registre e acompanhe o uso dos veículos da frota</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {isGestorOuAdmin
+              ? "Acompanhe e gerencie o uso dos veículos da frota"
+              : "Registre e acompanhe suas viagens"}
+          </p>
         </div>
-        <button
-          onClick={openIniciar}
-          className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition self-start sm:self-auto"
-        >
-          <Play className="w-4 h-4" />
-          Iniciar Viagem
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {isGestorOuAdmin && (
+            <button
+              onClick={exportarCSV}
+              className="flex items-center gap-2 px-3 py-2 border border-input bg-background text-sm font-medium rounded-lg hover:bg-muted transition"
+            >
+              <Download className="w-4 h-4" />
+              Exportar CSV
+            </button>
+          )}
+          <button
+            onClick={openIniciar}
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition"
+          >
+            <Play className="w-4 h-4" />
+            Iniciar Viagem
+          </button>
+        </div>
       </div>
 
       {/* Feedback global */}
@@ -381,6 +442,22 @@ export default function ControleKmPage() {
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
         </div>
+        {isGestorOuAdmin && (
+          <div className="relative">
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <select
+              value={filtroFuncionario}
+              onChange={(e) => setFiltroFuncionario(e.target.value)}
+              className="pl-9 pr-8 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
+            >
+              <option value="">Todos os funcionários</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.nome}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          </div>
+        )}
       </div>
 
       {/* Lista */}
