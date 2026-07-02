@@ -866,3 +866,107 @@ export function useProfiles() {
     toggleProfileStatus,
   };
 }
+
+// ─────────────────────────────────────────────
+// Controle de KM
+// ─────────────────────────────────────────────
+
+export interface ControleKm {
+  id: string;
+  frota_id: string;
+  usuario_id: string;
+  km_inicial: number;
+  km_final: number | null;
+  km_percorrido: number | null;
+  data_inicio: string;
+  data_fim: string | null;
+  duracao_minutos: number | null;
+  destino: string | null;
+  motivo: string | null;
+  observacao: string | null;
+  status: "aberto" | "finalizado";
+  created_at: string;
+  updated_at: string;
+}
+
+async function fetchControleKm() {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("controle_km")
+    .select("*")
+    .order("data_inicio", { ascending: false });
+  return data || [];
+}
+
+export function useControleKm() {
+  const { data, error, isLoading, mutate } = useSWR("controle_km", fetchControleKm, {
+    revalidateOnFocus: false,
+    refreshInterval: 30000,
+  });
+
+  const iniciarKm = async (payload: {
+    frota_id: string;
+    usuario_id: string;
+    km_inicial: number;
+    destino?: string;
+    motivo?: string;
+    observacao?: string;
+  }) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+
+    const { data: inserted, error } = await supabase
+      .from("controle_km")
+      .insert({
+        ...payload,
+        data_inicio: new Date().toISOString(),
+        status: "aberto",
+      })
+      .select()
+      .single();
+
+    if (error) return { error: error.message };
+    mutate();
+    return { data: inserted, error: null };
+  };
+
+  const finalizarKm = async (id: string, km_final: number, observacao?: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+
+    const { error } = await supabase
+      .from("controle_km")
+      .update({
+        km_final,
+        data_fim: new Date().toISOString(),
+        status: "finalizado",
+        observacao: observacao || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) return { error: error.message };
+    mutate();
+    return { error: null };
+  };
+
+  const deleteControleKm = async (id: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { error } = await supabase.from("controle_km").delete().eq("id", id);
+    if (error) return { error: error.message };
+    mutate();
+    return { error: null };
+  };
+
+  return {
+    registros: data as ControleKm[] || [],
+    isLoading,
+    error,
+    mutate,
+    iniciarKm,
+    finalizarKm,
+    deleteControleKm,
+  };
+}
