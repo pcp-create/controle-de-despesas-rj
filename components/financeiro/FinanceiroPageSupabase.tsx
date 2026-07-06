@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
-import { formatCurrency, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
+import { formatCurrency, formatDate, formatDateTime, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
 import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -149,8 +149,8 @@ export default function FinanceiroPageSupabase() {
         const tecnico = profiles.find((p) => p.id === d.tecnico_id);
         const sg = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
         switch (key as SortKey) {
-          case "data":        return new Date(d.data_despesa + "T12:00:00").toLocaleDateString("pt-BR").includes(v);
-          case "vencimento":  return d.data_vencimento ? new Date(d.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR").includes(v) : false;
+          case "data":        return formatDate(d.data_despesa).includes(v);
+          case "vencimento":  return d.data_vencimento ? formatDate(d.data_vencimento).includes(v) : false;
           case "funcionario": return (tecnico?.nome || "").toLowerCase().includes(v);
           case "tipo":        return (tipo?.nome || "").toLowerCase().includes(v);
           case "pagamento":   return (pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"]?.label || "").toLowerCase().includes(v);
@@ -215,8 +215,8 @@ export default function FinanceiroPageSupabase() {
         ? `${cartao.banco} — ${cartao.bandeira} — **** ${cartao.ultimos_digitos}`
         : "-";
       return {
-        Data: new Date(d.data_despesa).toLocaleDateString("pt-BR"),
-        Vencimento: d.data_vencimento ? new Date(d.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR") : "-",
+        Data: formatDate(d.data_despesa),
+        Vencimento: d.data_vencimento ? formatDate(d.data_vencimento) : "-",
         "Parcela": d.parcelado ? `${d.parcela_atual}/${d.numero_parcelas}` : "-",
         Funcionário: tecnico?.nome || "-",
         Tipo: tipo?.nome || "-",
@@ -228,7 +228,7 @@ export default function FinanceiroPageSupabase() {
         "Status": statusGeralConfig[getStatusGeral(d.status_erp ?? "", d.status_aprovacao)].label,
         Comprovante: d.comprovante_url ? "Sim" : "Não",
         "Status ERP": d.status_erp || "Não enviado",
-        "Data Envio": d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "-",
+        "Data Envio": d.data_envio ? formatDateTime(d.data_envio) : "-",
         "ERP ID": d.erp_id || "-",
       };
     });
@@ -274,8 +274,8 @@ export default function FinanceiroPageSupabase() {
       const sg = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
       const statusLabel = statusGeralConfig[sg].label;
       return [
-        new Date(d.data_despesa).toLocaleDateString("pt-BR"),
-        d.data_vencimento ? new Date(d.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR") : "-",
+        formatDate(d.data_despesa),
+        d.data_vencimento ? formatDate(d.data_vencimento) : "-",
         d.parcelado ? `${d.parcela_atual}/${d.numero_parcelas}` : "-",
         tecnico?.nome.split(" ").slice(0, 2).join(" ") || "-",
         tipo?.nome || "-",
@@ -287,7 +287,7 @@ export default function FinanceiroPageSupabase() {
         statusLabel,
         d.comprovante_url ? "Sim" : "Não",
         d.status_erp || "-",
-        d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "-",
+        d.data_envio ? formatDateTime(d.data_envio) : "-",
         d.erp_id || "-",
       ];
     });
@@ -725,7 +725,7 @@ export default function FinanceiroPageSupabase() {
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">{new Date(d.data_despesa).toLocaleDateString("pt-BR")}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{formatDate(d.data_despesa)}</td>
                     {/* Vencimento editável */}
                     <td className="px-3 py-2 whitespace-nowrap">
                       {editandoVencimento[d.id] !== undefined ? (
@@ -852,7 +852,7 @@ export default function FinanceiroPageSupabase() {
                     </td>
                     {/* Envio — futuramente retorna a data de integração com o ERP */}
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
-                      {d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "—"}
+                      {d.data_envio ? formatDateTime(d.data_envio) : "—"}
                     </td>
                     {/* ERP ID — futuramente retorna o número do documento gerado pelo ERP */}
                     <td className="px-3 py-2 whitespace-nowrap font-mono">

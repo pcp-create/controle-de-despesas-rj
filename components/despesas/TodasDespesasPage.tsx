@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles, type Despesa } from "@/lib/supabase/hooks";
-import { formatCurrency, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
+import { formatCurrency, formatDate, formatDateTime, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
 import {
   Search,
   Filter,
@@ -216,7 +216,7 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
                       {d.cliente && <><span>•</span><span>{d.cliente}</span></>}
                       {d.numero_os && <><span>•</span><span>{d.numero_os}</span></>}
                       <span>•</span>
-                      <span>{new Date(d.data_despesa).toLocaleDateString("pt-BR")}</span>
+                      <span>{formatDate(d.data_despesa)}</span>
                       {grupo.parcelado && (
                         <>
                           <span>•</span>
@@ -266,7 +266,7 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
                               <span className="font-semibold text-foreground">{formatCurrency(Number(p.valor))}</span>
                               {p.data_vencimento && (
                                 <span className="text-primary">
-                                  Vence: {new Date(p.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR")}
+                                  Vence: {formatDate(p.data_vencimento)}
                                 </span>
                               )}
                             </div>
@@ -296,7 +296,7 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
                       {d.data_envio && (
                         <div>
                           <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Enviado em</p>
-                          <p className="text-foreground">{new Date(d.data_envio).toLocaleString("pt-BR")}</p>
+                          <p className="text-foreground">{formatDateTime(d.data_envio)}</p>
                         </div>
                       )}
 
@@ -305,11 +305,11 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
                         <>
                           <div>
                             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Check-in</p>
-                            <p className="text-foreground">{new Date(d.data_checkin + "T12:00:00").toLocaleDateString("pt-BR")}</p>
+                            <p className="text-foreground">{formatDate(d.data_checkin)}</p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Check-out</p>
-                            <p className="text-foreground">{new Date(d.data_checkout + "T12:00:00").toLocaleDateString("pt-BR")}</p>
+                            <p className="text-foreground">{formatDate(d.data_checkout)}</p>
                           </div>
                           {d.numero_diarias && (
                             <div className="col-span-2 flex items-center justify-between p-2.5 rounded-lg bg-primary/5 border border-primary/15 text-sm">
@@ -334,7 +334,7 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
                         <>
                           <div>
                             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Aprovado em</p>
-                            <p className="text-success font-medium">{new Date(d.data_aprovacao).toLocaleString("pt-BR")}</p>
+                            <p className="text-success font-medium">{formatDateTime(d.data_aprovacao)}</p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Aprovado por</p>
@@ -352,7 +352,7 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
                         <>
                           <div>
                             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Reprovado em</p>
-                            <p className="text-destructive font-medium">{new Date(d.data_aprovacao).toLocaleString("pt-BR")}</p>
+                            <p className="text-destructive font-medium">{formatDateTime(d.data_aprovacao)}</p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Reprovado por</p>
