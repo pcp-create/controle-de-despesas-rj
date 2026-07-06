@@ -15,7 +15,9 @@ interface Props {
 // ─── Regra de vencimento ─────────────────────────────────────────────────────
 // Lançado ATÉ dia 08: vence no dia 19 do mesmo mês
 // Lançado APÓS dia 08: vence no dia 19 do mês seguinte
-function calcularVencimento(dataDespesa: string, offsetMeses: number = 0): string {
+function calcularVencimento(dataDespesa: string, offsetMeses: number = 0, pagamentoTipo?: string): string {
+  // Somente cartão segue a regra de vencimento no dia 19; demais formas = data da despesa
+  if (pagamentoTipo !== "cartao") return dataDespesa;
   const dt = new Date(dataDespesa + "T12:00:00");
   const dia = dt.getDate();
   // Determina o mês base: se dia > 8, vai pro mês seguinte; depois soma os offsets de parcela
@@ -109,7 +111,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     return Array.from({ length: qtdParcelas }, (_, i) => ({
       numero: i + 1,
       valor: valorParcela,
-      vencimento: calcularVencimento(form.dataDespesa, i),
+      vencimento: calcularVencimento(form.dataDespesa, i, pagamentoTipo),
     }));
   }, [parcelado, form.dataDespesa, valorTotal, qtdParcelas, valorParcela]);
 
@@ -191,7 +193,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         numero_parcelas: parcelado ? qtdParcelas : 1,
         parcela_atual: editDespesa.parcela_atual ?? 1,
         grupo_parcela_id: editDespesa.grupo_parcela_id ?? null,
-        data_vencimento: calcularVencimento(form.dataDespesa, 0),
+        data_vencimento: calcularVencimento(form.dataDespesa, 0, pagamentoTipo),
       });
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
@@ -212,7 +214,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           numero_parcelas: qtdParcelas,
           parcela_atual: i + 1,
           grupo_parcela_id: grupoId,
-          data_vencimento: calcularVencimento(form.dataDespesa, i),
+          data_vencimento: calcularVencimento(form.dataDespesa, i, pagamentoTipo),
         });
         if (result.error) {
           setFeedback({ type: "error", msg: `Erro na parcela ${i + 1}: ${result.error}` });
@@ -234,7 +236,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         numero_parcelas: 1,
         parcela_atual: 1,
         grupo_parcela_id: null,
-        data_vencimento: calcularVencimento(form.dataDespesa, 0),
+        data_vencimento: calcularVencimento(form.dataDespesa, 0, pagamentoTipo),
       });
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
@@ -593,7 +595,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               <span>
                 Vencimento previsto:{" "}
                 <strong className="text-foreground">
-                  {new Date(calcularVencimento(form.dataDespesa) + "T12:00:00").toLocaleDateString("pt-BR")}
+                  {new Date(calcularVencimento(form.dataDespesa, 0, pagamentoTipo) + "T12:00:00").toLocaleDateString("pt-BR")}
                 </strong>
                 {" — editável pelo Financeiro após lançamento"}
               </span>
