@@ -48,15 +48,11 @@ export default function ReembolsoPage() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  // Filtra somente despesas em dinheiro com aprovação do gestor
+  // Filtra somente despesas em dinheiro aprovadas pelo gestor
   const despesasReembolso = useMemo(() => {
     return despesas
       .filter((d) => d.pagamento_tipo === "dinheiro")
-      .filter((d) => {
-        // Só mostra despesas já aprovadas (ou que chegaram ao financeiro)
-        if (d.status_erp === "Rascunho") return false;
-        return true;
-      })
+      .filter((d) => d.status_aprovacao === "AprovadoGestor")
       .filter((d) => {
         if (filterStatus === "aguardando_aprovacao") return !d.aprovado_financeiro && !d.reembolso_processado;
         if (filterStatus === "aguardando_lancamento") return d.aprovado_financeiro && !d.reembolso_processado;
@@ -86,12 +82,12 @@ export default function ReembolsoPage() {
   }, [despesas, filterStatus, search, tiposDespesa, profiles]);
 
   const totalPendente = despesas.filter(
-    (d) => d.pagamento_tipo === "dinheiro" && !d.reembolso_processado && d.status_erp !== "Rascunho"
+    (d) => d.pagamento_tipo === "dinheiro" && d.status_aprovacao === "AprovadoGestor" && !d.reembolso_processado
   ).length;
 
   const valorTotalPendente = despesas
     .filter(
-      (d) => d.pagamento_tipo === "dinheiro" && !d.reembolso_processado && d.status_erp !== "Rascunho"
+      (d) => d.pagamento_tipo === "dinheiro" && d.status_aprovacao === "AprovadoGestor" && !d.reembolso_processado
     )
     .reduce((acc, d) => acc + Number(d.valor), 0);
 
