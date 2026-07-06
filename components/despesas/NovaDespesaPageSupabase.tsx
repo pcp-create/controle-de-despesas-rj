@@ -331,7 +331,15 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             </button>
             <button
               type="button"
-              onClick={() => { setPagamentoTipo("faturado"); setForm((f) => ({ ...f, cartaoId: "" })); setParcelado(false); }}
+              onClick={() => {
+                setPagamentoTipo("faturado");
+                setParcelado(false);
+                setForm((f) => {
+                  const tipoAtual = tiposDespesa.find((t) => t.id === f.tipoDespesaId);
+                  const isCombustivel = tipoAtual?.nome.toLowerCase().includes("combustív") || tipoAtual?.nome.toLowerCase().includes("combustiv");
+                  return { ...f, cartaoId: "", tipoDespesaId: isCombustivel ? f.tipoDespesaId : "" };
+                });
+              }}
               className={`flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-medium transition-colors border-t sm:border-t-0 border-l sm:border-l border-input ${
                 pagamentoTipo === "faturado"
                   ? "bg-accent text-white"
@@ -385,10 +393,16 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Selecione...</option>
-              {tiposDespesa.map((t) => (
+              {(pagamentoTipo === "faturado"
+                ? tiposDespesa.filter((t) => t.nome.toLowerCase().includes("combustível") || t.nome.toLowerCase().includes("combustivel"))
+                : tiposDespesa
+              ).map((t) => (
                 <option key={t.id} value={t.id}>{t.nome}</option>
               ))}
             </select>
+            {pagamentoTipo === "faturado" && (
+              <span className="text-xs text-muted-foreground">Pagamento faturado disponível apenas para Combustível.</span>
+            )}
             {errors.tipoDespesaId && <span className="text-xs text-destructive">{errors.tipoDespesaId}</span>}
           </div>
 
