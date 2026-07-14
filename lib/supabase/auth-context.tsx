@@ -157,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!usuarioOuEmail.includes("@")) {
         // É um nome de usuário — buscar o email na tabela profiles
+        console.log("[v0] Buscando email para usuario:", usuarioOuEmail);
         const { data: profileData, error: profileError } = await supabase
           .from("profiles")
           .select("email")
@@ -164,10 +165,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .eq("ativo", true)
           .single();
 
+        console.log("[v0] profileData:", profileData, "profileError:", profileError?.message, profileError?.code);
         if (profileError || !profileData) {
           return { error: "Usuário ou senha incorretos" };
         }
         emailParaLogin = profileData.email;
+        console.log("[v0] emailParaLogin:", emailParaLogin);
       }
 
       const { error } = await supabase.auth.signInWithPassword({
