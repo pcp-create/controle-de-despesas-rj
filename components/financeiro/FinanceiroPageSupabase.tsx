@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
+import { useAuth } from "@/lib/supabase/auth-context";
 import { formatCurrency, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
 import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -24,6 +25,7 @@ export default function FinanceiroPageSupabase() {
   const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
   const [lancando, setLancando] = useState<Record<string, boolean>>({});
   const { currentUser } = useAppStore();
+  const { user: authUser } = useAuth();
 
   // Ordenação
   type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status" | "documento" | "cartao";
@@ -49,9 +51,13 @@ export default function FinanceiroPageSupabase() {
   }, []);
 
   const handleLancar = async (id: string) => {
-    if (!currentUser?.id) return;
+    const userId = authUser?.id ?? currentUser?.id;
+    if (!userId) return;
     setLancando((prev) => ({ ...prev, [id]: true }));
-    await lancarERP(id, currentUser.id);
+    const result = await lancarERP(id, userId);
+    if (result?.error) {
+      console.error("[v0] Erro ao lançar ERP:", result.error);
+    }
     setLancando((prev) => ({ ...prev, [id]: false }));
     setConfirmLancar(null);
   };
