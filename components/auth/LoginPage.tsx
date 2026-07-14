@@ -6,7 +6,7 @@ import { Eye, EyeOff, Lock, User } from "lucide-react";
 
 export default function LoginPage() {
   const { signIn } = useAuth();
-  const [email, setEmail] = useState("");
+  const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
   const [showSenha, setShowSenha] = useState(false);
   const [lembrar, setLembrar] = useState(false);
@@ -19,25 +19,21 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     
-    if (!email || !senha) {
-      setError("Preencha email e senha");
+    if (!usuario || !senha) {
+      setError("Preencha usuário e senha");
       setLoading(false);
       return;
     }
     
     try {
-      const result = await signIn(email, senha);
-      console.log("[v0] signIn result:", result);
+      const result = await signIn(usuario, senha);
       
       if (result.error) {
-        console.log("[v0] Login error:", result.error);
         setError(result.error);
         setLoading(false);
       }
-      // Se não há erro, o listener do auth-context vai atualizar o loading
     } catch (err) {
-      console.log("[v0] Exception in signIn:", err);
-      setError("Erro ao processar solicitacao");
+      setError("Erro ao processar solicitação");
       setLoading(false);
     }
   };
@@ -69,16 +65,16 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {/* Usuário */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-foreground" htmlFor="email">
+              <label className="text-sm font-medium text-foreground" htmlFor="usuario">
                 Usuário
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
-                  id="email"
+                  id="usuario"
                   type="text"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={usuario}
+                  onChange={(e) => setUsuario(e.target.value)}
                   placeholder="Digite seu usuário"
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring transition"
                   required
