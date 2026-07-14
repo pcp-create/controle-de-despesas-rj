@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles, type Despesa } from "@/lib/supabase/hooks";
-import { formatCurrency, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
+import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
 import {
   Search,
   Filter,
@@ -216,7 +216,7 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
                       {d.cliente && <><span>•</span><span>{d.cliente}</span></>}
                       {d.numero_os && <><span>•</span><span>{d.numero_os}</span></>}
                       <span>•</span>
-                      <span>{new Date(d.data_despesa).toLocaleDateString("pt-BR")}</span>
+                      <span>{formatDate(d.data_despesa)}</span>
                       {grupo.parcelado && (
                         <>
                           <span>•</span>

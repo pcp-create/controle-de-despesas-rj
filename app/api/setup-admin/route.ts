@@ -1,48 +1,59 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://xyvupybgnvzzdrpkfuwb.supabase.co";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!; cmndhqfifljthmqiqemt
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-export async function POST(request: NextRequest) {
+async function runSetup() {
   if (!serviceRoleKey) {
-    return NextResponse.json({ error: "Missing SUPABASE_SERVICE_ROLE_KEY" }, { status: 500 });
+    return { error: "Missing SUPABASE_SERVICE_ROLE_KEY", status: 500 };
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
 
-  try {
-    // Criar usuário administrador
-    const { data, error } = await supabase.auth.admin.createUser({
+  const { data, error } = await supabase.auth.admin.createUser({
+    email: "administrador@rjcompressores.com.br",
+    password: "Admin@123",
+    email_confirm: true,
+    user_metadata: {
+      nome: "Administrador",
+      usuario: "admin",
+      perfil: "administrador",
+    },
+  });
+
+  if (error) {
+    return { error: error.message, status: 400 };
+  }
+
+  if (!data.user) {
+    return { error: "Usuário não foi criado", status: 500 };
+  }
+
+  return {
+    success: true,
+    message: "Usuário administrador criado com sucesso!",
+    credentials: {
       email: "administrador@rjcompressores.com.br",
       password: "Admin@123",
-      email_confirm: true,
-      user_metadata: {
-        nome: "Administrador",
-        usuario: "admin",
-        perfil: "administrador",
-      },
-    });
+    },
+    status: 200,
+  };
+}
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+export async function GET() {
+  const result = await runSetup();
+  const { status, ...body } = result;
+  return NextResponse.json(body, { status });
+}
 
-    if (!data.user) {
-      return NextResponse.json({ error: "Usuário não foi criado" }, { status: 500 });
-    }
-
-    // O trigger deve criar o perfil automaticamente
-    return NextResponse.json({
-      success: true,
-      message: "Usuário administrador criado com sucesso!",
-      credentials: {
-        email: "administrador@rjcompressores.com.br",
-        password: "Admin@123",
-      },
-    });
+export async function POST(request: NextRequest) {
+  try {
+    const result = await runSetup();
+    const { status, ...body } = result;
+    return NextResponse.json(body, { status });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Erro desconhecido" },

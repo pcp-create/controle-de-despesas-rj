@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/lib/supabase/auth-context";
-import { Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { Eye, EyeOff, Lock, User } from "lucide-react";
 
 export default function LoginPage() {
-  const { signIn } = useAuth();
-  const [email, setEmail] = useState("");
+  const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
   const [showSenha, setShowSenha] = useState(false);
   const [lembrar, setLembrar] = useState(false);
@@ -18,26 +17,53 @@ export default function LoginPage() {
     e.stopPropagation();
     setError("");
     setLoading(true);
-    
-    if (!email || !senha) {
-      setError("Preencha email e senha");
+
+    if (!usuario || !senha) {
+      setError("Preencha usuário e senha");
       setLoading(false);
       return;
     }
-    
+
     try {
-      const result = await signIn(email, senha);
-      console.log("[v0] signIn result:", result);
-      
-      if (result.error) {
-        console.log("[v0] Login error:", result.error);
-        setError(result.error);
+      // 1. Buscar email pelo usuario via API server-side
+      const loginRes = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usuario, senha }),
+      });
+
+      const loginData = await loginRes.json();
+
+      if (!loginRes.ok) {
+        setError(loginData.error ?? "Usuário ou senha inválidos");
         setLoading(false);
+        return;
       }
-      // Se não há erro, o listener do auth-context vai atualizar o loading
+
+      // 2. Usar setSession com os tokens do servidor para criar sessão no browser
+      const supabase = createClient();
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: loginData.session.access_token,
+        refresh_token: loginData.session.refresh_token,
+      });
+
+      if (sessionError) {
+        // Fallback: tentar signInWithPassword diretamente
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: loginData.user.email,
+          password: senha,
+        });
+
+        if (signInError) {
+          setError("Erro ao iniciar sessão. Tente novamente.");
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Aguardar o onAuthStateChange atualizar o contexto
     } catch (err) {
-      console.log("[v0] Exception in signIn:", err);
-      setError("Erro ao processar solicitacao");
+      setError("Erro ao processar solicitação");
       setLoading(false);
     }
   };
@@ -67,22 +93,22 @@ export default function LoginPage() {
           </h2>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {/* Email */}
+            {/* Usuário */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-foreground" htmlFor="email">
-                Email
+              <label className="text-sm font-medium text-foreground" htmlFor="usuario">
+                Usuário
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Digite seu email"
+                  id="usuario"
+                  type="text"
+                  value={usuario}
+                  onChange={(e) => setUsuario(e.target.value)}
+                  placeholder="Digite seu usuário"
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring transition"
                   required
-                  autoComplete="email"
+                  autoComplete="username"
                 />
               </div>
             </div>
@@ -124,7 +150,7 @@ export default function LoginPage() {
                   onChange={(e) => setLembrar(e.target.checked)}
                   className="w-4 h-4 rounded accent-primary"
                 />
-                <span className="text-sm text-muted-foreground">Lembrar email</span>
+                <span className="text-sm text-muted-foreground">Lembrar usuário</span>
               </label>
               <button
                 type="button"

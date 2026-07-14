@@ -3,7 +3,8 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
-import { formatCurrency, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
+import { useAuth } from "@/lib/supabase/auth-context";
+import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
 import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -23,7 +24,9 @@ export default function FinanceiroPageSupabase() {
   const [filtroLancamento, setFiltroLancamento] = useState<"todos" | "lancado" | "pendente">("pendente");
   const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
   const [lancando, setLancando] = useState<Record<string, boolean>>({});
+  const [erroLancar, setErroLancar] = useState<string | null>(null);
   const { currentUser } = useAppStore();
+  const { user: authUser } = useAuth();
 
   // Ordenação
   type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status" | "documento" | "cartao";
@@ -49,9 +52,14 @@ export default function FinanceiroPageSupabase() {
   }, []);
 
   const handleLancar = async (id: string) => {
-    if (!currentUser?.id) return;
+    const userId = authUser?.id ?? currentUser?.id;
+    if (!userId) return;
+    setErroLancar(null);
     setLancando((prev) => ({ ...prev, [id]: true }));
-    await lancarERP(id, currentUser.id);
+    const result = await lancarERP(id, userId);
+    if (result?.error) {
+      setErroLancar("Erro ao lançar no ERP: " + result.error);
+    }
     setLancando((prev) => ({ ...prev, [id]: false }));
     setConfirmLancar(null);
   };
@@ -215,7 +223,7 @@ export default function FinanceiroPageSupabase() {
         ? `${cartao.banco} — ${cartao.bandeira} — **** ${cartao.ultimos_digitos}`
         : "-";
       return {
-        Data: new Date(d.data_despesa).toLocaleDateString("pt-BR"),
+        Data: formatDate(d.data_despesa),
         Vencimento: d.data_vencimento ? new Date(d.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR") : "-",
         "Parcela": d.parcelado ? `${d.parcela_atual}/${d.numero_parcelas}` : "-",
         Funcionário: tecnico?.nome || "-",
@@ -274,7 +282,7 @@ export default function FinanceiroPageSupabase() {
       const sg = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
       const statusLabel = statusGeralConfig[sg].label;
       return [
-        new Date(d.data_despesa).toLocaleDateString("pt-BR"),
+        formatDate(d.data_despesa),
         d.data_vencimento ? new Date(d.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR") : "-",
         d.parcelado ? `${d.parcela_atual}/${d.numero_parcelas}` : "-",
         tecnico?.nome.split(" ").slice(0, 2).join(" ") || "-",
@@ -366,6 +374,14 @@ export default function FinanceiroPageSupabase() {
   return (
     <>
     <div className="flex flex-col gap-5">
+
+      {/* ── Erro de lançamento ── */}
+      {erroLancar && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+          <span>{erroLancar}</span>
+          <button onClick={() => setErroLancar(null)} className="shrink-0 font-bold hover:opacity-70">&times;</button>
+        </div>
+      )}
 
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
@@ -725,7 +741,7 @@ export default function FinanceiroPageSupabase() {
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">{new Date(d.data_despesa).toLocaleDateString("pt-BR")}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{formatDate(d.data_despesa)}</td>
                     {/* Vencimento editável */}
                     <td className="px-3 py-2 whitespace-nowrap">
                       {editandoVencimento[d.id] !== undefined ? (

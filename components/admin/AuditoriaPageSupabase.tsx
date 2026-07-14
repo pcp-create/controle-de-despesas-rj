@@ -1,12 +1,17 @@
 "use client";
 
 import { useAppStore } from "@/lib/store";
+import { useProfiles } from "@/lib/supabase/hooks";
 import { formatDateTime } from "@/lib/helpers";
 
 export default function AuditoriaPageSupabase() {
-  const { auditoria, profiles } = useAppStore();
+  const { auditoria } = useAppStore();
+  const { profiles } = useProfiles();
 
-  const sorted = [...auditoria].sort(
+  const safeProfiles = profiles ?? [];
+  const safeAuditoria = auditoria ?? [];
+
+  const sorted = [...safeAuditoria].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
@@ -40,7 +45,7 @@ export default function AuditoriaPageSupabase() {
                 </tr>
               )}
               {sorted.map((entry) => {
-                const user = profiles.find((u) => u.id === entry.user_id);
+                const user = safeProfiles.find((u) => u.id === entry.user_id);
                 return (
                   <tr key={entry.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition">
                     <td className="px-4 py-3 text-muted-foreground whitespace-nowrap text-xs">

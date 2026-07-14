@@ -27,11 +27,12 @@ export default function SimpleLogin() {
     try {
       const supabase = createClient();
 
-      // Buscar usuário na tabela profiles
+      // 1. Buscar email pelo usuario na tabela profiles
       const { data: profile, error: fetchError } = await supabase
         .from("profiles")
-        .select("*")
-        .eq("usuario", usuario)
+        .select("id, nome, email, usuario, perfil, ativo, gestor_id, primeiro_acesso")
+        .eq("usuario", usuario.trim().toLowerCase())
+        .eq("ativo", true)
         .single();
 
       if (fetchError || !profile) {
@@ -40,23 +41,30 @@ export default function SimpleLogin() {
         return;
       }
 
-      // Verificar se o usuário está ativo
-      if (!profile.ativo) {
-        setError("Usuário inativo");
-        setLoading(false);
-        return;
-      }
+      // 2. Autenticar com email + senha no Supabase Auth
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: profile.email,
+        password: senha,
+      });
 
-      // Verificar senha (para demo, comparamos diretamente com campo da tabela)
-      // Em produção, use autenticação Supabase Auth segura
-      if (profile.senha !== senha) {
+      if (authError) {
         setError("Usuário ou senha inválidos");
         setLoading(false);
         return;
       }
 
-      // Login bem-sucedido
-      setCurrentUser(profile);
+      // 3. Guardar no store para compatibilidade com o resto do app
+      setCurrentUser({
+        id: profile.id,
+        nome: profile.nome,
+        email: profile.email,
+        usuario: profile.usuario,
+        perfil: profile.perfil,
+        ativo: profile.ativo,
+        gestor_id: profile.gestor_id,
+        primeiro_acesso: profile.primeiro_acesso,
+      } as any);
+
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao fazer login");
