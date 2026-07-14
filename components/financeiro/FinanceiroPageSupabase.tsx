@@ -24,6 +24,7 @@ export default function FinanceiroPageSupabase() {
   const [filtroLancamento, setFiltroLancamento] = useState<"todos" | "lancado" | "pendente">("pendente");
   const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
   const [lancando, setLancando] = useState<Record<string, boolean>>({});
+  const [erroLancar, setErroLancar] = useState<string | null>(null);
   const { currentUser } = useAppStore();
   const { user: authUser } = useAuth();
 
@@ -53,10 +54,11 @@ export default function FinanceiroPageSupabase() {
   const handleLancar = async (id: string) => {
     const userId = authUser?.id ?? currentUser?.id;
     if (!userId) return;
+    setErroLancar(null);
     setLancando((prev) => ({ ...prev, [id]: true }));
     const result = await lancarERP(id, userId);
     if (result?.error) {
-      console.error("[v0] Erro ao lançar ERP:", result.error);
+      setErroLancar("Erro ao lançar no ERP: " + result.error);
     }
     setLancando((prev) => ({ ...prev, [id]: false }));
     setConfirmLancar(null);
@@ -372,6 +374,14 @@ export default function FinanceiroPageSupabase() {
   return (
     <>
     <div className="flex flex-col gap-5">
+
+      {/* ── Erro de lançamento ── */}
+      {erroLancar && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
+          <span>{erroLancar}</span>
+          <button onClick={() => setErroLancar(null)} className="shrink-0 font-bold hover:opacity-70">&times;</button>
+        </div>
+      )}
 
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
