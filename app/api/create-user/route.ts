@@ -56,12 +56,27 @@ export async function POST(request: Request) {
       );
     }
 
-    // Atualizar profile com dados adicionais (gestor_id)
-    if (gestor_id) {
-      await supabaseAdmin
-        .from("profiles")
-        .update({ gestor_id })
-        .eq("id", authData.user.id);
+    // Inserir profile completo no banco
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .insert({
+        id: authData.user.id,
+        nome,
+        email,
+        usuario,
+        perfil,
+        ativo: true,
+        primeiro_acesso: true,
+        gestor_id: gestor_id || null,
+      });
+
+    if (profileError) {
+      // Reverter: deletar usuário do Auth se o profile falhou
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      return NextResponse.json(
+        { error: "Erro ao criar perfil: " + profileError.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({

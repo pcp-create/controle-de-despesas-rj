@@ -184,37 +184,56 @@ export default function UsuariosPageSupabase() {
         updateUser(editingUser.id, form);
         setFeedback({ type: "success", msg: "Usuário atualizado com sucesso!" });
       } else {
-        // Criar novo usuário com UUID gerado localmente
-        const userId = crypto.randomUUID();
+        // Criar usuário via API server-side (cria no Auth e depois no profiles)
+        if (!form.senha || form.senha.trim().length < 6) {
+          setFormError("A senha deve ter pelo menos 6 caracteres");
+          setFormLoading(false);
+          return;
+        }
 
-        // Inserir diretamente em profiles (sem usar Auth)
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .insert({
-            id: userId,
-            nome: form.nome,
+        const createRes = await fetch("/api/create-user", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             email: form.email,
+            password: form.senha,
+            nome: form.nome,
             usuario: form.usuario,
             perfil: form.perfil,
+            gestor_id: form.gestor_id || null,
+          }),
+        });
+
+        const createData = await createRes.json();
+
+        if (!createRes.ok) {
+          setFormError("Erro ao criar usuário: " + (createData.error || "Erro desconhecido"));
+          setFormLoading(false);
+          return;
+        }
+
+        const userId = createData.user.id;
+
+        // Atualizar os campos extras no profile criado pelo Auth
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({
             area: form.area && form.area.trim() ? form.area : null,
-            gestor_id: form.gestor_id && form.gestor_id.trim() ? form.gestor_id : null,
             empresa_id: form.empresaId && form.empresaId.trim() ? form.empresaId : null,
             fornecedor_id: form.fornecedorId && form.fornecedorId.trim() ? form.fornecedorId : null,
             condicao_pagamento_id: form.condicaoPagamentoId && form.condicaoPagamentoId.trim() ? form.condicaoPagamentoId : null,
             operacao_financeira_id: form.operacaoFinanceiraId && form.operacaoFinanceiraId.trim() ? form.operacaoFinanceiraId : null,
             moeda_id: form.moedaId && form.moedaId.trim() ? form.moedaId : null,
             centro_custo_id: form.centroCustoId && form.centroCustoId.trim() ? form.centroCustoId : null,
-            ativo: true,
-            primeiro_acesso: false,
-            senha: form.senha || "12345",
-          });
+          })
+          .eq("id", userId);
 
-        if (profileError) {
-          setFormError("Erro ao criar usuário: " + profileError.message);
+        if (updateError) {
+          setFormError("Usuário criado, mas houve erro ao salvar campos extras: " + updateError.message);
           setFormLoading(false);
           return;
         }
-        
+
         addUser({
           ...form,
           id: userId,
