@@ -33,6 +33,7 @@ interface UsuarioForm {
   usuario: string;
   perfil: "funcionario" | "gestor" | "financeiro" | "administrador";
   area: string;
+  telefone: string;
   gestor_id: string | null;
   senha?: string;
   empresaId?: string;
@@ -49,6 +50,7 @@ const initialForm: UsuarioForm = {
   usuario: "",
   perfil: "funcionario",
   area: "",
+  telefone: "",
   gestor_id: null,
   senha: "",
   empresaId: "",
@@ -114,6 +116,7 @@ export default function UsuariosPageSupabase() {
         usuario: user.usuario,
         perfil: user.perfil,
         area: user.area || "",
+        telefone: user.telefone || "",
         gestor_id: user.gestor_id || null,
         senha: "",
         empresaId: user.empresaId || "",
