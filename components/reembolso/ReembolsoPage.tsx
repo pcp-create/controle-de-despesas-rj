@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
-import { formatCurrency } from "@/lib/helpers";
+import { formatCurrency, formatDate } from "@/lib/helpers";
 import {
   Search,
   Filter,
@@ -273,7 +273,7 @@ export default function ReembolsoPage() {
                         </>
                       )}
                       <span>•</span>
-                      <span>{new Date(d.data_despesa).toLocaleDateString("pt-BR")}</span>
+                      <span>{formatDate(d.data_despesa)}</span>
                     </div>
                     {/* Linha 3: status */}
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -321,7 +321,7 @@ export default function ReembolsoPage() {
                           Data da Despesa
                         </p>
                         <p className="text-foreground">
-                          {new Date(d.data_despesa).toLocaleDateString("pt-BR")}
+                          {formatDate(d.data_despesa)}
                         </p>
                       </div>
                       <div>
