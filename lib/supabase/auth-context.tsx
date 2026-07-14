@@ -148,12 +148,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchProfile]);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (usuario: string, password: string) => {
     const supabase = createClient();
-    
+
     try {
+      // Buscar o e-mail correspondente ao nome de usuário
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("usuario", usuario.trim().toLowerCase())
+        .eq("ativo", true)
+        .single();
+
+      if (profileError || !profileData) {
+        return { error: "Usuário ou senha incorretos" };
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: profileData.email,
         password,
       });
 
@@ -162,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { error: "Email não confirmado" };
         }
         if (error.message.includes("Invalid login") || error.message.includes("Invalid credentials")) {
-          return { error: "Email ou senha incorretos" };
+          return { error: "Usuário ou senha incorretos" };
         }
         return { error: error.message };
       }
