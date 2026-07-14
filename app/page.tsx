@@ -25,9 +25,10 @@ export default function Home() {
     );
   }
 
-  if (!currentUser) {
-    return <SimpleLogin />;
-  }
+  // LOGIN TEMPORARIAMENTE DESABILITADO
+  // if (!currentUser) {
+  //   return <SimpleLogin />;
+  // }
 
   return <AppShellSupabase />;
 }
