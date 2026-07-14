@@ -44,21 +44,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = useCallback(async (userId: string) => {
+  const fetchProfile = useCallback(async (_userId: string) => {
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single();
-
-      if (error) {
-        console.error("[v0] Erro ao buscar perfil:", error);
+      const res = await fetch("/api/get-profile");
+      if (!res.ok) {
+        console.error("[v0] Erro ao buscar perfil - status:", res.status);
         return null;
       }
-
-      return data as Profile;
+      const { profile } = await res.json();
+      return profile as Profile;
     } catch (err) {
       console.error("[v0] Erro ao buscar perfil:", err);
       return null;
@@ -149,29 +143,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchProfile]);
 
   const signIn = async (usuario: string, password: string) => {
-    const supabase = createClient();
-
     try {
-      // Buscar e-mail via API (usa service role para bypassar RLS)
-      const res = await fetch("/api/lookup-usuario", {
+      // Validar credenciais e criar sessão via API server-side
+      const res = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ usuario }),
+        body: JSON.stringify({ usuario, senha: password }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        return { error: "Usuário ou senha incorretos" };
+        return { error: data.error ?? "Usuário ou senha inválidos" };
       }
 
-      const { email } = await res.json();
-
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      // Usar setSession com os tokens retornados pelo servidor
+      const supabase = createClient();
+      const { error } = await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
 
       if (error) {
-        if (error.message.includes("Email not confirmed")) {
-          return { error: "Email não confirmado" };
-        }
-        return { error: "Usuário ou senha incorretos" };
+        console.error("[v0] setSession error:", error.message);
+        return { error: "Erro ao iniciar sessão" };
       }
 
       return { error: null };

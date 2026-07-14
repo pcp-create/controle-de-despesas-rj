@@ -32,7 +32,6 @@ export default function LoginPage() {
         setError(result.error);
         setLoading(false);
       }
-      // Se não há erro, o listener do auth-context vai atualizar o estado
     } catch (err) {
       setError("Erro ao processar solicitação");
       setLoading(false);
