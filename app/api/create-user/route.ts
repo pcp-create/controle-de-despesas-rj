@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { email, password, nome, usuario, perfil, gestor_id } = body;
+    const { email, password, nome, usuario, perfil, gestor_id, telefone } = body;
 
     if (!email || !password || !nome || !usuario || !perfil) {
       return NextResponse.json(
@@ -68,6 +68,7 @@ export async function POST(request: Request) {
         ativo: true,
         primeiro_acesso: true,
         gestor_id: gestor_id || null,
+        telefone: telefone || null,
       });
 
     if (profileError) {

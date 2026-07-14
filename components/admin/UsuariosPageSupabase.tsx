@@ -165,6 +165,7 @@ export default function UsuariosPageSupabase() {
             usuario: form.usuario,
             perfil: form.perfil,
             area: form.area || null,
+            telefone: form.telefone || null,
             gestor_id: form.gestor_id || null,
             empresa_id: form.empresaId || null,
             fornecedor_id: form.fornecedorId || null,
@@ -201,6 +202,7 @@ export default function UsuariosPageSupabase() {
             usuario: form.usuario,
             perfil: form.perfil,
             gestor_id: form.gestor_id || null,
+            telefone: form.telefone || null,
           }),
         });
 
@@ -219,6 +221,7 @@ export default function UsuariosPageSupabase() {
           .from("profiles")
           .update({
             area: form.area && form.area.trim() ? form.area : null,
+            telefone: form.telefone && form.telefone.trim() ? form.telefone : null,
             empresa_id: form.empresaId && form.empresaId.trim() ? form.empresaId : null,
             fornecedor_id: form.fornecedorId && form.fornecedorId.trim() ? form.fornecedorId : null,
             condicao_pagamento_id: form.condicaoPagamentoId && form.condicaoPagamentoId.trim() ? form.condicaoPagamentoId : null,
