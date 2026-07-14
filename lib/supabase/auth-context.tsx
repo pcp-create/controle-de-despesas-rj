@@ -148,12 +148,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchProfile]);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (usuarioOuEmail: string, password: string) => {
     const supabase = createClient();
     
     try {
+      // Verificar se o input é um email ou um nome de usuário
+      let emailParaLogin = usuarioOuEmail;
+
+      if (!usuarioOuEmail.includes("@")) {
+        // É um nome de usuário — buscar o email na tabela profiles
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("email")
+          .eq("usuario", usuarioOuEmail)
+          .eq("ativo", true)
+          .single();
+
+        if (profileError || !profileData) {
+          return { error: "Usuário ou senha incorretos" };
+        }
+        emailParaLogin = profileData.email;
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: emailParaLogin,
         password,
       });
 
@@ -162,7 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { error: "Email não confirmado" };
         }
         if (error.message.includes("Invalid login") || error.message.includes("Invalid credentials")) {
-          return { error: "Email ou senha incorretos" };
+          return { error: "Usuário ou senha incorretos" };
         }
         return { error: error.message };
       }
