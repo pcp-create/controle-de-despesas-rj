@@ -152,34 +152,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const supabase = createClient();
 
     try {
-      // Buscar o e-mail correspondente ao nome de usuário
-      const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("email")
-        .eq("usuario", usuario.trim().toLowerCase())
-        .eq("ativo", true)
-        .single();
+      // Buscar e-mail via API (usa service role para bypassar RLS)
+      const res = await fetch("/api/lookup-usuario", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usuario }),
+      });
 
-      if (profileError || !profileData) {
+      if (!res.ok) {
         return { error: "Usuário ou senha incorretos" };
       }
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email: profileData.email,
-        password,
-      });
+      const { email } = await res.json();
+
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
         if (error.message.includes("Email not confirmed")) {
           return { error: "Email não confirmado" };
         }
-        if (error.message.includes("Invalid login") || error.message.includes("Invalid credentials")) {
-          return { error: "Usuário ou senha incorretos" };
-        }
-        return { error: error.message };
+        return { error: "Usuário ou senha incorretos" };
       }
 
-      // Listener vai carregar perfil e atualizar estado
       return { error: null };
     } catch (err) {
       return { error: err instanceof Error ? err.message : "Erro ao fazer login" };
