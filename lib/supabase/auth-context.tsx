@@ -142,8 +142,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchProfile]);
 
+  // v2: login via /api/login com setSession
   const signIn = async (usuario: string, password: string) => {
     try {
+      console.log("[v0] signIn v2 chamado para usuario:", usuario);
       // Validar credenciais e criar sessão via API server-side
       const res = await fetch("/api/login", {
         method: "POST",

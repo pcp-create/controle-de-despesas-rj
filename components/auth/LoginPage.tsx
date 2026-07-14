@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/lib/supabase/auth-context";
+import { createClient } from "@/lib/supabase/client";
 import { Eye, EyeOff, Lock, User } from "lucide-react";
 
 export default function LoginPage() {
-  const { signIn } = useAuth();
   const [usuario, setUsuario] = useState("");
   const [senha, setSenha] = useState("");
   const [showSenha, setShowSenha] = useState(false);
@@ -26,12 +25,43 @@ export default function LoginPage() {
     }
 
     try {
-      const result = await signIn(usuario, senha);
+      // 1. Buscar email pelo usuario via API server-side
+      const loginRes = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usuario, senha }),
+      });
 
-      if (result.error) {
-        setError(result.error);
+      const loginData = await loginRes.json();
+
+      if (!loginRes.ok) {
+        setError(loginData.error ?? "Usuário ou senha inválidos");
         setLoading(false);
+        return;
       }
+
+      // 2. Usar setSession com os tokens do servidor para criar sessão no browser
+      const supabase = createClient();
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: loginData.session.access_token,
+        refresh_token: loginData.session.refresh_token,
+      });
+
+      if (sessionError) {
+        // Fallback: tentar signInWithPassword diretamente
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: loginData.user.email,
+          password: senha,
+        });
+
+        if (signInError) {
+          setError("Erro ao iniciar sessão. Tente novamente.");
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Aguardar o onAuthStateChange atualizar o contexto
     } catch (err) {
       setError("Erro ao processar solicitação");
       setLoading(false);
