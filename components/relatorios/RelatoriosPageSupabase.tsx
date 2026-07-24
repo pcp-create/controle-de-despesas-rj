@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { formatCurrency } from "@/lib/helpers";
@@ -20,7 +20,8 @@ import {
   LabelList,
   CartesianGrid,
 } from "recharts";
-import { Calendar, Download, TrendingUp, DollarSign, Users, FileText, CalendarDays, Gauge, Route, Clock, Car, X } from "lucide-react";
+import { Calendar, Download, TrendingUp, DollarSign, Users, FileText, CalendarDays, Gauge, Route, Clock, Car, X, ChevronDown, ChevronUp, Table2 } from "lucide-react";
+import { formatDate } from "@/lib/helpers";
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -127,6 +128,9 @@ export default function RelatoriosPageSupabase() {
   // ── Filtros cruzados ──
   const [filtroFuncionario, setFiltroFuncionario] = useState<string | null>(null);
   const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
+
+  // ── Tabela de despesas colapsável ──
+  const [tabelaAberta, setTabelaAberta] = useState(false);
 
   const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
 
@@ -562,6 +566,121 @@ export default function RelatoriosPageSupabase() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* ── Tabela de despesas colapsável ── */}
+      <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+        {/* Cabeçalho da tabela — sempre visível */}
+        <button
+          type="button"
+          onClick={() => setTabelaAberta((v) => !v)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Table2 className="w-4 h-4" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-foreground">
+                Despesas do Período
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  ({despesasCruzadas.length} {despesasCruzadas.length === 1 ? "registro" : "registros"} &bull; {formatCurrency(totalAno)})
+                </span>
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {temFiltroAtivo ? "Com filtros cruzados ativos" : "Todas as despesas aprovadas do período selecionado"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-muted-foreground group-hover:text-foreground transition-colors">
+            <span className="text-xs">{tabelaAberta ? "Ocultar" : "Expandir"}</span>
+            {tabelaAberta
+              ? <ChevronUp className="w-4 h-4" />
+              : <ChevronDown className="w-4 h-4" />
+            }
+          </div>
+        </button>
+
+        {/* Corpo da tabela — colapsável */}
+        {tabelaAberta && (
+          <div className="border-t border-border overflow-x-auto">
+            {despesasCruzadas.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+                <FileText className="w-8 h-8 opacity-30" />
+                <p className="text-sm">Nenhuma despesa encontrada para os filtros aplicados.</p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/40 border-b border-border">
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Data</th>
+                    {!isFuncionario && (
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Funcionário</th>
+                    )}
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Tipo</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Cliente</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">OS</th>
+                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Valor</th>
+                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Observação</th>
+                    {!isFuncionario && (
+                      <>
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Aprovador</th>
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Data Aprovação</th>
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {despesasCruzadas.map((d) => {
+                    const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
+                    const tecnico = profiles.find((p) => p.id === d.tecnico_id);
+                    const aprovador = profiles.find((p) => p.id === d.aprovado_por);
+                    return (
+                      <tr key={d.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-2.5 whitespace-nowrap text-foreground">{formatDate(d.data_despesa)}</td>
+                        {!isFuncionario && (
+                          <td className="px-4 py-2.5 whitespace-nowrap text-foreground">
+                            {tecnico?.nome ?? <span className="text-muted-foreground">—</span>}
+                          </td>
+                        )}
+                        <td className="px-4 py-2.5 whitespace-nowrap text-foreground">
+                          {tipo?.nome ?? <span className="text-muted-foreground">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-foreground max-w-[160px] truncate">{d.cliente}</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-foreground">{d.numero_os || <span className="text-muted-foreground">—</span>}</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-right font-medium text-foreground">{formatCurrency(Number(d.valor))}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground max-w-[200px] truncate" title={d.observacao ?? ""}>
+                          {d.observacao || "—"}
+                        </td>
+                        {!isFuncionario && (
+                          <>
+                            <td className="px-4 py-2.5 whitespace-nowrap text-foreground">
+                              {aprovador?.nome ?? <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="px-4 py-2.5 whitespace-nowrap text-foreground">
+                              {d.aprovado_em ? formatDate(d.aprovado_em.slice(0, 10)) : <span className="text-muted-foreground">—</span>}
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-muted/40 border-t border-border">
+                    <td colSpan={!isFuncionario ? 5 : 4} className="px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Total ({despesasCruzadas.length} registros)
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-sm font-bold text-foreground">
+                      {formatCurrency(totalAno)}
+                    </td>
+                    <td colSpan={!isFuncionario ? 3 : 1} />
+                  </tr>
+                </tfoot>
+              </table>
+            )}
           </div>
         )}
       </div>
