@@ -132,6 +132,240 @@ export default function RelatoriosPageSupabase() {
   // ── Tabela de despesas colapsável ──
   const [tabelaAberta, setTabelaAberta] = useState(false);
 
+  // ── Exportação PDF ──
+  const [exportando, setExportando] = useState(false);
+
+  const periodoLabel = modoFiltro === "mes"
+    ? `${MESES_FULL[mesSelecionado]} ${anoSelecionado}`
+    : dataInicial && dataFinal
+    ? `${dataInicial.split("-").reverse().join("/")} a ${dataFinal.split("-").reverse().join("/")}`
+    : "Período personalizado";
+
+  const handleExportarPDF = async () => {
+    setExportando(true);
+    try {
+      const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
+        import("jspdf"),
+        import("html2canvas"),
+      ]);
+
+      // Agrupar despesas por funcionário (igual à tabela)
+      const gruposPDF: { nome: string; despesas: typeof despesasCruzadas }[] = [];
+      const seenPDF = new Map<string, number>();
+      despesasCruzadas.forEach((d) => {
+        const key = d.tecnico_id ?? "__sem__";
+        if (!seenPDF.has(key)) {
+          const tec = profiles.find((p) => p.id === d.tecnico_id);
+          seenPDF.set(key, gruposPDF.length);
+          gruposPDF.push({ nome: tec?.nome ?? "Sem funcionário", despesas: [] });
+        }
+        gruposPDF[seenPDF.get(key)!].despesas.push(d);
+      });
+      gruposPDF.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
+      // Montar HTML de impressão
+      const container = document.createElement("div");
+      container.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1100px;background:#fff;font-family:Inter,sans-serif;color:#111;padding:40px;box-sizing:border-box;";
+
+      const periodoPDF = periodoLabel;
+      const tituloFiltros = [
+        filtroFuncionario ? `Funcionário: ${profiles.find((p) => p.id === filtroFuncionario)?.nome}` : "",
+        filtroTipo ? `Tipo: ${tiposDespesa.find((t) => t.id === filtroTipo)?.nome}` : "",
+      ].filter(Boolean).join(" | ");
+
+      container.innerHTML = `
+        <div style="border-bottom:2px solid #2563eb;padding-bottom:16px;margin-bottom:24px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+            <div>
+              <h1 style="font-size:22px;font-weight:700;margin:0 0 4px;color:#1e40af;">Relatório de Despesas</h1>
+              <p style="font-size:13px;color:#6b7280;margin:0;">${periodoPDF}${tituloFiltros ? ` &nbsp;|&nbsp; ${tituloFiltros}` : ""}</p>
+            </div>
+            <p style="font-size:11px;color:#9ca3af;margin:0;">Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
+          </div>
+        </div>
+
+        <!-- Cards -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;">
+          ${[
+            { label: "Total do Período", val: formatCurrency(totalAno), color: "#2563eb" },
+            { label: "Lançamentos", val: String(totalLancamentos), color: "#16a34a" },
+            { label: "Ticket Médio", val: formatCurrency(ticketMedio), color: "#d97706" },
+            ...(isGestorOuAdmin ? [{ label: "Funcionários", val: String(tecnicosAtivos), color: "#7c3aed" }] : []),
+          ].map(c => `
+            <div style="border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;border-top:3px solid ${c.color};">
+              <p style="font-size:11px;color:#6b7280;margin:0 0 4px;text-transform:uppercase;letter-spacing:.5px;">${c.label}</p>
+              <p style="font-size:20px;font-weight:700;color:#111;margin:0;">${c.val}</p>
+            </div>
+          `).join("")}
+        </div>
+
+        <!-- Top Funcionários -->
+        ${byTecnico.length > 0 ? `
+        <div style="margin-bottom:28px;">
+          <h2 style="font-size:14px;font-weight:600;margin:0 0 12px;color:#374151;">Top Funcionários</h2>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead>
+              <tr style="background:#f3f4f6;">
+                <th style="text-align:left;padding:7px 10px;border:1px solid #e5e7eb;color:#6b7280;text-transform:uppercase;font-size:10px;">Funcionário</th>
+                <th style="text-align:center;padding:7px 10px;border:1px solid #e5e7eb;color:#6b7280;text-transform:uppercase;font-size:10px;">Qtd</th>
+                <th style="text-align:right;padding:7px 10px;border:1px solid #e5e7eb;color:#6b7280;text-transform:uppercase;font-size:10px;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${byTecnico.map((t, i) => `
+                <tr style="background:${i % 2 === 0 ? "#fff" : "#f9fafb"};">
+                  <td style="padding:7px 10px;border:1px solid #e5e7eb;">${t.nome}</td>
+                  <td style="padding:7px 10px;border:1px solid #e5e7eb;text-align:center;">${t.qtd}</td>
+                  <td style="padding:7px 10px;border:1px solid #e5e7eb;text-align:right;font-weight:600;">${formatCurrency(t.total)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+        ` : ""}
+
+        <!-- Por Tipo de Despesa -->
+        ${byTipo.length > 0 ? `
+        <div style="margin-bottom:28px;">
+          <h2 style="font-size:14px;font-weight:600;margin:0 0 12px;color:#374151;">Por Tipo de Despesa</h2>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead>
+              <tr style="background:#f3f4f6;">
+                <th style="text-align:left;padding:7px 10px;border:1px solid #e5e7eb;color:#6b7280;text-transform:uppercase;font-size:10px;">Tipo</th>
+                <th style="text-align:right;padding:7px 10px;border:1px solid #e5e7eb;color:#6b7280;text-transform:uppercase;font-size:10px;">Total</th>
+                <th style="text-align:right;padding:7px 10px;border:1px solid #e5e7eb;color:#6b7280;text-transform:uppercase;font-size:10px;">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${byTipo.map((t, i) => `
+                <tr style="background:${i % 2 === 0 ? "#fff" : "#f9fafb"};">
+                  <td style="padding:7px 10px;border:1px solid #e5e7eb;">${t.name}</td>
+                  <td style="padding:7px 10px;border:1px solid #e5e7eb;text-align:right;font-weight:600;">${formatCurrency(t.valor)}</td>
+                  <td style="padding:7px 10px;border:1px solid #e5e7eb;text-align:right;">${totalAno > 0 ? ((t.valor / totalAno) * 100).toFixed(1) + "%" : "—"}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+        ` : ""}
+
+        <!-- Evolução Mensal -->
+        <div style="margin-bottom:28px;">
+          <h2 style="font-size:14px;font-weight:600;margin:0 0 12px;color:#374151;">Evolução Mensal — ${anoSelecionado}</h2>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead>
+              <tr style="background:#f3f4f6;">
+                ${MESES.map(m => `<th style="text-align:center;padding:7px 6px;border:1px solid #e5e7eb;color:#6b7280;text-transform:uppercase;font-size:10px;">${m}</th>`).join("")}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                ${byMes.map(m => `<td style="padding:8px 6px;border:1px solid #e5e7eb;text-align:center;font-weight:${m.valor > 0 ? "600" : "400"};color:${m.valor > 0 ? "#111" : "#9ca3af"};">${m.valor > 0 ? formatCurrency(m.valor) : "—"}</td>`).join("")}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Tabela agrupada por funcionário -->
+        <div>
+          <h2 style="font-size:14px;font-weight:600;margin:0 0 12px;color:#374151;">Despesas do Período (${despesasCruzadas.length} registros)</h2>
+          ${gruposPDF.map(grupo => {
+            const subtotal = grupo.despesas.reduce((s, d) => s + Number(d.valor), 0);
+            const rows = grupo.despesas
+              .slice()
+              .sort((a, b) => a.data_despesa.localeCompare(b.data_despesa))
+              .map((d, i) => {
+                const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
+                const aprovador = profiles.find((p) => p.id === d.aprovado_por);
+                return `<tr style="background:${i % 2 === 0 ? "#fff" : "#f9fafb"};">
+                  <td style="padding:6px 8px;border:1px solid #e5e7eb;">${formatDate(d.data_despesa)}</td>
+                  <td style="padding:6px 8px;border:1px solid #e5e7eb;">${tipo?.nome ?? "—"}</td>
+                  <td style="padding:6px 8px;border:1px solid #e5e7eb;">${d.cliente}</td>
+                  <td style="padding:6px 8px;border:1px solid #e5e7eb;">${d.numero_os ?? "—"}</td>
+                  <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:600;">${formatCurrency(Number(d.valor))}</td>
+                  <td style="padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;max-width:160px;">${d.observacao ?? "—"}</td>
+                  ${!isFuncionario ? `
+                    <td style="padding:6px 8px;border:1px solid #e5e7eb;">${aprovador?.nome ?? "—"}</td>
+                    <td style="padding:6px 8px;border:1px solid #e5e7eb;">${d.aprovado_em ? formatDate(d.aprovado_em.slice(0, 10)) : "—"}</td>
+                  ` : ""}
+                </tr>`;
+              }).join("");
+            return `
+              <div style="margin-bottom:20px;page-break-inside:avoid;">
+                <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:0;">
+                  <span style="font-size:13px;font-weight:700;color:#1e40af;">${grupo.nome}</span>
+                  <span style="font-size:13px;font-weight:700;color:#1e40af;">${formatCurrency(subtotal)} &nbsp;&bull;&nbsp; ${grupo.despesas.length} ${grupo.despesas.length === 1 ? "despesa" : "despesas"}</span>
+                </div>
+                <table style="width:100%;border-collapse:collapse;font-size:11px;border-top:none;">
+                  <thead>
+                    <tr style="background:#f3f4f6;">
+                      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">Data</th>
+                      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">Tipo</th>
+                      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">Cliente</th>
+                      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">OS</th>
+                      <th style="text-align:right;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">Valor</th>
+                      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">Observação</th>
+                      ${!isFuncionario ? `
+                        <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">Aprovador</th>
+                        <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">Data Aprov.</th>
+                      ` : ""}
+                    </tr>
+                  </thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            `;
+          }).join("")}
+
+          <!-- Total geral -->
+          <div style="background:#1e40af;color:#fff;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+            <span style="font-size:13px;font-weight:600;">Total Geral &nbsp;&bull;&nbsp; ${despesasCruzadas.length} despesas &nbsp;&bull;&nbsp; ${gruposPDF.length} funcionários</span>
+            <span style="font-size:15px;font-weight:700;">${formatCurrency(totalAno)}</span>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(container);
+
+      const canvas = await html2canvas(container, {
+        scale: 1.8,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        width: 1100,
+      });
+
+      document.body.removeChild(container);
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = pdf.internal.pageSize.getHeight();
+      const ratio = canvas.width / canvas.height;
+      const imgH = pdfW / ratio;
+      let posY = 0;
+
+      while (posY < canvas.height) {
+        const sliceH = Math.min(pdfH * (canvas.width / pdfW), canvas.height - posY);
+        const sliceCanvas = document.createElement("canvas");
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = sliceH;
+        const ctx = sliceCanvas.getContext("2d")!;
+        ctx.drawImage(canvas, 0, posY, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        const sliceData = sliceCanvas.toDataURL("image/png");
+        if (posY > 0) pdf.addPage();
+        pdf.addImage(sliceData, "PNG", 0, 0, pdfW, (sliceH * pdfW) / canvas.width);
+        posY += sliceH;
+      }
+
+      const nomeArquivo = `relatorio-despesas-${periodoLabel.replace(/\s+/g, "-").toLowerCase()}.pdf`;
+      pdf.save(nomeArquivo);
+    } catch (err) {
+      console.error("[v0] Erro ao exportar PDF:", err);
+    } finally {
+      setExportando(false);
+    }
+  };
+
   const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
 
   const despesasAprovadas = useMemo(() => {
@@ -326,9 +560,22 @@ export default function RelatoriosPageSupabase() {
                 Período
               </button>
             </div>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input bg-white text-xs hover:bg-muted transition">
-              <Download className="w-3.5 h-3.5" />
-              Exportar PDF
+            <button
+              onClick={handleExportarPDF}
+              disabled={exportando}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input bg-white text-xs hover:bg-muted transition disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {exportando ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                  Gerando...
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5" />
+                  Exportar PDF
+                </>
+              )}
             </button>
           </div>
 
