@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
+import type { FiltrosRelatorio } from "@/lib/supabase/use-filtros-persistidos";
 import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { formatCurrency } from "@/lib/helpers";
@@ -116,6 +118,10 @@ export default function RelatoriosPageSupabase() {
   const { frotas } = useFrotas();
 
   const now = new Date();
+
+  const { filtrosSalvos: filtrosRel, carregado: carregadoRel, salvar: salvarRel } = useFiltrosPersistidos<FiltrosRelatorio>(currentUser?.id, "relatorio");
+  const aplicadoRel = useRef(false);
+
   const [modoFiltro, setModoFiltro] = useState<ModoFiltro>("mes");
   const [mesSelecionado, setMesSelecionado] = useState(now.getMonth());
   const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());
@@ -124,10 +130,29 @@ export default function RelatoriosPageSupabase() {
     return d.toISOString().slice(0, 10);
   });
   const [dataFinal, setDataFinal] = useState(() => now.toISOString().slice(0, 10));
-
-  // ── Filtros cruzados ──
   const [filtroFuncionario, setFiltroFuncionario] = useState<string | null>(null);
   const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
+
+  // Restaurar filtros salvos ao montar — apenas uma vez
+  // Restaurar filtros salvos ao montar — roda uma única vez quando carregado=true
+  useEffect(() => {
+    if (!carregadoRel || aplicadoRel.current) return;
+    aplicadoRel.current = true;
+    if (!filtrosRel) return;
+    setModoFiltro(filtrosRel.modoFiltro);
+    setMesSelecionado(filtrosRel.mesSelecionado);
+    setAnoSelecionado(filtrosRel.anoSelecionado);
+    setDataInicial(filtrosRel.dataInicial);
+    setDataFinal(filtrosRel.dataFinal);
+    setFiltroFuncionario(filtrosRel.filtroFuncionario);
+    setFiltroTipo(filtrosRel.filtroTipo);
+  }, [carregadoRel, filtrosRel]);
+
+  // Salvar ao alterar qualquer filtro (só após restauração inicial)
+  useEffect(() => {
+    if (!carregadoRel || !aplicadoRel.current) return;
+    salvarRel({ modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroFuncionario, filtroTipo });
+  }, [modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroFuncionario, filtroTipo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Tabela de despesas colapsável ──
   const [tabelaAberta, setTabelaAberta] = useState(false);
@@ -370,7 +395,7 @@ export default function RelatoriosPageSupabase() {
 
       // ════════════════════════════════════════
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
-      // ════════════════════════════════════════
+      // ═════════════════��═════════════════════��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
 
       const yStart2col = y;

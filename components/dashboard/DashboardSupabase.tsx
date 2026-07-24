@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import type React from "react";
+import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
+import type { FiltrosDashboard } from "@/lib/supabase/use-filtros-persistidos";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import {
@@ -108,6 +110,9 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   const perfil = currentUser?.perfil;
 
   const now = new Date();
+  const { filtrosSalvos, carregado, salvar } = useFiltrosPersistidos<FiltrosDashboard>(currentUser?.id, "dashboard");
+  const aplicado = useRef(false);
+
   const [modoFiltro, setModoFiltro] = useState<ModoFiltro>("mes");
   const [mesSelecionado, setMesSelecionado] = useState(now.getMonth());
   const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());
@@ -116,10 +121,28 @@ export default function DashboardSupabase({ onNavigate }: Props) {
     return d.toISOString().slice(0, 10);
   });
   const [dataFinal, setDataFinal] = useState(() => now.toISOString().slice(0, 10));
-
-  // ── Filtros cruzados ──
   const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
   const [filtroFuncionario, setFiltroFuncionario] = useState<string | null>(null);
+
+  // Restaurar filtros salvos ao montar — roda uma única vez quando carregado=true
+  useEffect(() => {
+    if (!carregado || aplicado.current) return;
+    aplicado.current = true;
+    if (!filtrosSalvos) return; // sem preferências salvas: mantém padrões
+    setModoFiltro(filtrosSalvos.modoFiltro);
+    setMesSelecionado(filtrosSalvos.mesSelecionado);
+    setAnoSelecionado(filtrosSalvos.anoSelecionado);
+    setDataInicial(filtrosSalvos.dataInicial);
+    setDataFinal(filtrosSalvos.dataFinal);
+    setFiltroTipo(filtrosSalvos.filtroTipo);
+    setFiltroFuncionario(filtrosSalvos.filtroFuncionario);
+  }, [carregado, filtrosSalvos]);
+
+  // Salvar ao alterar qualquer filtro
+  useEffect(() => {
+    if (!carregado || !aplicado.current) return;
+    salvar({ modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroTipo, filtroFuncionario });
+  }, [modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroTipo, filtroFuncionario]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
 

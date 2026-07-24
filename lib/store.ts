@@ -203,7 +203,9 @@ export const useAppStore = create<AppState>()(
           // Carregar Auditoria
           const { data: auditoria, error: auditoriaError } = await supabase
             .from("auditoria")
-            .select("*");
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(500);
 
           if (auditoriaError) {
             console.error("[v0] Error loading auditoria:", auditoriaError);
@@ -211,12 +213,15 @@ export const useAppStore = create<AppState>()(
 
           const auditoriaData = (auditoria || []).map((entry: any) => ({
             id: entry.id,
-            userId: entry.user_id,
+            usuarioId: entry.user_id,   // campo canônico do tipo AuditoriaEntry
+            user_id: entry.user_id,      // campo raw para compatibilidade
             acao: entry.acao,
             entidade: entry.entidade,
+            entidade_id: entry.entidade_id,
             entidadeId: entry.entidade_id,
             detalhes: entry.detalhes,
-            dataCriacao: entry.created_at,
+            data: entry.created_at,      // campo canônico do tipo AuditoriaEntry
+            created_at: entry.created_at, // campo raw para compatibilidade
           }));
 
           set({
