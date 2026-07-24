@@ -203,6 +203,15 @@ export default function RelatoriosPageSupabase() {
         y += 5;
       };
 
+      // Para align "right": o ponto x é a borda direita da coluna (cx + col.w).
+      // Para align "left":  o ponto x é cx + 2 (padding interno).
+      // Para align "center": cx + col.w / 2.
+      const colX = (cx: number, col: { w: number; align?: string }) => {
+        if (col.align === "right")  return cx + col.w;        // âncora na borda direita
+        if (col.align === "center") return cx + col.w / 2;
+        return cx + 2;                                         // âncora esquerda com padding
+      };
+
       const tableHeader = (cols: { label: string; w: number; align?: "left" | "right" | "center" }[]) => {
         checkY(8);
         pdf.setFillColor(...C_LIGHT);
@@ -212,9 +221,7 @@ export default function RelatoriosPageSupabase() {
         pdf.setTextColor(...C_NAVY);
         let cx = ML;
         cols.forEach((col) => {
-          const align = col.align ?? "left";
-          const tx = align === "right" ? cx + col.w - 2 : cx + 2;
-          text(col.label.toUpperCase(), tx, y + 4.5, { align });
+          text(col.label.toUpperCase(), colX(cx, col), y + 4.5, { align: col.align ?? "left" });
           cx += col.w;
         });
         pdf.setTextColor(0, 0, 0);
@@ -235,11 +242,9 @@ export default function RelatoriosPageSupabase() {
         let cx = ML;
         cols.forEach((col) => {
           pdf.setFont("helvetica", col.bold ? "bold" : "normal");
-          const align = col.align ?? "left";
-          const tx = align === "right" ? cx + col.w - 2 : cx + 2;
           const maxW = col.w - 4;
           const lines = pdf.splitTextToSize(col.val, maxW) as string[];
-          text(lines[0], tx, y + 4.2, { align });
+          text(lines[0], colX(cx, col), y + 4.2, { align: col.align ?? "left" });
           cx += col.w;
         });
         pdf.setDrawColor(220, 226, 240);
@@ -256,7 +261,9 @@ export default function RelatoriosPageSupabase() {
       pdf.setFillColor(...C_NAVY);
       pdf.rect(0, 0, PW, 26, "F");
 
-      // Logo (imagem PNG da sidebar)
+      // Logo: altura fixa de 18mm em mm, largura proporcional
+      const LOGO_H_MM = 18;
+      let logoWMM = 0;
       try {
         const logoUrl = "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/RJ%20Branco%202-Pn9QBwHse0Kjls3Cpbdg4mGuwo47pg.png";
         const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -266,33 +273,28 @@ export default function RelatoriosPageSupabase() {
           i.onerror = reject;
           i.src = logoUrl;
         });
-        const canvas = document.createElement("canvas");
-        const scale = 20 / img.naturalHeight;
-        canvas.width  = img.naturalWidth  * scale;
-        canvas.height = img.naturalHeight * scale;
-        const ctx = canvas.getContext("2d")!;
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const logoData = canvas.toDataURL("image/png");
-        pdf.addImage(logoData, "PNG", ML, 3, canvas.width, canvas.height);
-        // Título à direita da logo
-        const logoW = canvas.width + 4;
-        pdf.setFontSize(15);
-        pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(255, 255, 255);
-        text("Relatório de Despesas", ML + logoW, 12);
-        pdf.setFontSize(9);
-        pdf.setFont("helvetica", "normal");
-        text(periodoLabel, ML + logoW, 19);
+        // Calcular largura proporcional em mm (sem canvas — jsPDF aceita Image diretamente)
+        const ratio = img.naturalWidth / img.naturalHeight;
+        logoWMM = LOGO_H_MM * ratio;
+        // Renderizar no canvas apenas para converter em dataURL
+        const cv = document.createElement("canvas");
+        cv.width  = img.naturalWidth;
+        cv.height = img.naturalHeight;
+        cv.getContext("2d")!.drawImage(img, 0, 0);
+        pdf.addImage(cv.toDataURL("image/png"), "PNG", ML, (26 - LOGO_H_MM) / 2, logoWMM, LOGO_H_MM);
       } catch {
-        // Fallback sem logo
-        pdf.setFontSize(15);
-        pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(255, 255, 255);
-        text("Relatório de Despesas", ML, 12);
-        pdf.setFontSize(9);
-        pdf.setFont("helvetica", "normal");
-        text(periodoLabel, ML, 19);
+        logoWMM = 0; // fallback: sem logo, título começa em ML
       }
+
+      // Título à direita da logo
+      const tituloX = ML + (logoWMM > 0 ? logoWMM + 3 : 0);
+      pdf.setFontSize(15);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(255, 255, 255);
+      text("Relatório de Despesas", tituloX, 11);
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "normal");
+      text(periodoLabel, tituloX, 19);
 
       const dataGeracao = `Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
       pdf.setFontSize(8);
@@ -414,7 +416,7 @@ export default function RelatoriosPageSupabase() {
       pdf.setTextColor(0, 0, 0);
       y += 12;
 
-      // ═══════════════════════════════
+      // ═════════���═════════════════════
       // TABELA AGRUPADA POR FUNCIONÁRIO
       // ═══════════════════════════════
       sectionTitle(`Despesas do Período (${despesasTabela.length} registros)`);
@@ -441,7 +443,7 @@ export default function RelatoriosPageSupabase() {
         pdf.setFont("helvetica", "bold");
         pdf.setTextColor(...C_NAVY);
         text(grupo.nome, ML + 2, y + 5);
-        text(`${formatCurrency(subtotal)}  •  ${qtd} ${qtd === 1 ? "despesa" : "despesas"}`, ML + CW - 2, y + 5, { align: "right" });
+        text(`${formatCurrency(subtotal)}  •  ${qtd} ${qtd === 1 ? "despesa" : "despesas"}`, ML + CW, y + 5, { align: "right" });
         pdf.setTextColor(0, 0, 0);
         y += 7;
 
@@ -475,7 +477,7 @@ export default function RelatoriosPageSupabase() {
       pdf.setFont("helvetica", "bold");
       pdf.setTextColor(255, 255, 255);
       text(`Total Geral  •  ${despesasTabela.length} despesas  •  ${gruposPDF.length} funcionários`, ML + 2, y + 6);
-      text(formatCurrency(despesasTabela.reduce((s, d) => s + Number(d.valor), 0)), ML + CW - 2, y + 6, { align: "right" });
+      text(formatCurrency(despesasTabela.reduce((s, d) => s + Number(d.valor), 0)), ML + CW, y + 6, { align: "right" });
 
       // ── Número de páginas ──
       const totalPages = (pdf as any).internal.getNumberOfPages();
