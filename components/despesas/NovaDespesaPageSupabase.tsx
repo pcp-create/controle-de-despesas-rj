@@ -71,6 +71,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   const isCombustivel = tipoSelecionado?.nome?.toLowerCase().includes("combust") ?? false;
   const frotasAtivas = frotas.filter((f) => f.ativo);
 
+  // Quando faturado, apenas tipos de combustível ficam disponíveis
+  const tiposDisponiveis = pagamentoTipo === "faturado"
+    ? tiposDespesa.filter((t) => t.nome?.toLowerCase().includes("combust"))
+    : tiposDespesa;
+
   // Calcula número de diárias em tempo real
   const numeroDiarias = useMemo(() => {
     if (!calculaDiarias || !form.dataCheckin || !form.dataCheckout) return null;
@@ -331,7 +336,15 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             </button>
             <button
               type="button"
-              onClick={() => { setPagamentoTipo("faturado"); setForm((f) => ({ ...f, cartaoId: "" })); setParcelado(false); }}
+              onClick={() => {
+              setPagamentoTipo("faturado");
+              setParcelado(false);
+              setForm((f) => {
+                const tipoAtual = tiposDespesa.find((t) => t.id === f.tipoDespesaId);
+                const isCombust = tipoAtual?.nome?.toLowerCase().includes("combust");
+                return { ...f, cartaoId: "", tipoDespesaId: isCombust ? f.tipoDespesaId : "" };
+              });
+            }}
               className={`flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-medium transition-colors border-t sm:border-t-0 border-l sm:border-l border-input ${
                 pagamentoTipo === "faturado"
                   ? "bg-accent text-white"
@@ -385,7 +398,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="">Selecione...</option>
-              {tiposDespesa.map((t) => (
+              {tiposDisponiveis.map((t) => (
                 <option key={t.id} value={t.id}>{t.nome}</option>
               ))}
             </select>
