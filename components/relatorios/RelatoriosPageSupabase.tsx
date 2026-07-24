@@ -694,13 +694,11 @@ export default function RelatoriosPageSupabase() {
 
   const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
 
-  const despesasAprovadas = useMemo(() => {
-    return despesas.filter((d) => d.status_aprovacao === "AprovadoGestor");
-  }, [despesas]);
-
+  // Todas as despesas enviadas do período (exclui apenas rascunhos) — base para gráficos e tabela
   const despesasAno = useMemo(() => {
     return despesas.filter((d) => {
-      if (d.status_aprovacao !== "AprovadoGestor") return false;
+      // Exclui rascunhos nunca enviados
+      if (d.status_erp === "Rascunho" && d.status_aprovacao === "AguardandoGestor" && !d.data_envio) return false;
       const dataStr = (d.data_despesa || d.created_at || "").slice(0, 10);
       if (modoFiltro === "mes") {
         const dt = new Date(dataStr + "T00:00:00");
@@ -713,7 +711,7 @@ export default function RelatoriosPageSupabase() {
     });
   }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
 
-  // Despesas após filtros cruzados (apenas aprovadas — usadas nos gráficos e cards)
+  // Despesas com filtros cruzados (todas enviadas) — usadas nos gráficos e cards
   const despesasCruzadas = useMemo(() => {
     return despesasAno.filter((d) => {
       if (filtroFuncionario && d.tecnico_id !== filtroFuncionario) return false;
@@ -746,21 +744,24 @@ export default function RelatoriosPageSupabase() {
   const ticketMedio = totalLancamentos > 0 ? totalAno / totalLancamentos : 0;
   const tecnicosAtivos = new Set(despesasCruzadas.map((d) => d.tecnico_id)).size;
 
-  // Evolução mensal — usa anoSelecionado para respeitar o filtro de ano do topo
+  // Evolução mensal — considera todas as despesas enviadas do ano selecionado
   const byMes = useMemo(() => {
+    const base = despesas.filter((d) => {
+      if (d.status_erp === "Rascunho" && d.status_aprovacao === "AguardandoGestor" && !d.data_envio) return false;
+      if (filtroFuncionario && d.tecnico_id !== filtroFuncionario) return false;
+      if (filtroTipo && d.tipo_despesa_id !== filtroTipo) return false;
+      return true;
+    });
     return MESES.map((m, i) => ({
       mes: m,
-      valor: despesasAprovadas
+      valor: base
         .filter((d) => {
-          const dt = new Date(d.data_despesa + "T12:00:00");
-          if (dt.getMonth() !== i || dt.getFullYear() !== anoSelecionado) return false;
-          if (filtroFuncionario && d.tecnico_id !== filtroFuncionario) return false;
-          if (filtroTipo && d.tipo_despesa_id !== filtroTipo) return false;
-          return true;
+          const dt = new Date((d.data_despesa || d.created_at || "").slice(0, 10) + "T12:00:00");
+          return dt.getMonth() === i && dt.getFullYear() === anoSelecionado;
         })
         .reduce((s, d) => s + Number(d.valor), 0),
     }));
-  }, [despesasAprovadas, anoSelecionado, filtroFuncionario, filtroTipo]);
+  }, [despesas, anoSelecionado, filtroFuncionario, filtroTipo]);
 
   // Por tipo — filtrado pelo funcionário selecionado
   const byTipo = useMemo(() => {
