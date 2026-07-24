@@ -433,7 +433,7 @@ export default function RelatoriosPageSupabase() {
           .sort((a, b) => a.data_despesa.localeCompare(b.data_despesa))
           .forEach((d, i) => {
             const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
-            const aprovador = profiles.find((p) => p.id === d.aprovado_por);
+            const aprovador = profiles.find((p) => p.id === d.gestor_aprovador_id);
             const rowData = isFuncionario
               ? [
                   { val: formatDate(d.data_despesa), w: colsDesp[0].w },
@@ -451,7 +451,7 @@ export default function RelatoriosPageSupabase() {
                   { val: formatCurrency(Number(d.valor)), w: colsDesp[4].w, align: "right" as const, bold: true },
                   { val: d.observacao ?? "—", w: colsDesp[5].w },
                   { val: aprovador?.nome ?? "—", w: colsDesp[6].w },
-                  { val: d.aprovado_em ? formatDate(d.aprovado_em.slice(0, 10)) : "—", w: colsDesp[7].w },
+                  { val: d.data_aprovacao ? formatDate(d.data_aprovacao.slice(0, 10)) : "—", w: colsDesp[7].w },
                 ];
             tableRow(rowData, i % 2 !== 0);
           });
@@ -1044,7 +1044,7 @@ export default function RelatoriosPageSupabase() {
                             .sort((a, b) => a.data_despesa.localeCompare(b.data_despesa))
                             .map((d) => {
                               const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
-                              const aprovador = profiles.find((p) => p.id === d.aprovado_por);
+                              const aprovador = profiles.find((p) => p.id === d.gestor_aprovador_id);
                               return (
                                 <tr key={d.id} className="border-b border-border hover:bg-muted/20 transition-colors">
                                   <td className="px-4 py-2 whitespace-nowrap text-foreground pl-12">{formatDate(d.data_despesa)}</td>
@@ -1067,7 +1067,7 @@ export default function RelatoriosPageSupabase() {
                                         {aprovador?.nome ?? <span className="text-muted-foreground">—</span>}
                                       </td>
                                       <td className="px-4 py-2 whitespace-nowrap text-foreground">
-                                        {d.aprovado_em ? formatDate(d.aprovado_em.slice(0, 10)) : <span className="text-muted-foreground">—</span>}
+                                        {d.data_aprovacao ? formatDate(d.data_aprovacao.slice(0, 10)) : <span className="text-muted-foreground">—</span>}
                                       </td>
                                     </>
                                   )}
