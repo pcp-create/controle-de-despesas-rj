@@ -270,8 +270,10 @@ export function useTipoDespesaCentroCusto(tipoDespesaId: string | null) {
 export function useCartoes(userId?: string) {
   const { profile } = useAuth();
   const effectiveId = userId || profile?.id;
+  // Só busca quando a sessão está confirmada
+  const swrKey = profile?.id && effectiveId ? `cartoes-${effectiveId}` : null;
   const { data, error, isLoading, mutate } = useSWR(
-    effectiveId ? `cartoes-${effectiveId}` : null,
+    swrKey,
     () => fetchCartoes(effectiveId!),
     { revalidateOnFocus: false }
   );
@@ -333,9 +335,15 @@ export function useCartoes(userId?: string) {
 
 export function useDespesas(userId?: string, perfil?: string) {
   const { profile } = useAuth();
+  // Só busca quando a sessão está confirmada (profile preenchido pelo AuthContext)
+  // Isso evita a race condition onde o SWR busca antes do cookie de sessão ser gravado
+  const sessionReady = !!profile?.id;
+  const effectiveUserId = userId || profile?.id;
+  const swrKey = sessionReady ? `despesas_${effectiveUserId || "all"}_${perfil || profile?.perfil || ""}` : null;
+
   const { data, error, isLoading, mutate } = useSWR(
-    `despesas_${userId || "all"}_${perfil || ""}`,
-    userId ? () => fetchDespesas(userId, perfil || "funcionario") : () => fetchDespesas("", perfil || "gestor"),
+    swrKey,
+    effectiveUserId ? () => fetchDespesas(effectiveUserId, perfil || profile?.perfil || "funcionario") : () => fetchDespesas("", perfil || profile?.perfil || "gestor"),
     { revalidateOnFocus: false }
   );
 
@@ -803,9 +811,13 @@ export function useFrotas() {
 }
 
 export function useProfiles() {
-  const { data, error, isLoading, mutate } = useSWR("profiles", fetchProfiles, {
-    revalidateOnFocus: false,
-  });
+  const { profile } = useAuth();
+  // Só busca quando a sessão está confirmada
+  const { data, error, isLoading, mutate } = useSWR(
+    profile?.id ? "profiles" : null,
+    fetchProfiles,
+    { revalidateOnFocus: false }
+  );
 
   const addProfile = async (profileData: Omit<Profile, "id" | "primeiro_acesso">, password: string) => {
     const supabase = getSupabase();
