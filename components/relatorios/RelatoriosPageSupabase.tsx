@@ -387,27 +387,18 @@ export default function RelatoriosPageSupabase() {
       // ═══════════════════════════════
       // TABELA AGRUPADA POR FUNCIONÁRIO
       // ═══════════════════════════════
-      sectionTitle(`Despesas do Período (${despesasCruzadas.length} registros)`);
+      sectionTitle(`Despesas do Período (${despesasTabela.length} registros)`);
 
-      const colsDesp = isFuncionario
-        ? [
-            { label: "Data",       w: CW * 0.12 },
-            { label: "Tipo",       w: CW * 0.18 },
-            { label: "Cliente",    w: CW * 0.25 },
-            { label: "OS",         w: CW * 0.13 },
-            { label: "Valor",      w: CW * 0.16, align: "right" as const },
-            { label: "Observação", w: CW * 0.16 },
-          ]
-        : [
-            { label: "Data",       w: CW * 0.10 },
-            { label: "Tipo",       w: CW * 0.15 },
-            { label: "Cliente",    w: CW * 0.19 },
-            { label: "OS",         w: CW * 0.10 },
-            { label: "Valor",      w: CW * 0.13, align: "right" as const },
-            { label: "Observação", w: CW * 0.14 },
-            { label: "Aprovador",  w: CW * 0.11 },
-            { label: "Dt. Aprov.", w: CW * 0.08 },
-          ];
+      // Colunas do PDF: Valor na última posição, sem Aprovador/Data Aprovação
+      const colsDesp = [
+        { label: "Data",       w: CW * 0.11 },
+        { label: "Tipo",       w: CW * 0.18 },
+        { label: "Cliente",    w: CW * 0.24 },
+        { label: "OS",         w: CW * 0.11 },
+        { label: "Status",     w: CW * 0.13 },
+        { label: "Observação", w: CW * 0.23 },
+        { label: "Valor",      w: CW * 0.15, align: "right" as const },
+      ];
 
       gruposPDF.forEach((grupo) => {
         const subtotal = grupo.despesas.reduce((s, d) => s + Number(d.valor), 0);
@@ -433,26 +424,19 @@ export default function RelatoriosPageSupabase() {
           .sort((a, b) => a.data_despesa.localeCompare(b.data_despesa))
           .forEach((d, i) => {
             const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
-            const aprovador = profiles.find((p) => p.id === d.gestor_aprovador_id);
-            const rowData = isFuncionario
-              ? [
-                  { val: formatDate(d.data_despesa), w: colsDesp[0].w },
-                  { val: tipo?.nome ?? "—", w: colsDesp[1].w },
-                  { val: d.cliente, w: colsDesp[2].w },
-                  { val: d.numero_os ?? "—", w: colsDesp[3].w },
-                  { val: formatCurrency(Number(d.valor)), w: colsDesp[4].w, align: "right" as const, bold: true },
-                  { val: d.observacao ?? "—", w: colsDesp[5].w },
-                ]
-              : [
-                  { val: formatDate(d.data_despesa), w: colsDesp[0].w },
-                  { val: tipo?.nome ?? "—", w: colsDesp[1].w },
-                  { val: d.cliente, w: colsDesp[2].w },
-                  { val: d.numero_os ?? "—", w: colsDesp[3].w },
-                  { val: formatCurrency(Number(d.valor)), w: colsDesp[4].w, align: "right" as const, bold: true },
-                  { val: d.observacao ?? "—", w: colsDesp[5].w },
-                  { val: aprovador?.nome ?? "—", w: colsDesp[6].w },
-                  { val: d.data_aprovacao ? formatDate(d.data_aprovacao.slice(0, 10)) : "—", w: colsDesp[7].w },
-                ];
+            const statusPDF =
+              d.status_aprovacao === "AprovadoGestor" ? "Aprovado"
+              : d.status_aprovacao === "Reprovado"    ? "Reprovado"
+              : "Aguardando";
+            const rowData = [
+              { val: formatDate(d.data_despesa),        w: colsDesp[0].w },
+              { val: tipo?.nome ?? "—",                 w: colsDesp[1].w },
+              { val: d.cliente,                         w: colsDesp[2].w },
+              { val: d.numero_os ?? "—",                w: colsDesp[3].w },
+              { val: statusPDF,                         w: colsDesp[4].w },
+              { val: d.observacao ?? "—",               w: colsDesp[5].w },
+              { val: formatCurrency(Number(d.valor)),   w: colsDesp[6].w, align: "right" as const, bold: true },
+            ];
             tableRow(rowData, i % 2 !== 0);
           });
 
@@ -466,7 +450,7 @@ export default function RelatoriosPageSupabase() {
       pdf.setFontSize(10);
       pdf.setFont("helvetica", "bold");
       pdf.setTextColor(255, 255, 255);
-      text(`Total Geral  •  ${despesasCruzadas.length} despesas  •  ${gruposPDF.length} funcionários`, ML + 2, y + 6);
+      text(`Total Geral  •  ${despesasTabela.length} despesas  •  ${gruposPDF.length} funcionários`, ML + 2, y + 6);
       text(formatCurrency(totalAno), ML + CW - 1, y + 6, { align: "right" });
 
       // ── Número de páginas ──
@@ -1024,7 +1008,6 @@ export default function RelatoriosPageSupabase() {
                       <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Tipo</th>
                       <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Cliente</th>
                       <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">OS</th>
-                      <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Valor</th>
                       <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Status</th>
                       <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Observação</th>
                       {!isFuncionario && (
@@ -1033,6 +1016,7 @@ export default function RelatoriosPageSupabase() {
                           <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Data Aprovação</th>
                         </>
                       )}
+                      <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Valor</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1082,9 +1066,6 @@ export default function RelatoriosPageSupabase() {
                                   <td className="px-4 py-2 whitespace-nowrap text-foreground">
                                     {d.numero_os || <span className="text-muted-foreground">—</span>}
                                   </td>
-                                  <td className="px-4 py-2 whitespace-nowrap text-right font-medium text-foreground">
-                                    {formatCurrency(Number(d.valor))}
-                                  </td>
                                   <td className="px-4 py-2 whitespace-nowrap">
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusLabel.color}`}>
                                       {statusLabel.label}
@@ -1103,6 +1084,9 @@ export default function RelatoriosPageSupabase() {
                                       </td>
                                     </>
                                   )}
+                                  <td className="px-4 py-2 whitespace-nowrap text-right font-medium text-foreground">
+                                    {formatCurrency(Number(d.valor))}
+                                  </td>
                                 </tr>
                               );
                             })}
@@ -1112,13 +1096,12 @@ export default function RelatoriosPageSupabase() {
                   </tbody>
                   <tfoot>
                     <tr className="bg-muted/40 border-t border-border">
-                      <td colSpan={colCount - 3} className="px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      <td colSpan={colCount - 1} className="px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                         Total geral — {despesasTabela.length} {despesasTabela.length === 1 ? "despesa" : "despesas"} &bull; {grupos.length} {grupos.length === 1 ? "funcionário" : "funcionários"}
                       </td>
                       <td className="px-4 py-2.5 text-right text-sm font-bold text-foreground">
                         {formatCurrency(despesasTabela.reduce((s, d) => s + Number(d.valor), 0))}
                       </td>
-                      <td colSpan={colCount - (colCount - 3) - 1} />
                     </tr>
                   </tfoot>
                 </table>
