@@ -170,6 +170,11 @@ export default function RelatoriosPageSupabase() {
 
       let y = 0;
 
+      // ── Cores do sistema (Navy Blue RJ Compressores) ──
+      const C_NAVY: [number,number,number]  = [35,  55, 110]; // primary oklch(0.35 0.12 255)
+      const C_AZURE: [number,number,number] = [44, 105, 210]; // accent  oklch(0.55 0.18 255)
+      const C_LIGHT: [number,number,number] = [220, 230, 248]; // fundo suave
+
       // ── Helpers de desenho ──
       const newPage = () => {
         pdf.addPage();
@@ -184,26 +189,14 @@ export default function RelatoriosPageSupabase() {
         pdf.text(str, x, yy, opts);
       };
 
-      const headerBar = (label: string) => {
-        checkY(10);
-        pdf.setFillColor(37, 99, 235);
-        pdf.rect(ML, y, CW, 7, "F");
-        pdf.setFontSize(9);
-        pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(255, 255, 255);
-        text(label.toUpperCase(), ML + 2, y + 4.8);
-        pdf.setTextColor(0, 0, 0);
-        y += 9;
-      };
-
       const sectionTitle = (label: string) => {
         checkY(10);
         pdf.setFontSize(11);
         pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(30, 64, 175);
+        pdf.setTextColor(...C_NAVY);
         text(label, ML, y);
         y += 1;
-        pdf.setDrawColor(37, 99, 235);
+        pdf.setDrawColor(...C_AZURE);
         pdf.setLineWidth(0.4);
         pdf.line(ML, y, ML + CW, y);
         pdf.setTextColor(0, 0, 0);
@@ -212,15 +205,15 @@ export default function RelatoriosPageSupabase() {
 
       const tableHeader = (cols: { label: string; w: number; align?: "left" | "right" | "center" }[]) => {
         checkY(8);
-        pdf.setFillColor(243, 244, 246);
+        pdf.setFillColor(...C_LIGHT);
         pdf.rect(ML, y, CW, 6.5, "F");
         pdf.setFontSize(8);
         pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(107, 114, 128);
-        let cx = ML + 1;
+        pdf.setTextColor(...C_NAVY);
+        let cx = ML;
         cols.forEach((col) => {
           const align = col.align ?? "left";
-          const tx = align === "right" ? cx + col.w - 1 : align === "center" ? cx + col.w / 2 : cx + 1;
+          const tx = align === "right" ? cx + col.w - 2 : cx + 2;
           text(col.label.toUpperCase(), tx, y + 4.5, { align });
           cx += col.w;
         });
@@ -234,62 +227,99 @@ export default function RelatoriosPageSupabase() {
       ) => {
         checkY(6.5);
         if (bgGray) {
-          pdf.setFillColor(249, 250, 251);
+          pdf.setFillColor(245, 247, 252);
           pdf.rect(ML, y, CW, 6, "F");
         }
         pdf.setFontSize(8.5);
         pdf.setTextColor(17, 24, 39);
-        let cx = ML + 1;
+        let cx = ML;
         cols.forEach((col) => {
           pdf.setFont("helvetica", col.bold ? "bold" : "normal");
           const align = col.align ?? "left";
-          const tx = align === "right" ? cx + col.w - 1 : align === "center" ? cx + col.w / 2 : cx + 1;
-          const maxW = col.w - 2;
+          const tx = align === "right" ? cx + col.w - 2 : cx + 2;
+          const maxW = col.w - 4;
           const lines = pdf.splitTextToSize(col.val, maxW) as string[];
           text(lines[0], tx, y + 4.2, { align });
           cx += col.w;
         });
-        pdf.setDrawColor(229, 231, 235);
+        pdf.setDrawColor(220, 226, 240);
         pdf.setLineWidth(0.1);
         pdf.line(ML, y + 6, ML + CW, y + 6);
         y += 6;
       };
 
       // ═══════════════════════════════
-      // CABEÇALHO DA PÁGINA
+      // CABEÇALHO DA PÁGINA — logo + título
       // ═══════════════════════════════
-      y = 14;
-      pdf.setFillColor(30, 64, 175);
-      pdf.rect(0, 0, PW, 22, "F");
-      pdf.setFontSize(16);
-      pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(255, 255, 255);
-      text("Relatório de Despesas", ML, 10);
-      pdf.setFontSize(9);
-      pdf.setFont("helvetica", "normal");
-      text(periodoLabel, ML, 16);
+      y = 0;
+      // Fundo navy
+      pdf.setFillColor(...C_NAVY);
+      pdf.rect(0, 0, PW, 26, "F");
+
+      // Logo (imagem PNG da sidebar)
+      try {
+        const logoUrl = "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/RJ%20Branco%202-Pn9QBwHse0Kjls3Cpbdg4mGuwo47pg.png";
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const i = new Image();
+          i.crossOrigin = "anonymous";
+          i.onload = () => resolve(i);
+          i.onerror = reject;
+          i.src = logoUrl;
+        });
+        const canvas = document.createElement("canvas");
+        const scale = 20 / img.naturalHeight;
+        canvas.width  = img.naturalWidth  * scale;
+        canvas.height = img.naturalHeight * scale;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const logoData = canvas.toDataURL("image/png");
+        pdf.addImage(logoData, "PNG", ML, 3, canvas.width, canvas.height);
+        // Título à direita da logo
+        const logoW = canvas.width + 4;
+        pdf.setFontSize(15);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(255, 255, 255);
+        text("Relatório de Despesas", ML + logoW, 12);
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "normal");
+        text(periodoLabel, ML + logoW, 19);
+      } catch {
+        // Fallback sem logo
+        pdf.setFontSize(15);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(255, 255, 255);
+        text("Relatório de Despesas", ML, 12);
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "normal");
+        text(periodoLabel, ML, 19);
+      }
+
       const dataGeracao = `Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
-      text(dataGeracao, PW - MR, 16, { align: "right" });
+      pdf.setFontSize(8);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(190, 205, 235);
+      text(dataGeracao, PW - MR, 19, { align: "right" });
 
       if (filtroFuncionario || filtroTipo) {
         const filtrosAtivos = [
           filtroFuncionario ? `Funcionário: ${profiles.find((p) => p.id === filtroFuncionario)?.nome}` : "",
           filtroTipo ? `Tipo: ${tiposDespesa.find((t) => t.id === filtroTipo)?.nome}` : "",
         ].filter(Boolean).join("  |  ");
-        text(`Filtros ativos: ${filtrosAtivos}`, ML, 20.5);
+        pdf.setTextColor(190, 205, 235);
+        text(`Filtros: ${filtrosAtivos}`, ML, 23.5);
       }
 
       pdf.setTextColor(0, 0, 0);
-      y = 28;
+      y = 32;
 
       // ═══════════════════════════════
       // CARDS DE RESUMO
       // ═══════════════════════════════
       const cards = [
-        { label: "Total do Período", val: formatCurrency(totalAno), color: [37, 99, 235] as [number,number,number] },
-        { label: "Lançamentos", val: String(totalLancamentos), color: [22, 163, 74] as [number,number,number] },
-        { label: "Ticket Médio", val: formatCurrency(ticketMedio), color: [217, 119, 6] as [number,number,number] },
-        ...(isGestorOuAdmin ? [{ label: "Funcionários Ativos", val: String(tecnicosAtivos), color: [124, 58, 237] as [number,number,number] }] : []),
+        { label: "Total do Período",   val: formatCurrency(totalAno),       color: C_NAVY  },
+        { label: "Lançamentos",         val: String(totalLancamentos),        color: [22, 163, 74]  as [number,number,number] },
+        { label: "Ticket Médio",        val: formatCurrency(ticketMedio),     color: [195, 110, 10] as [number,number,number] },
+        ...(isGestorOuAdmin ? [{ label: "Funcionários Ativos", val: String(tecnicosAtivos), color: C_AZURE }] : []),
       ];
       const cardW = CW / cards.length;
       cards.forEach((card, i) => {
@@ -389,15 +419,14 @@ export default function RelatoriosPageSupabase() {
       // ═══════════════════════════════
       sectionTitle(`Despesas do Período (${despesasTabela.length} registros)`);
 
-      // Colunas do PDF: Valor na última posição, sem Aprovador/Data Aprovação
+      // Colunas do PDF: Valor na última posição, sem Aprovador/Data Aprovação e sem Status
       const colsDesp = [
-        { label: "Data",       w: CW * 0.11 },
-        { label: "Tipo",       w: CW * 0.18 },
-        { label: "Cliente",    w: CW * 0.24 },
-        { label: "OS",         w: CW * 0.11 },
-        { label: "Status",     w: CW * 0.13 },
-        { label: "Observação", w: CW * 0.23 },
-        { label: "Valor",      w: CW * 0.15, align: "right" as const },
+        { label: "Data",       w: CW * 0.12 },
+        { label: "Tipo",       w: CW * 0.20 },
+        { label: "Cliente",    w: CW * 0.27 },
+        { label: "OS",         w: CW * 0.12 },
+        { label: "Observação", w: CW * 0.29 },
+        { label: "Valor",      w: CW * 0.18, align: "right" as const },
       ];
 
       gruposPDF.forEach((grupo) => {
@@ -406,13 +435,13 @@ export default function RelatoriosPageSupabase() {
 
         // Linha do funcionário
         checkY(8);
-        pdf.setFillColor(239, 246, 255);
+        pdf.setFillColor(...C_LIGHT);
         pdf.rect(ML, y, CW, 7, "F");
         pdf.setFontSize(9.5);
         pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(30, 64, 175);
+        pdf.setTextColor(...C_NAVY);
         text(grupo.nome, ML + 2, y + 5);
-        text(`${formatCurrency(subtotal)}  •  ${qtd} ${qtd === 1 ? "despesa" : "despesas"}`, ML + CW - 1, y + 5, { align: "right" });
+        text(`${formatCurrency(subtotal)}  •  ${qtd} ${qtd === 1 ? "despesa" : "despesas"}`, ML + CW - 2, y + 5, { align: "right" });
         pdf.setTextColor(0, 0, 0);
         y += 7;
 
@@ -424,18 +453,13 @@ export default function RelatoriosPageSupabase() {
           .sort((a, b) => a.data_despesa.localeCompare(b.data_despesa))
           .forEach((d, i) => {
             const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
-            const statusPDF =
-              d.status_aprovacao === "AprovadoGestor" ? "Aprovado"
-              : d.status_aprovacao === "Reprovado"    ? "Reprovado"
-              : "Aguardando";
             const rowData = [
               { val: formatDate(d.data_despesa),        w: colsDesp[0].w },
               { val: tipo?.nome ?? "—",                 w: colsDesp[1].w },
               { val: d.cliente,                         w: colsDesp[2].w },
               { val: d.numero_os ?? "—",                w: colsDesp[3].w },
-              { val: statusPDF,                         w: colsDesp[4].w },
-              { val: d.observacao ?? "—",               w: colsDesp[5].w },
-              { val: formatCurrency(Number(d.valor)),   w: colsDesp[6].w, align: "right" as const, bold: true },
+              { val: d.observacao ?? "—",               w: colsDesp[4].w },
+              { val: formatCurrency(Number(d.valor)),   w: colsDesp[5].w, align: "right" as const, bold: true },
             ];
             tableRow(rowData, i % 2 !== 0);
           });
@@ -445,22 +469,22 @@ export default function RelatoriosPageSupabase() {
 
       // ── Total geral ──
       checkY(10);
-      pdf.setFillColor(30, 64, 175);
+      pdf.setFillColor(...C_NAVY);
       pdf.rect(ML, y, CW, 9, "F");
       pdf.setFontSize(10);
       pdf.setFont("helvetica", "bold");
       pdf.setTextColor(255, 255, 255);
       text(`Total Geral  •  ${despesasTabela.length} despesas  •  ${gruposPDF.length} funcionários`, ML + 2, y + 6);
-      text(formatCurrency(totalAno), ML + CW - 1, y + 6, { align: "right" });
+      text(formatCurrency(despesasTabela.reduce((s, d) => s + Number(d.valor), 0)), ML + CW - 2, y + 6, { align: "right" });
 
       // ── Número de páginas ──
       const totalPages = (pdf as any).internal.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        pdf.setPage(i);
+      for (let pg = 1; pg <= totalPages; pg++) {
+        pdf.setPage(pg);
         pdf.setFontSize(8);
         pdf.setFont("helvetica", "normal");
-        pdf.setTextColor(156, 163, 175);
-        pdf.text(`Página ${i} de ${totalPages}`, PW / 2, PH - 6, { align: "center" });
+        pdf.setTextColor(...C_AZURE);
+        pdf.text(`Página ${pg} de ${totalPages}`, PW / 2, PH - 5, { align: "center" });
       }
 
       const nomeArquivo = `relatorio-despesas-${periodoLabel.replace(/[\s/]/g, "-").toLowerCase()}.pdf`;
@@ -991,7 +1015,7 @@ export default function RelatoriosPageSupabase() {
           });
           grupos.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
-          const colCount = isFuncionario ? 7 : 9;
+          const colCount = isFuncionario ? 6 : 8;
 
           return (
             <div className="border-t border-border overflow-x-auto">
@@ -1008,7 +1032,6 @@ export default function RelatoriosPageSupabase() {
                       <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Tipo</th>
                       <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Cliente</th>
                       <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">OS</th>
-                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Status</th>
                       <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Observação</th>
                       {!isFuncionario && (
                         <>
@@ -1052,10 +1075,6 @@ export default function RelatoriosPageSupabase() {
                               // Aprovação automática: tem data_aprovacao mas gestor_aprovador_id é null
                               const nomeAprovador = aprovador?.nome
                                 ?? (d.data_aprovacao && !d.gestor_aprovador_id ? "Automático" : null);
-                              const statusLabel =
-                                d.status_aprovacao === "AprovadoGestor" ? { label: "Aprovado", color: "text-green-700 bg-green-50" }
-                                : d.status_aprovacao === "Reprovado"    ? { label: "Reprovado", color: "text-red-700 bg-red-50" }
-                                : { label: "Aguardando", color: "text-yellow-700 bg-yellow-50" };
                               return (
                                 <tr key={d.id} className="border-b border-border hover:bg-muted/20 transition-colors">
                                   <td className="px-4 py-2 whitespace-nowrap text-foreground pl-12">{formatDate(d.data_despesa)}</td>
@@ -1065,11 +1084,6 @@ export default function RelatoriosPageSupabase() {
                                   <td className="px-4 py-2 whitespace-nowrap text-foreground max-w-[150px] truncate">{d.cliente}</td>
                                   <td className="px-4 py-2 whitespace-nowrap text-foreground">
                                     {d.numero_os || <span className="text-muted-foreground">—</span>}
-                                  </td>
-                                  <td className="px-4 py-2 whitespace-nowrap">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusLabel.color}`}>
-                                      {statusLabel.label}
-                                    </span>
                                   </td>
                                   <td className="px-4 py-2 text-muted-foreground max-w-[180px] truncate" title={d.observacao ?? ""}>
                                     {d.observacao || "—"}
