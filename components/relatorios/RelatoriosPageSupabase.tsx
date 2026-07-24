@@ -146,40 +146,482 @@ export default function RelatoriosPageSupabase() {
     try {
       const { default: jsPDF } = await import("jspdf");
 
-      // Agrupar despesas por funcionário
-      const gruposPDF: { nome: string; despesas: typeof despesasCruzadas }[] = [];
+      // ── Agrupar despesas por funcionário (usando despesasTabela) ──
+      const gruposPDF: { nome: string; iniciais: string; despesas: typeof despesasTabela }[] = [];
       const seenPDF = new Map<string, number>();
-      despesasCruzadas.forEach((d) => {
+      despesasTabela.forEach((d) => {
         const key = d.tecnico_id ?? "__sem__";
         if (!seenPDF.has(key)) {
           const tec = profiles.find((p) => p.id === d.tecnico_id);
+          const nome = tec?.nome ?? "Sem funcionário";
+          const partes = nome.trim().split(" ");
+          const iniciais = partes.length >= 2
+            ? (partes[0][0] + partes[partes.length - 1][0]).toUpperCase()
+            : nome.slice(0, 2).toUpperCase();
           seenPDF.set(key, gruposPDF.length);
-          gruposPDF.push({ nome: tec?.nome ?? "Sem funcionário", despesas: [] });
+          gruposPDF.push({ nome, iniciais, despesas: [] });
         }
         gruposPDF[seenPDF.get(key)!].despesas.push(d);
       });
       gruposPDF.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
+      // ── Constantes de layout ──
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const PW = 210; // largura A4
-      const PH = 297; // altura A4
-      const ML = 14;  // margem esquerda
-      const MR = 14;  // margem direita
-      const CW = PW - ML - MR; // largura útil
-      const BOTTOM_MARGIN = 15;
+      const PW = 210;
+      const PH = 297;
+      const ML = 12;
+      const MR = 12;
+      const CW = PW - ML - MR;
+      const BOT = 14;
+
+      // ── Paleta ──
+      const NAVY:   [number,number,number] = [22,  45,  95];
+      const AZURE:  [number,number,number] = [44, 105, 210];
+      const C_GREEN:[number,number,number] = [22, 163,  74];
+      const C_ORG:  [number,number,number] = [195,110,  10];
+      const LIGHT:  [number,number,number] = [230, 238, 252];
+      const GREY:   [number,number,number] = [245, 247, 250];
+      const BORDER: [number,number,number] = [218, 226, 242];
+
+      // Paleta de avatares (ciclo)
+      const AVATAR_COLORS: [number,number,number][] = [
+        [44,105,210], [22,163,74], [195,110,10], [139,40,200], [220,50,50],
+      ];
 
       let y = 0;
 
-      // ── Cores do sistema (Navy Blue RJ Compressores) ──
-      const C_NAVY: [number,number,number]  = [35,  55, 110]; // primary oklch(0.35 0.12 255)
-      const C_AZURE: [number,number,number] = [44, 105, 210]; // accent  oklch(0.55 0.18 255)
-      const C_LIGHT: [number,number,number] = [220, 230, 248]; // fundo suave
+      // ── Helpers ──
+      const t = (str: string, x: number, yy: number, opts?: Parameters<typeof pdf.text>[3]) =>
+        pdf.text(str, x, yy, opts);
 
-      // ── Helpers de desenho ──
-      const newPage = () => {
-        pdf.addPage();
-        y = 14;
+      const checkY = (needed: number) => {
+        if (y + needed > PH - BOT) { pdf.addPage(); y = BOT; }
       };
+
+      // Coluna x baseado em alinhamento (âncora correta para jsPDF)
+      const cx = (startX: number, w: number, align?: string) => {
+        if (align === "right")  return startX + w;   // jsPDF usa borda direita
+        if (align === "center") return startX + w / 2;
+        return startX + 2;
+      };
+
+      const sectionLine = (label: string, icon?: string) => {
+        checkY(12);
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...NAVY);
+        t((icon ? icon + "  " : "") + label, ML, y);
+        y += 1.5;
+        pdf.setDrawColor(...AZURE);
+        pdf.setLineWidth(0.5);
+        pdf.line(ML, y, ML + CW, y);
+        pdf.setTextColor(17, 24, 39);
+        y += 5;
+      };
+
+      const tblHeader = (cols: { label: string; w: number; align?: "left"|"right"|"center" }[], startX = ML, totalW = CW) => {
+        checkY(7);
+        pdf.setFillColor(...LIGHT);
+        pdf.rect(startX, y, totalW, 6, "F");
+        pdf.setFontSize(7.5);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...NAVY);
+        let x = startX;
+        cols.forEach((col) => {
+          t(col.label.toUpperCase(), cx(x, col.w, col.align), y + 4.2, { align: col.align ?? "left" });
+          x += col.w;
+        });
+        pdf.setTextColor(17, 24, 39);
+        y += 6;
+      };
+
+      const tblRow = (
+        cols: { val: string; w: number; align?: "left"|"right"|"center"; bold?: boolean }[],
+        odd: boolean,
+        startX = ML
+      ) => {
+        checkY(6);
+        if (odd) { pdf.setFillColor(...GREY); pdf.rect(startX, y, CW, 5.5, "F"); }
+        let x = startX;
+        cols.forEach((col) => {
+          pdf.setFont("helvetica", col.bold ? "bold" : "normal");
+          pdf.setFontSize(8);
+          pdf.setTextColor(17, 24, 39);
+          const maxW = col.w - 3;
+          const lines = pdf.splitTextToSize(col.val, maxW) as string[];
+          t(lines[0], cx(x, col.w, col.align), y + 3.8, { align: col.align ?? "left" });
+          x += col.w;
+        });
+        pdf.setDrawColor(...BORDER);
+        pdf.setLineWidth(0.1);
+        pdf.line(startX, y + 5.5, startX + CW, y + 5.5);
+        y += 5.5;
+      };
+
+      // ════════════════════════════════════════
+      // 1. CABEÇALHO
+      // ════════════════════════════════════════
+      // Fundo navy completo
+      pdf.setFillColor(...NAVY);
+      pdf.rect(0, 0, PW, 32, "F");
+
+      // Acento degradê (faixa mais clara no canto direito)
+      pdf.setFillColor(35, 65, 125);
+      pdf.rect(PW * 0.55, 0, PW * 0.45, 32, "F");
+
+      // Logo
+      const LOGO_H = 22;
+      let logoEndX = ML;
+      try {
+        const logoUrl = "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/RJ%20Branco%202-Pn9QBwHse0Kjls3Cpbdg4mGuwo47pg.png";
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image(); el.crossOrigin = "anonymous";
+          el.onload = () => resolve(el); el.onerror = reject; el.src = logoUrl;
+        });
+        const ratio = img.naturalWidth / img.naturalHeight;
+        const logoW = LOGO_H * ratio;
+        const cv = document.createElement("canvas");
+        cv.width = img.naturalWidth; cv.height = img.naturalHeight;
+        cv.getContext("2d")!.drawImage(img, 0, 0);
+        pdf.addImage(cv.toDataURL("image/png"), "PNG", 4, (32 - LOGO_H) / 2, logoW, LOGO_H);
+        logoEndX = 4 + logoW + 3;
+      } catch { logoEndX = ML; }
+
+      // Linha divisória vertical após logo
+      pdf.setDrawColor(255, 255, 255);
+      pdf.setLineWidth(0.3);
+      pdf.line(logoEndX + 1, 6, logoEndX + 1, 26);
+
+      // Título e período
+      const titleX = logoEndX + 5;
+      pdf.setFontSize(17);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(255, 255, 255);
+      t("Relatorio de Despesas", titleX, 14);
+      // Ícone calendário simulado + período
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(185, 205, 240);
+      t(periodoLabel, titleX + 5, 22);
+
+      // Box "Gerado em" no canto direito
+      const boxW = 42; const boxH = 16; const boxX = PW - MR - boxW; const boxY = 8;
+      pdf.setFillColor(35, 65, 145);
+      pdf.roundedRect(boxX, boxY, boxW, boxH, 2, 2, "F");
+      pdf.setFontSize(7);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(185, 205, 240);
+      t("Gerado em", boxX + boxW / 2, boxY + 5.5, { align: "center" });
+      pdf.setFontSize(8.5);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(255, 255, 255);
+      const agora = new Date();
+      t(
+        `${agora.toLocaleDateString("pt-BR")} as ${agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`,
+        boxX + boxW / 2, boxY + 12, { align: "center" }
+      );
+
+      // Filtros ativos (se houver)
+      if (filtroFuncionario || filtroTipo) {
+        const filtrosAtivos = [
+          filtroFuncionario ? profiles.find((p) => p.id === filtroFuncionario)?.nome : "",
+          filtroTipo ? tiposDespesa.find((t2) => t2.id === filtroTipo)?.nome : "",
+        ].filter(Boolean).join("  |  ");
+        pdf.setFontSize(7);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(185, 205, 240);
+        t(`Filtros: ${filtrosAtivos}`, ML, 29);
+      }
+
+      y = 38;
+
+      // ════════════════════════════════════════
+      // 2. CARDS DE RESUMO (com círculo ícone)
+      // ════════════════════════════════════════
+      const cardsData = [
+        { label: "Total do Periodo",   val: formatCurrency(totalAno),   color: AZURE,   letra: "$" },
+        { label: "Lancamentos",         val: String(totalLancamentos),    color: C_GREEN, letra: "#" },
+        { label: "Ticket Medio",        val: formatCurrency(ticketMedio), color: C_ORG,   letra: "~" },
+        ...(isGestorOuAdmin ? [{ label: "Funcionarios Ativos", val: String(tecnicosAtivos), color: AZURE as [number,number,number], letra: "@" }] : []),
+      ];
+      const cardW = CW / cardsData.length;
+      const cardH = 22;
+      cardsData.forEach((card, i) => {
+        const cx2 = ML + i * cardW;
+        // Card com borda
+        pdf.setFillColor(255, 255, 255);
+        pdf.roundedRect(cx2, y, cardW - 2, cardH, 2, 2, "F");
+        pdf.setDrawColor(...BORDER);
+        pdf.setLineWidth(0.3);
+        pdf.roundedRect(cx2, y, cardW - 2, cardH, 2, 2, "S");
+
+        // Círculo colorido ícone
+        const circR = 5.5;
+        const circX = cx2 + 4 + circR;
+        const circY = y + cardH / 2;
+        pdf.setFillColor(...card.color);
+        pdf.circle(circX, circY, circR, "F");
+        pdf.setFontSize(8);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(255, 255, 255);
+        t(card.letra, circX, circY + 2.5, { align: "center" });
+
+        // Textos
+        const textX = cx2 + 4 + circR * 2 + 3;
+        pdf.setFontSize(7);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(107, 114, 128);
+        t(card.label, textX, y + 8);
+        pdf.setFontSize(13);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...card.color);
+        t(card.val, textX, y + 17);
+      });
+      pdf.setTextColor(17, 24, 39);
+      y += cardH + 8;
+
+      // ════════════════════════════════════════
+      // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
+      // ════════════════════════════════════════
+      const COL2W = CW / 2 - 3; // largura de cada coluna com gap
+
+      const yStart2col = y;
+
+      // ── Coluna esquerda: Top Funcionários ──
+      if (byTecnico.length > 0) {
+        // Box
+        pdf.setFillColor(255, 255, 255);
+        pdf.setDrawColor(...BORDER);
+        pdf.setLineWidth(0.3);
+        // Título da seção dentro do box
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...NAVY);
+        t("Top Funcionarios", ML, y);
+        y += 1.5;
+        pdf.setDrawColor(...AZURE);
+        pdf.setLineWidth(0.5);
+        pdf.line(ML, y, ML + COL2W, y);
+        y += 5;
+
+        const colsFun = [
+          { label: "Funcionario", w: COL2W * 0.55 },
+          { label: "Qtd",         w: COL2W * 0.20, align: "center" as const },
+          { label: "Total",       w: COL2W * 0.25, align: "right"  as const },
+        ];
+        tblHeader(colsFun, ML, COL2W);
+        byTecnico.forEach((tec, i) => {
+          tblRow([
+            { val: tec.nome,                   w: colsFun[0].w },
+            { val: String(tec.qtd),            w: colsFun[1].w, align: "center" },
+            { val: formatCurrency(tec.total),  w: colsFun[2].w, align: "right", bold: true },
+          ], i % 2 !== 0, ML);
+        });
+      }
+
+      const yAfterLeft = y;
+      y = yStart2col;
+
+      // ── Coluna direita: Por Tipo ──
+      const colRX = ML + COL2W + 6;
+      if (byTipo.length > 0) {
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...NAVY);
+        t("Por Tipo de Despesa", colRX, y);
+        y += 1.5;
+        pdf.setDrawColor(...AZURE);
+        pdf.setLineWidth(0.5);
+        pdf.line(colRX, y, colRX + COL2W, y);
+        y += 5;
+
+        const colsTipo = [
+          { label: "Tipo",  w: COL2W * 0.50 },
+          { label: "Total", w: COL2W * 0.30, align: "right" as const },
+          { label: "%",     w: COL2W * 0.20, align: "right" as const },
+        ];
+        // header manual para a coluna direita
+        checkY(7);
+        pdf.setFillColor(...LIGHT);
+        pdf.rect(colRX, y, COL2W, 6, "F");
+        pdf.setFontSize(7.5);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...NAVY);
+        let x2 = colRX;
+        colsTipo.forEach((col) => {
+          t(col.label.toUpperCase(), cx(x2, col.w, col.align), y + 4.2, { align: col.align ?? "left" });
+          x2 += col.w;
+        });
+        pdf.setTextColor(17, 24, 39);
+        y += 6;
+
+        byTipo.forEach((tp, i) => {
+          checkY(6);
+          if (i % 2 !== 0) { pdf.setFillColor(...GREY); pdf.rect(colRX, y, COL2W, 5.5, "F"); }
+          let rx = colRX;
+          const rowTipo = [
+            { val: tp.name,                                                          w: colsTipo[0].w },
+            { val: formatCurrency(tp.valor),                                         w: colsTipo[1].w, align: "right" as const, bold: true },
+            { val: totalAno > 0 ? ((tp.valor / totalAno) * 100).toFixed(1) + "%" : "—", w: colsTipo[2].w, align: "right" as const },
+          ];
+          rowTipo.forEach((col) => {
+            pdf.setFont("helvetica", col.bold ? "bold" : "normal");
+            pdf.setFontSize(8);
+            pdf.setTextColor(17, 24, 39);
+            const lines = pdf.splitTextToSize(col.val, col.w - 3) as string[];
+            t(lines[0], cx(rx, col.w, col.align), y + 3.8, { align: col.align ?? "left" });
+            rx += col.w;
+          });
+          pdf.setDrawColor(...BORDER);
+          pdf.setLineWidth(0.1);
+          pdf.line(colRX, y + 5.5, colRX + COL2W, y + 5.5);
+          y += 5.5;
+        });
+      }
+
+      y = Math.max(yAfterLeft, y) + 8;
+
+      // ════════════════════════════════════════
+      // 4. EVOLUÇÃO MENSAL com barras
+      // ════════════════════════════════════════
+      sectionLine(`Evolucao Mensal - ${anoSelecionado}`);
+      checkY(30);
+
+      const mesW = CW / 12;
+      const BAR_MAX_H = 12;
+      const maxVal = Math.max(...byMes.map((m) => m.valor), 1);
+
+      // Nomes dos meses (abreviados)
+      const MESES_ABR = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+      MESES_ABR.forEach((m, i) => {
+        pdf.setFontSize(7.5);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(107, 114, 128);
+        t(m, ML + i * mesW + mesW / 2, y + 5, { align: "center" });
+      });
+      y += 7;
+
+      // Barras e valores
+      byMes.forEach((m, i) => {
+        const bx = ML + i * mesW + mesW / 2;
+        if (m.valor > 0) {
+          const bh = Math.max((m.valor / maxVal) * BAR_MAX_H, 2);
+          const barW = mesW * 0.5;
+          pdf.setFillColor(...AZURE);
+          pdf.roundedRect(bx - barW / 2, y + (BAR_MAX_H - bh), barW, bh, 1, 1, "F");
+          const valStr = m.valor >= 1000 ? `R$${(m.valor / 1000).toFixed(1)}k` : formatCurrency(m.valor);
+          pdf.setFontSize(6.5);
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(...AZURE);
+          t(valStr, bx, y + BAR_MAX_H + 5, { align: "center" });
+        } else {
+          pdf.setFontSize(7.5);
+          pdf.setFont("helvetica", "normal");
+          pdf.setTextColor(180, 188, 200);
+          t("—", bx, y + BAR_MAX_H / 2 + 3, { align: "center" });
+        }
+      });
+      pdf.setTextColor(17, 24, 39);
+      y += BAR_MAX_H + 10;
+
+      // ════════════════════════════════════════
+      // 5. TABELA AGRUPADA POR FUNCIONÁRIO
+      // ════════════════════════════════════════
+      sectionLine(`Despesas do Periodo (${despesasTabela.length} registros)`);
+
+      // Colunas — somam 1.00
+      const colsDesp = [
+        { label: "Data",       w: CW * 0.12 },
+        { label: "Tipo",       w: CW * 0.18 },
+        { label: "Cliente",    w: CW * 0.24 },
+        { label: "OS",         w: CW * 0.10 },
+        { label: "Observacao", w: CW * 0.22 },
+        { label: "Valor",      w: CW * 0.14, align: "right" as const },
+      ];
+      // 0.12+0.18+0.24+0.10+0.22+0.14 = 1.00 ✓
+
+      gruposPDF.forEach((grupo, gi) => {
+        const subtotal = grupo.despesas.reduce((s, d) => s + Number(d.valor), 0);
+        const qtd = grupo.despesas.length;
+        const avatarColor = AVATAR_COLORS[gi % AVATAR_COLORS.length];
+
+        // Linha do funcionário com avatar
+        checkY(10);
+        pdf.setFillColor(...LIGHT);
+        pdf.rect(ML, y, CW, 8, "F");
+
+        // Avatar círculo com iniciais
+        const AVR = 4;
+        const avX = ML + 4 + AVR;
+        const avY = y + 4;
+        pdf.setFillColor(...avatarColor);
+        pdf.circle(avX, avY, AVR, "F");
+        pdf.setFontSize(6.5);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(255, 255, 255);
+        t(grupo.iniciais, avX, avY + 2, { align: "center" });
+
+        // Nome
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...NAVY);
+        t(grupo.nome, ML + 4 + AVR * 2 + 3, y + 5.5);
+
+        // Subtotal e qtd à direita
+        pdf.setFontSize(8.5);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...NAVY);
+        t(`${formatCurrency(subtotal)}  •  ${qtd} ${qtd === 1 ? "despesa" : "despesas"}`, ML + CW, y + 5.5, { align: "right" });
+
+        y += 8;
+        tblHeader(colsDesp, ML, CW);
+
+        grupo.despesas
+          .slice()
+          .sort((a, b) => a.data_despesa.localeCompare(b.data_despesa))
+          .forEach((d, i) => {
+            const tipo = tiposDespesa.find((tp) => tp.id === d.tipo_despesa_id);
+            tblRow([
+              { val: formatDate(d.data_despesa),      w: colsDesp[0].w },
+              { val: tipo?.nome ?? "—",               w: colsDesp[1].w },
+              { val: d.cliente,                       w: colsDesp[2].w },
+              { val: d.numero_os ?? "—",              w: colsDesp[3].w },
+              { val: d.observacao ?? "—",             w: colsDesp[4].w },
+              { val: formatCurrency(Number(d.valor)), w: colsDesp[5].w, align: "right", bold: true },
+            ], i % 2 !== 0);
+          });
+
+        y += 5;
+      });
+
+      // ── Total geral ──
+      checkY(10);
+      pdf.setFillColor(...NAVY);
+      pdf.roundedRect(ML, y, CW, 9, 1, 1, "F");
+      pdf.setFontSize(9.5);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(255, 255, 255);
+      t(`Total Geral  •  ${despesasTabela.length} despesas  •  ${gruposPDF.length} funcionarios`, ML + 3, y + 6);
+      t(formatCurrency(despesasTabela.reduce((s, d) => s + Number(d.valor), 0)), ML + CW, y + 6, { align: "right" });
+
+      // ── Rodapé com número de páginas ──
+      const totalPages = (pdf as any).internal.getNumberOfPages();
+      for (let pg = 1; pg <= totalPages; pg++) {
+        pdf.setPage(pg);
+        pdf.setFontSize(7.5);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(160, 174, 200);
+        pdf.text(`Pagina ${pg} de ${totalPages}`, PW / 2, PH - 5, { align: "center" });
+      }
+
+      const nomeArquivo = `relatorio-despesas-${periodoLabel.replace(/[\s/]/g, "-").toLowerCase()}.pdf`;
+      pdf.save(nomeArquivo);
+    } catch (err) {
+      console.error("[v0] Erro ao exportar PDF:", err);
+    } finally {
+      setExportando(false);
+    }
+  };
 
       const checkY = (needed: number) => {
         if (y + needed > PH - BOTTOM_MARGIN) newPage();
