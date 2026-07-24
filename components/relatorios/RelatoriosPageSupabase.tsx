@@ -509,7 +509,7 @@ export default function RelatoriosPageSupabase() {
     });
   }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
 
-  // Despesas após filtros cruzados
+  // Despesas após filtros cruzados (apenas aprovadas — usadas nos gráficos e cards)
   const despesasCruzadas = useMemo(() => {
     return despesasAno.filter((d) => {
       if (filtroFuncionario && d.tecnico_id !== filtroFuncionario) return false;
@@ -517,6 +517,25 @@ export default function RelatoriosPageSupabase() {
       return true;
     });
   }, [despesasAno, filtroFuncionario, filtroTipo]);
+
+  // Todas as despesas enviadas do período (exceto rascunho) — usadas na tabela
+  const despesasTabela = useMemo(() => {
+    return despesas.filter((d) => {
+      // Exclui apenas rascunhos (nunca enviados)
+      if (d.status_erp === "Rascunho" && d.status_aprovacao === "AguardandoGestor" && !d.data_envio) return false;
+      const dataStr = (d.data_despesa || d.created_at || "").slice(0, 10);
+      if (modoFiltro === "mes") {
+        const dt = new Date(dataStr + "T00:00:00");
+        if (dt.getMonth() !== mesSelecionado || dt.getFullYear() !== anoSelecionado) return false;
+      } else {
+        if (dataInicial && dataStr < dataInicial) return false;
+        if (dataFinal && dataStr > dataFinal) return false;
+      }
+      if (filtroFuncionario && d.tecnico_id !== filtroFuncionario) return false;
+      if (filtroTipo && d.tipo_despesa_id !== filtroTipo) return false;
+      return true;
+    });
+  }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroFuncionario, filtroTipo]);
 
   const totalAno = despesasCruzadas.reduce((s, d) => s + Number(d.valor), 0);
   const totalLancamentos = despesasCruzadas.length;
@@ -955,11 +974,11 @@ export default function RelatoriosPageSupabase() {
               <p className="text-sm font-semibold text-foreground">
                 Despesas do Período
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  ({despesasCruzadas.length} {despesasCruzadas.length === 1 ? "registro" : "registros"} &bull; {formatCurrency(totalAno)})
+                  ({despesasTabela.length} {despesasTabela.length === 1 ? "registro" : "registros"} &bull; {formatCurrency(despesasTabela.reduce((s, d) => s + Number(d.valor), 0))})
                 </span>
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {temFiltroAtivo ? "Com filtros cruzados ativos" : "Todas as despesas aprovadas do período selecionado"}
+                {temFiltroAtivo ? "Com filtros cruzados ativos" : "Todas as despesas enviadas do período selecionado"}
               </p>
             </div>
           </div>
@@ -974,10 +993,10 @@ export default function RelatoriosPageSupabase() {
 
         {/* Corpo da tabela — colapsável */}
         {tabelaAberta && (() => {
-          // Agrupar por funcionário
-          const grupos: { tecnicoId: string | null; nome: string; despesas: typeof despesasCruzadas }[] = [];
+          // Agrupar por funcionário usando despesasTabela (todas as enviadas, não só aprovadas)
+          const grupos: { tecnicoId: string | null; nome: string; despesas: typeof despesasTabela }[] = [];
           const seen = new Map<string, number>();
-          despesasCruzadas.forEach((d) => {
+          despesasTabela.forEach((d) => {
             const key = d.tecnico_id ?? "__sem_funcionario__";
             if (!seen.has(key)) {
               const tecnico = profiles.find((p) => p.id === d.tecnico_id);
@@ -988,11 +1007,11 @@ export default function RelatoriosPageSupabase() {
           });
           grupos.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
-          const colCount = isFuncionario ? 6 : 8;
+          const colCount = isFuncionario ? 7 : 9;
 
           return (
             <div className="border-t border-border overflow-x-auto">
-              {despesasCruzadas.length === 0 ? (
+              {despesasTabela.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
                   <FileText className="w-8 h-8 opacity-30" />
                   <p className="text-sm">Nenhuma despesa encontrada para os filtros aplicados.</p>
@@ -1006,6 +1025,7 @@ export default function RelatoriosPageSupabase() {
                       <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Cliente</th>
                       <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">OS</th>
                       <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Valor</th>
+                      <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Status</th>
                       <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Observação</th>
                       {!isFuncionario && (
                         <>
@@ -1045,6 +1065,13 @@ export default function RelatoriosPageSupabase() {
                             .map((d) => {
                               const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
                               const aprovador = profiles.find((p) => p.id === d.gestor_aprovador_id);
+                              // Aprovação automática: tem data_aprovacao mas gestor_aprovador_id é null
+                              const nomeAprovador = aprovador?.nome
+                                ?? (d.data_aprovacao && !d.gestor_aprovador_id ? "Automático" : null);
+                              const statusLabel =
+                                d.status_aprovacao === "AprovadoGestor" ? { label: "Aprovado", color: "text-green-700 bg-green-50" }
+                                : d.status_aprovacao === "Reprovado"    ? { label: "Reprovado", color: "text-red-700 bg-red-50" }
+                                : { label: "Aguardando", color: "text-yellow-700 bg-yellow-50" };
                               return (
                                 <tr key={d.id} className="border-b border-border hover:bg-muted/20 transition-colors">
                                   <td className="px-4 py-2 whitespace-nowrap text-foreground pl-12">{formatDate(d.data_despesa)}</td>
@@ -1058,13 +1085,18 @@ export default function RelatoriosPageSupabase() {
                                   <td className="px-4 py-2 whitespace-nowrap text-right font-medium text-foreground">
                                     {formatCurrency(Number(d.valor))}
                                   </td>
+                                  <td className="px-4 py-2 whitespace-nowrap">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${statusLabel.color}`}>
+                                      {statusLabel.label}
+                                    </span>
+                                  </td>
                                   <td className="px-4 py-2 text-muted-foreground max-w-[180px] truncate" title={d.observacao ?? ""}>
                                     {d.observacao || "—"}
                                   </td>
                                   {!isFuncionario && (
                                     <>
                                       <td className="px-4 py-2 whitespace-nowrap text-foreground">
-                                        {aprovador?.nome ?? <span className="text-muted-foreground">—</span>}
+                                        {nomeAprovador ?? <span className="text-muted-foreground">—</span>}
                                       </td>
                                       <td className="px-4 py-2 whitespace-nowrap text-foreground">
                                         {d.data_aprovacao ? formatDate(d.data_aprovacao.slice(0, 10)) : <span className="text-muted-foreground">—</span>}
@@ -1079,15 +1111,14 @@ export default function RelatoriosPageSupabase() {
                     })}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-muted/50 border-t-2 border-border">
-                      <td colSpan={colCount - 2} className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        Total geral — {despesasCruzadas.length} {despesasCruzadas.length === 1 ? "despesa" : "despesas"} &bull; {grupos.length} {grupos.length === 1 ? "funcionário" : "funcionários"}
+                    <tr className="bg-muted/40 border-t border-border">
+                      <td colSpan={colCount - 3} className="px-4 py-2.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Total geral — {despesasTabela.length} {despesasTabela.length === 1 ? "despesa" : "despesas"} &bull; {grupos.length} {grupos.length === 1 ? "funcionário" : "funcionários"}
                       </td>
-                      <td className="px-4 py-3 text-right text-sm font-bold text-foreground">
-                        {formatCurrency(totalAno)}
+                      <td className="px-4 py-2.5 text-right text-sm font-bold text-foreground">
+                        {formatCurrency(despesasTabela.reduce((s, d) => s + Number(d.valor), 0))}
                       </td>
-                      <td colSpan={1} />
-                      {!isFuncionario && <td colSpan={2} />}
+                      <td colSpan={colCount - (colCount - 3) - 1} />
                     </tr>
                   </tfoot>
                 </table>
