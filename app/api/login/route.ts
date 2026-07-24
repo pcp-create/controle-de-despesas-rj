@@ -24,8 +24,6 @@ export async function POST(request: NextRequest) {
       .eq("usuario", usuario.trim().toLowerCase())
       .single();
 
-    console.log("[v0] login - profile lookup:", profileData, profileError?.message);
-
     if (profileError || !profileData) {
       return NextResponse.json({ error: "Usuário ou senha inválidos" }, { status: 401 });
     }
@@ -40,8 +38,6 @@ export async function POST(request: NextRequest) {
       email: profileData.email,
       password: senha,
     });
-
-    console.log("[v0] login - auth result:", authData?.user?.id, authError?.message);
 
     if (authError || !authData.user || !authData.session) {
       return NextResponse.json({ error: "Usuário ou senha inválidos" }, { status: 401 });

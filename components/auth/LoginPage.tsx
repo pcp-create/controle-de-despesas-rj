@@ -25,7 +25,7 @@ export default function LoginPage() {
     }
 
     try {
-      // 1. Buscar email pelo usuario via API server-side
+      // 1. Buscar o email associado ao nome de usuário via API server-side
       const loginRes = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -40,28 +40,22 @@ export default function LoginPage() {
         return;
       }
 
-      // 2. Usar setSession com os tokens do servidor para criar sessão no browser
+      // 2. Autenticar diretamente no cliente Supabase com email + senha.
+      // Isso evita problemas de cookies SameSite/cross-domain quando o sistema
+      // é acessado de um domínio externo (ex: GitHub Pages apontando para Vercel).
       const supabase = createClient();
-      const { error: sessionError } = await supabase.auth.setSession({
-        access_token: loginData.session.access_token,
-        refresh_token: loginData.session.refresh_token,
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: loginData.user.email,
+        password: senha,
       });
 
-      if (sessionError) {
-        // Fallback: tentar signInWithPassword diretamente
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: loginData.user.email,
-          password: senha,
-        });
-
-        if (signInError) {
-          setError("Erro ao iniciar sessão. Tente novamente.");
-          setLoading(false);
-          return;
-        }
+      if (signInError) {
+        setError("Erro ao iniciar sessão. Tente novamente.");
+        setLoading(false);
+        return;
       }
 
-      // Aguardar o onAuthStateChange atualizar o contexto
+      // onAuthStateChange no contexto detecta a sessão e redireciona automaticamente
     } catch (err) {
       setError("Erro ao processar solicitação");
       setLoading(false);
