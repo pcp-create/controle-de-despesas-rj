@@ -11,13 +11,14 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   PieChart,
   Pie,
   Cell,
   Legend,
   LabelList,
+  CartesianGrid,
 } from "recharts";
 import { Calendar, Download, TrendingUp, DollarSign, Users, FileText, CalendarDays, Gauge, Route, Clock, Car, X } from "lucide-react";
 
@@ -162,22 +163,21 @@ export default function RelatoriosPageSupabase() {
   const ticketMedio = totalLancamentos > 0 ? totalAno / totalLancamentos : 0;
   const tecnicosAtivos = new Set(despesasCruzadas.map((d) => d.tecnico_id)).size;
 
-  // Evolução mensal
+  // Evolução mensal — usa anoSelecionado para respeitar o filtro de ano do topo
   const byMes = useMemo(() => {
-    const anoAtual = now.getFullYear();
     return MESES.map((m, i) => ({
       mes: m,
       valor: despesasAprovadas
         .filter((d) => {
           const dt = new Date(d.data_despesa + "T12:00:00");
-          if (dt.getMonth() !== i || dt.getFullYear() !== anoAtual) return false;
+          if (dt.getMonth() !== i || dt.getFullYear() !== anoSelecionado) return false;
           if (filtroFuncionario && d.tecnico_id !== filtroFuncionario) return false;
           if (filtroTipo && d.tipo_despesa_id !== filtroTipo) return false;
           return true;
         })
         .reduce((s, d) => s + Number(d.valor), 0),
     }));
-  }, [despesasAprovadas, filtroFuncionario, filtroTipo]);
+  }, [despesasAprovadas, anoSelecionado, filtroFuncionario, filtroTipo]);
 
   // Por tipo — filtrado pelo funcionário selecionado
   const byTipo = useMemo(() => {
@@ -247,11 +247,11 @@ export default function RelatoriosPageSupabase() {
           if (r.status !== "finalizado") return false;
           if (!isGestorOuAdmin && currentUser?.id && r.usuario_id !== currentUser.id) return false;
           const dt = new Date(r.data_inicio);
-          return dt.getMonth() === i && dt.getFullYear() === now.getFullYear();
+          return dt.getMonth() === i && dt.getFullYear() === anoSelecionado;
         })
         .reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
     }));
-  }, [registrosKm, isGestorOuAdmin, currentUser]);
+  }, [registrosKm, isGestorOuAdmin, currentUser, anoSelecionado]);
 
   const kmByFrota = useMemo(() => {
     return frotas
@@ -399,24 +399,82 @@ export default function RelatoriosPageSupabase() {
 
       {/* Gráfico evolução mensal */}
       <div className="bg-white rounded-xl border border-border shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-foreground mb-4">
-          Evolução Mensal — {now.getFullYear()}
-          <span className="ml-2 text-xs font-normal text-muted-foreground">(todos os meses, independente do filtro de período)</span>
-        </h2>
-        <ResponsiveContainer width="100%" height={260}>
-          <LineChart data={byMes}>
-            <XAxis dataKey="mes" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={70}
-              tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-sm font-semibold text-foreground">
+            Evolução Mensal — {anoSelecionado}
+          </h2>
+          <span className="text-xs text-muted-foreground">
+            Total: <span className="font-semibold text-foreground">{formatCurrency(byMes.reduce((s, m) => s + m.valor, 0))}</span>
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Todos os meses do ano selecionado{temFiltroAtivo ? " com filtros cruzados ativos" : ""}
+        </p>
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={byMes} margin={{ top: 36, right: 16, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="gradMensal" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="oklch(0.55 0.18 255)" stopOpacity={0.18} />
+                <stop offset="95%" stopColor="oklch(0.55 0.18 255)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+            <XAxis
+              dataKey="mes"
+              tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+              axisLine={false}
+              tickLine={false}
+              width={72}
+              tickFormatter={(v) => v === 0 ? "R$0" : `R$${(v / 1000).toFixed(0)}k`}
+            />
             <Tooltip
-              formatter={(v: number) => [formatCurrency(v), "Valor"]}
-              contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }}
+              formatter={(v: number) => [formatCurrency(v), "Total"]}
+              contentStyle={{ borderRadius: 10, border: "1px solid var(--border)", fontSize: 13, boxShadow: "0 4px 16px rgba(0,0,0,0.08)" }}
+              labelStyle={{ fontWeight: 600, color: "var(--foreground)" }}
             />
-            <Line type="monotone" dataKey="valor" stroke="oklch(0.55 0.18 255)" strokeWidth={2}
-              dot={{ fill: "oklch(0.55 0.18 255)", r: 4 }}
-              label={{ position: "top", fontSize: 9, fill: "var(--muted-foreground)", formatter: (v: number) => v > 0 ? `R$${(v / 1000).toFixed(1)}k` : "" }}
+            <Area
+              type="monotone"
+              dataKey="valor"
+              stroke="oklch(0.48 0.22 255)"
+              strokeWidth={2.5}
+              fill="url(#gradMensal)"
+              dot={{ fill: "oklch(0.48 0.22 255)", r: 5, strokeWidth: 2, stroke: "white" }}
+              activeDot={{ r: 7, stroke: "oklch(0.48 0.22 255)", strokeWidth: 2, fill: "white" }}
+              label={(props: any) => {
+                const { x, y, value } = props;
+                if (!value || value === 0) return null;
+                return (
+                  <g>
+                    <rect
+                      x={x - 28}
+                      y={y - 28}
+                      width={56}
+                      height={20}
+                      rx={4}
+                      fill="oklch(0.48 0.22 255)"
+                      opacity={0.92}
+                    />
+                    <text
+                      x={x}
+                      y={y - 14}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontSize={10}
+                      fontWeight={600}
+                      fill="white"
+                    >
+                      {value >= 1000 ? `R$${(value / 1000).toFixed(1)}k` : formatCurrency(value)}
+                    </text>
+                  </g>
+                );
+              }}
             />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
 
