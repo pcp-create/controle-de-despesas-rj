@@ -399,11 +399,27 @@ export default function RelatoriosPageSupabase() {
         ];
         tblHeader(colsFun, ML, COL2W);
         byTecnico.forEach((tec, i) => {
-          tblRow([
-            { val: tec.nome,                   w: colsFun[0].w },
-            { val: String(tec.qtd),            w: colsFun[1].w, align: "center" },
-            { val: formatCurrency(tec.total),  w: colsFun[2].w, align: "right", bold: true },
-          ], i % 2 !== 0, ML);
+          // Linha da tabela esquerda sem desenhar linha separadora (evita emenda visual com coluna direita)
+          checkY(6);
+          if (i % 2 !== 0) { pdf.setFillColor(...GREY); pdf.rect(ML, y, COL2W, 5.5, "F"); }
+          let rx = ML;
+          [
+            { val: tec.nome,                  w: colsFun[0].w },
+            { val: String(tec.qtd),           w: colsFun[1].w, align: "center" as const },
+            { val: formatCurrency(tec.total), w: colsFun[2].w, align: "right" as const, bold: true },
+          ].forEach((col) => {
+            pdf.setFont("helvetica", col.bold ? "bold" : "normal");
+            pdf.setFontSize(8);
+            pdf.setTextColor(17, 24, 39);
+            const lines = pdf.splitTextToSize(col.val, col.w - 3) as string[];
+            t(lines[0], cx(rx, col.w, col.align), y + 3.8, { align: col.align ?? "left" });
+            rx += col.w;
+          });
+          // Linha separadora apenas até a largura da coluna esquerda
+          pdf.setDrawColor(...BORDER);
+          pdf.setLineWidth(0.1);
+          pdf.line(ML, y + 5.5, ML + COL2W, y + 5.5);
+          y += 5.5;
         });
       }
 
@@ -550,6 +566,10 @@ export default function RelatoriosPageSupabase() {
         t(`${formatCurrency(subtotal)}  •  ${qtd} ${qtd === 1 ? "despesa" : "despesas"}`, ML + CW, y + 5.5, { align: "right" });
 
         y += 8;
+        // Linha branca fina separando o cabeçalho do funcionário do cabeçalho das colunas
+        pdf.setDrawColor(255, 255, 255);
+        pdf.setLineWidth(0.6);
+        pdf.line(ML, y, ML + CW, y);
         tblHeader(colsDesp, ML, CW);
 
         grupo.despesas
