@@ -36,8 +36,37 @@ export interface PreferenciasFiltros {
   aprovacao?: FiltrosAprovacao;
 }
 
-const DEBOUNCE_MS = 800;
-const cache: Record<string, PreferenciasFiltros> = {};
+const DEBOUNCE_MS = 600;
+
+// Cache de módulo: sobrevive à troca de abas (remontagem de componentes)
+// É populado na primeira requisição e atualizado a cada save.
+const cache: Record<string, PreferenciasFiltros | null> = {};
+// Indica se já disparamos o fetch para aquele userId (evita fetches duplicados)
+const fetchPromise: Record<string, Promise<PreferenciasFiltros>> = {};
+
+async function carregarPreferencias(userId: string): Promise<PreferenciasFiltros> {
+  // Se já está em andamento, reutilizar a mesma promise
+  if (userId in fetchPromise) return fetchPromise[userId];
+
+  const supabase = createClient();
+  const promise = supabase
+    .from("profiles")
+    .select("preferencias_filtros")
+    .eq("id", userId)
+    .single()
+    .then(({ data }) => {
+      const prefs = (data?.preferencias_filtros ?? {}) as PreferenciasFiltros;
+      cache[userId] = prefs;
+      return prefs;
+    })
+    .catch(() => {
+      cache[userId] = {};
+      return {} as PreferenciasFiltros;
+    });
+
+  fetchPromise[userId] = promise;
+  return promise;
+}
 
 /**
  * Hook genérico para persistir filtros de qualquer aba no campo
@@ -50,44 +79,41 @@ export function useFiltrosPersistidos<T extends object>(
   userId: string | undefined,
   aba: keyof PreferenciasFiltros
 ) {
-  const [filtrosSalvos, setFiltrosSalvos] = useState<T | null>(null);
-  const [carregado, setCarregado] = useState(false);
+  // Inicializar de forma síncrona a partir do cache quando disponível
+  const [filtrosSalvos, setFiltrosSalvos] = useState<T | null>(() => {
+    if (!userId) return null;
+    const cached = cache[userId];
+    return cached ? (cached[aba] as T) ?? null : null;
+  });
+  const [carregado, setCarregado] = useState(() => {
+    if (!userId) return true;
+    return userId in cache; // já no cache = já carregado
+  });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!userId) { setCarregado(true); return; }
-
-    // Usar cache de sessão para evitar fetch duplicado
-    if (cache[userId]) {
-      setFiltrosSalvos((cache[userId][aba] as T) ?? null);
+    // Se já está em cache (incluindo cache vazio {}), não busca de novo
+    if (userId in cache) {
+      setFiltrosSalvos((cache[userId]?.[aba] as T) ?? null);
       setCarregado(true);
       return;
     }
-
-    const supabase = createClient();
-    supabase
-      .from("profiles")
-      .select("preferencias_filtros")
-      .eq("id", userId)
-      .single()
-      .then(({ data }) => {
-        const prefs = (data?.preferencias_filtros ?? {}) as PreferenciasFiltros;
-        cache[userId] = prefs;
-        setFiltrosSalvos((prefs[aba] as T) ?? null);
-        setCarregado(true);
-      })
-      .catch(() => setCarregado(true));
+    // Buscar do banco (ou reaproveitar promise em andamento)
+    carregarPreferencias(userId).then((prefs) => {
+      setFiltrosSalvos((prefs[aba] as T) ?? null);
+      setCarregado(true);
+    });
   }, [userId, aba]);
 
   const salvar = useCallback(
     (filtros: T) => {
       if (!userId) return;
+      // Atualizar cache imediatamente para que outras abas vejam na remontagem
+      cache[userId] = { ...(cache[userId] ?? {}), [aba]: filtros };
+
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(async () => {
-        // Atualizar cache local imediatamente
-        if (!cache[userId]) cache[userId] = {};
-        cache[userId] = { ...cache[userId], [aba]: filtros };
-
         const supabase = createClient();
         await supabase
           .from("profiles")

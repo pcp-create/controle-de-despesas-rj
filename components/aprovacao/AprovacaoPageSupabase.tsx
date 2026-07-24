@@ -51,9 +51,11 @@ export default function AprovacaoPageSupabase() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Restaurar filtros salvos ao montar
+  // Restaurar filtros salvos ao montar — roda uma única vez quando carregado=true
   useEffect(() => {
-    if (!carregadoApr || aplicadoApr.current || !filtrosApr) return;
+    if (!carregadoApr || aplicadoApr.current) return;
     aplicadoApr.current = true;
+    if (!filtrosApr) return;
     setFilterStatus(filtrosApr.filterStatus);
     setFilterFuncionario(filtrosApr.filterFuncionario);
   }, [carregadoApr, filtrosApr]);

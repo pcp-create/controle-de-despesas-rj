@@ -134,9 +134,11 @@ export default function RelatoriosPageSupabase() {
   const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
 
   // Restaurar filtros salvos ao montar — apenas uma vez
+  // Restaurar filtros salvos ao montar — roda uma única vez quando carregado=true
   useEffect(() => {
-    if (!carregadoRel || aplicadoRel.current || !filtrosRel) return;
+    if (!carregadoRel || aplicadoRel.current) return;
     aplicadoRel.current = true;
+    if (!filtrosRel) return;
     setModoFiltro(filtrosRel.modoFiltro);
     setMesSelecionado(filtrosRel.mesSelecionado);
     setAnoSelecionado(filtrosRel.anoSelecionado);
@@ -393,7 +395,7 @@ export default function RelatoriosPageSupabase() {
 
       // ════════════════════════════════════════
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
-      // ═════════════════��══════════════════════
+      // ═════════════════��═════════════════════��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
 
       const yStart2col = y;

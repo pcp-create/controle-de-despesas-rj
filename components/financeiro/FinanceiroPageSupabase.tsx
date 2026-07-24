@@ -92,10 +92,11 @@ export default function FinanceiroPageSupabase() {
   });
   const [dataFinal, setDataFinal] = useState(() => now.toISOString().slice(0, 10));
 
-  // Restaurar filtros salvos ao montar
+  // Restaurar filtros salvos ao montar — roda uma única vez quando carregado=true
   useEffect(() => {
-    if (!carregadoFin || aplicadoFin.current || !filtrosFin) return;
+    if (!carregadoFin || aplicadoFin.current) return;
     aplicadoFin.current = true;
+    if (!filtrosFin) return;
     setModoFiltro(filtrosFin.modoFiltro);
     setMesSelecionado(filtrosFin.mesSelecionado);
     setAnoSelecionado(filtrosFin.anoSelecionado);

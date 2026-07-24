@@ -124,10 +124,11 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
   const [filtroFuncionario, setFiltroFuncionario] = useState<string | null>(null);
 
-  // Restaurar filtros salvos ao montar
+  // Restaurar filtros salvos ao montar — roda uma única vez quando carregado=true
   useEffect(() => {
-    if (!carregado || aplicado.current || !filtrosSalvos) return;
+    if (!carregado || aplicado.current) return;
     aplicado.current = true;
+    if (!filtrosSalvos) return; // sem preferências salvas: mantém padrões
     setModoFiltro(filtrosSalvos.modoFiltro);
     setMesSelecionado(filtrosSalvos.mesSelecionado);
     setAnoSelecionado(filtrosSalvos.anoSelecionado);
