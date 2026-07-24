@@ -281,7 +281,7 @@ export default function RelatoriosPageSupabase() {
         cv.width  = img.naturalWidth;
         cv.height = img.naturalHeight;
         cv.getContext("2d")!.drawImage(img, 0, 0);
-        pdf.addImage(cv.toDataURL("image/png"), "PNG", ML, (26 - LOGO_H_MM) / 2, logoWMM, LOGO_H_MM);
+        pdf.addImage(cv.toDataURL("image/png"), "PNG", 4, (26 - LOGO_H_MM) / 2, logoWMM, LOGO_H_MM);
       } catch {
         logoWMM = 0; // fallback: sem logo, título começa em ML
       }
