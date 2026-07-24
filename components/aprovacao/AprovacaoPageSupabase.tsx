@@ -42,6 +42,7 @@ export default function AprovacaoPageSupabase() {
   
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("AguardandoGestor");
+  const [filterFuncionario, setFilterFuncionario] = useState<string>("todos");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [reprovandoChave, setReprovandoChave] = useState<string | null>(null);
@@ -53,9 +54,14 @@ export default function AprovacaoPageSupabase() {
 
     const visiveis = despesas.filter((d) => {
       if (!d.status_erp || d.status_erp === "Rascunho") return false;
-      if (currentUser.perfil === "administrador" || currentUser.perfil === "financeiro") return true;
-      const funcionario = profiles.find((p) => p.id === d.tecnico_id);
-      return funcionario?.gestor_id === currentUser.id;
+      // Gestor, administrador e financeiro visualizam todas as despesas enviadas
+      if (
+        currentUser.perfil === "administrador" ||
+        currentUser.perfil === "gestor" ||
+        currentUser.perfil === "financeiro"
+      ) return true;
+      // Funcionário vê apenas as próprias
+      return d.tecnico_id === currentUser.id;
     });
 
     const mapa = new Map<string, Despesa[]>();
@@ -87,6 +93,7 @@ export default function AprovacaoPageSupabase() {
       .filter((g) => {
         const d = g.despesaPrincipal;
         if (filterStatus !== "todos" && d.status_aprovacao !== filterStatus) return false;
+        if (filterFuncionario !== "todos" && d.tecnico_id !== filterFuncionario) return false;
         if (search) {
           const term = search.toLowerCase();
           const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
@@ -104,7 +111,15 @@ export default function AprovacaoPageSupabase() {
         new Date(b.despesaPrincipal.created_at).getTime() -
         new Date(a.despesaPrincipal.created_at).getTime()
       );
-  }, [despesas, currentUser, profiles, search, filterStatus, tiposDespesa]);
+  }, [despesas, currentUser, profiles, search, filterStatus, filterFuncionario, tiposDespesa]);
+
+  // Funcionários que têm despesas visíveis (para o select de filtro)
+  const isGestorOuAdmin = currentUser?.perfil === "gestor" || currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro";
+  const funcionariosComDespesas = useMemo(() => {
+    if (!isGestorOuAdmin) return [];
+    const ids = new Set(despesas.filter((d) => d.status_erp && d.status_erp !== "Rascunho").map((d) => d.tecnico_id));
+    return profiles.filter((p) => ids.has(p.id)).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [despesas, profiles, isGestorOuAdmin]);
 
   const pendentes = grupos.filter((g) => g.despesaPrincipal.status_aprovacao === "AguardandoGestor").length;
 
@@ -229,6 +244,25 @@ export default function AprovacaoPageSupabase() {
             className="w-full pl-9 pr-4 py-2 rounded-lg border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
+
+        {/* Filtro por funcionário — visível apenas para gestor/admin */}
+        {isGestorOuAdmin && funcionariosComDespesas.length > 0 && (
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <select
+              value={filterFuncionario}
+              onChange={(e) => setFilterFuncionario(e.target.value)}
+              className="pl-9 pr-8 py-2 rounded-lg border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none min-w-[180px]"
+            >
+              <option value="todos">Todos os Funcionários</option>
+              {funcionariosComDespesas.map((p) => (
+                <option key={p.id} value={p.id}>{p.nome}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          </div>
+        )}
+
         <div className="relative">
           <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <select
@@ -236,7 +270,7 @@ export default function AprovacaoPageSupabase() {
             onChange={(e) => setFilterStatus(e.target.value)}
             className="pl-9 pr-8 py-2 rounded-lg border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
           >
-            <option value="todos">Todos</option>
+            <option value="todos">Todos os Status</option>
             <option value="AguardandoGestor">Aguardando Aprovação</option>
             <option value="AprovadoGestor">Aprovados</option>
             <option value="Reprovado">Reprovados</option>
