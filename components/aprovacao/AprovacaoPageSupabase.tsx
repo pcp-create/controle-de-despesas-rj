@@ -375,11 +375,11 @@ export default function AprovacaoPageSupabase() {
                         <>
                           <div>
                             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Check-in</p>
-                            <p className="text-foreground">{new Date(d.data_checkin + "T12:00:00").toLocaleDateString("pt-BR")}</p>
+                            <p className="text-foreground">{formatDate(d.data_checkin ?? "")}</p>
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Check-out</p>
-                            <p className="text-foreground">{new Date(d.data_checkout + "T12:00:00").toLocaleDateString("pt-BR")}</p>
+                            <p className="text-foreground">{formatDate(d.data_checkout ?? "")}</p>
                           </div>
                           {d.numero_diarias && (
                             <div className="col-span-2 flex items-center justify-between p-2.5 rounded-lg bg-primary/5 border border-primary/15 text-sm">
