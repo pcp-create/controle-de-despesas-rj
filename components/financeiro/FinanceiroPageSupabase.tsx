@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
@@ -32,9 +32,10 @@ export default function FinanceiroPageSupabase() {
   type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status" | "documento" | "cartao";
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  // Filtros por coluna
-  const [colFilters, setColFilters] = useState<Partial<Record<SortKey, string>>>({});
+  // Filtros por coluna — cada chave armazena um conjunto de valores selecionados
+  const [colFilters, setColFilters] = useState<Partial<Record<SortKey, Set<string>>>>({});
   const [filterOpen, setFilterOpen] = useState<SortKey | null>(null);
+  const [filterSearch, setFilterSearch] = useState<Partial<Record<SortKey, string>>>({});
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,6 +63,58 @@ export default function FinanceiroPageSupabase() {
     }
     setLancando((prev) => ({ ...prev, [id]: false }));
     setConfirmLancar(null);
+  };
+
+  // Extrai valores únicos de uma coluna para o popover de filtro
+  const getColValues = useCallback((key: SortKey): string[] => {
+    const vals = new Set<string>();
+    todasDespesas.forEach((d) => {
+      const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
+      const tecnico = profiles.find((p) => p.id === d.tecnico_id);
+      const sg = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
+      let cellVal = "";
+      switch (key) {
+        case "data":        cellVal = formatDate(d.data_despesa); break;
+        case "vencimento":  cellVal = d.data_vencimento ? formatDate(d.data_vencimento) : "—"; break;
+        case "funcionario": cellVal = tecnico?.nome || "—"; break;
+        case "tipo":        cellVal = tipo?.nome || "—"; break;
+        case "pagamento":   cellVal = pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"]?.label || "—"; break;
+        case "cliente":     cellVal = d.cliente; break;
+        case "os":          cellVal = d.numero_os || "—"; break;
+        case "valor":       cellVal = formatCurrency(Number(d.valor)); break;
+        case "status":      cellVal = statusGeralConfig[sg]?.label || "—"; break;
+        case "documento":   cellVal = d.documento || "—"; break;
+        case "cartao": {
+          const c = d.cartao;
+          cellVal = c ? `${c.banco} — ${c.bandeira} — **** ${c.ultimos_digitos}` : "—";
+          break;
+        }
+      }
+      if (cellVal) vals.add(cellVal);
+    });
+    return Array.from(vals).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [todasDespesas, tiposDespesa, profiles]);
+
+  const toggleColFilterValue = (key: SortKey, val: string) => {
+    setColFilters((prev) => {
+      const current = new Set(prev[key] ?? []);
+      if (current.has(val)) current.delete(val);
+      else current.add(val);
+      if (current.size === 0) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: current };
+    });
+  };
+
+  const clearColFilter = (key: SortKey) => {
+    setColFilters((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
   };
 
   const handleSort = (key: SortKey) => {
@@ -158,32 +211,33 @@ export default function FinanceiroPageSupabase() {
     if (filtroLancamento === "lancado")  list = list.filter((d) => d.lancado_erp);
     if (filtroLancamento === "pendente") list = list.filter((d) => !d.lancado_erp);
 
-    // Filtros por coluna
-    Object.entries(colFilters).forEach(([key, val]) => {
-      if (!val) return;
-      const v = val.toLowerCase();
+    // Filtros por coluna — cada chave tem um Set de valores permitidos
+    Object.entries(colFilters).forEach(([key, selected]) => {
+      if (!selected || selected.size === 0) return;
       list = list.filter((d) => {
         const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
         const tecnico = profiles.find((p) => p.id === d.tecnico_id);
         const sg = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
+        let cellVal = "";
         switch (key as SortKey) {
-          case "data":        return new Date(d.data_despesa + "T12:00:00").toLocaleDateString("pt-BR").includes(v);
-          case "vencimento":  return d.data_vencimento ? new Date(d.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR").includes(v) : false;
-          case "funcionario": return (tecnico?.nome || "").toLowerCase().includes(v);
-          case "tipo":        return (tipo?.nome || "").toLowerCase().includes(v);
-          case "pagamento":   return (pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"]?.label || "").toLowerCase().includes(v);
-          case "cliente":     return d.cliente.toLowerCase().includes(v);
-          case "os":          return (d.numero_os || "").toLowerCase().includes(v);
-          case "valor":       return formatCurrency(Number(d.valor)).includes(v);
-          case "status":      return (statusGeralConfig[sg]?.label || "").toLowerCase().includes(v);
-          case "documento":   return (d.documento || "").toLowerCase().includes(v);
+          case "data":        cellVal = formatDate(d.data_despesa); break;
+          case "vencimento":  cellVal = d.data_vencimento ? formatDate(d.data_vencimento) : "—"; break;
+          case "funcionario": cellVal = tecnico?.nome || "—"; break;
+          case "tipo":        cellVal = tipo?.nome || "—"; break;
+          case "pagamento":   cellVal = pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"]?.label || "—"; break;
+          case "cliente":     cellVal = d.cliente; break;
+          case "os":          cellVal = d.numero_os || "—"; break;
+          case "valor":       cellVal = formatCurrency(Number(d.valor)); break;
+          case "status":      cellVal = statusGeralConfig[sg]?.label || "—"; break;
+          case "documento":   cellVal = d.documento || "—"; break;
           case "cartao": {
             const c = d.cartao;
-            const label = c ? `${c.banco} ${c.bandeira} ${c.ultimos_digitos}`.toLowerCase() : "";
-            return label.includes(v);
+            cellVal = c ? `${c.banco} — ${c.bandeira} — **** ${c.ultimos_digitos}` : "—";
+            break;
           }
           default: return true;
         }
+        return selected.has(cellVal);
       });
     });
 
@@ -630,33 +684,72 @@ export default function FinanceiroPageSupabase() {
                         <div className="relative">
                           <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); setFilterOpen(filterOpen === key ? null : key); }}
-                            className={`p-0.5 rounded hover:bg-background transition-colors ${colFilters[key] ? "text-primary" : "text-muted-foreground opacity-50 hover:opacity-100"}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (filterOpen !== key) setFilterSearch((s) => ({ ...s, [key]: "" }));
+                              setFilterOpen(filterOpen === key ? null : key);
+                            }}
+                            className={`p-0.5 rounded hover:bg-background transition-colors ${colFilters[key]?.size ? "text-primary" : "text-muted-foreground opacity-50 hover:opacity-100"}`}
                             title="Filtrar"
                           >
                             <Filter className="w-3 h-3" />
                           </button>
-                          {filterOpen === key && (
-                            <div data-filter-popover className="absolute left-0 top-full mt-1 z-50 bg-background border border-input rounded-lg shadow-lg p-2 min-w-36">
-                              <input
-                                autoFocus
-                                type="text"
-                                placeholder={`Filtrar ${label}...`}
-                                value={colFilters[key] || ""}
-                                onChange={(e) => setColFilters((f) => ({ ...f, [key]: e.target.value }))}
-                                className="w-full px-2 py-1 text-xs rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-                              />
-                              {colFilters[key] && (
-                                <button
-                                  type="button"
-                                  onClick={() => { setColFilters((f) => { const n = { ...f }; delete n[key]; return n; }); setFilterOpen(null); }}
-                                  className="mt-1 text-xs text-destructive hover:underline w-full text-left"
-                                >
-                                  Limpar filtro
-                                </button>
-                              )}
-                            </div>
-                          )}
+                          {filterOpen === key && (() => {
+                            const allVals = getColValues(key);
+                            const searchTerm = (filterSearch[key] || "").toLowerCase();
+                            const visible = searchTerm ? allVals.filter((v) => v.toLowerCase().includes(searchTerm)) : allVals;
+                            const selected = colFilters[key] ?? new Set<string>();
+                            return (
+                              <div
+                                data-filter-popover
+                                className="absolute left-0 top-full mt-1 z-50 bg-background border border-input rounded-lg shadow-xl min-w-48 max-w-64"
+                                style={{ minWidth: "12rem" }}
+                              >
+                                {/* Busca interna */}
+                                <div className="p-2 border-b border-input">
+                                  <input
+                                    autoFocus
+                                    type="text"
+                                    placeholder="Buscar..."
+                                    value={filterSearch[key] || ""}
+                                    onChange={(e) => setFilterSearch((s) => ({ ...s, [key]: e.target.value }))}
+                                    className="w-full px-2 py-1 text-xs rounded border border-input bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary"
+                                  />
+                                </div>
+                                {/* Lista de valores */}
+                                <ul className="overflow-y-auto max-h-52 py-1">
+                                  {visible.length === 0 && (
+                                    <li className="px-3 py-2 text-xs text-muted-foreground">Nenhum resultado</li>
+                                  )}
+                                  {visible.map((val) => (
+                                    <li key={val}>
+                                      <label className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted/50 cursor-pointer text-xs">
+                                        <input
+                                          type="checkbox"
+                                          checked={selected.has(val)}
+                                          onChange={() => toggleColFilterValue(key, val)}
+                                          className="accent-primary rounded"
+                                        />
+                                        <span className="truncate">{val}</span>
+                                      </label>
+                                    </li>
+                                  ))}
+                                </ul>
+                                {/* Rodapé */}
+                                {selected.size > 0 && (
+                                  <div className="border-t border-input p-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => { clearColFilter(key); setFilterOpen(null); }}
+                                      className="text-xs text-destructive hover:underline w-full text-left"
+                                    >
+                                      Limpar filtro ({selected.size} selecionado{selected.size > 1 ? "s" : ""})
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
