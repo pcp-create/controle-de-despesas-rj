@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
+import { usePreferenciasRelatorio } from "@/lib/supabase/preferencias-relatorio";
 import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { formatCurrency } from "@/lib/helpers";
@@ -116,6 +117,11 @@ export default function RelatoriosPageSupabase() {
   const { frotas } = useFrotas();
 
   const now = new Date();
+
+  // ── Preferências persistidas por usuário ──
+  const { preferencias, carregado, salvar } = usePreferenciasRelatorio(currentUser?.id);
+  const preferenciasAplicadas = useRef(false);
+
   const [modoFiltro, setModoFiltro] = useState<ModoFiltro>("mes");
   const [mesSelecionado, setMesSelecionado] = useState(now.getMonth());
   const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());
@@ -128,6 +134,26 @@ export default function RelatoriosPageSupabase() {
   // ── Filtros cruzados ──
   const [filtroFuncionario, setFiltroFuncionario] = useState<string | null>(null);
   const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
+
+  // Aplicar preferências salvas uma única vez assim que carregarem
+  useEffect(() => {
+    if (!carregado || preferenciasAplicadas.current || !preferencias) return;
+    preferenciasAplicadas.current = true;
+    setModoFiltro(preferencias.modoFiltro);
+    setMesSelecionado(preferencias.mesSelecionado);
+    setAnoSelecionado(preferencias.anoSelecionado);
+    setDataInicial(preferencias.dataInicial);
+    setDataFinal(preferencias.dataFinal);
+    setFiltroFuncionario(preferencias.filtroFuncionario);
+    setFiltroTipo(preferencias.filtroTipo);
+  }, [carregado, preferencias]);
+
+  // Salvar automaticamente ao mudar qualquer filtro (após preferências terem sido aplicadas)
+  useEffect(() => {
+    if (!preferenciasAplicadas.current && preferencias !== null) return;
+    if (!carregado) return;
+    salvar({ modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroFuncionario, filtroTipo });
+  }, [modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroFuncionario, filtroTipo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Tabela de despesas colapsável ──
   const [tabelaAberta, setTabelaAberta] = useState(false);

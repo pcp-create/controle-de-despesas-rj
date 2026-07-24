@@ -21,6 +21,16 @@ export type ERPStatus =
 export type UserArea = "Administrativo" | "Comercial" | "Manutenção";
 
 // ─── Usuário ──────────────────────────────────────────────────────────────────
+export interface PreferenciasRelatorio {
+  modoFiltro: "mes" | "periodo";
+  mesSelecionado: number;
+  anoSelecionado: number;
+  dataInicial: string;
+  dataFinal: string;
+  filtroFuncionario: string | null;
+  filtroTipo: string | null;
+}
+
 export interface User {
   id: string;
   nome: string;
@@ -28,6 +38,7 @@ export interface User {
   telefone: string;
   usuario: string;
   perfil: UserProfile;
+  preferencias_relatorio?: PreferenciasRelatorio;
   area?: UserArea;
   ativo: boolean;
   gestorId?: string;
