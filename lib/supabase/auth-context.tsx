@@ -99,35 +99,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listener para mudanças de auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log("[v0] onAuthStateChange - event:", event, "user:", session?.user?.id);
-        
         if (!isMounted) return;
 
         if (event === "SIGNED_IN" && session?.user) {
-          console.log("[v0] SIGNED_IN - fetching profile for:", session.user.id);
           setUser(session.user);
           const profileData = await fetchProfile(session.user.id);
-          console.log("[v0] Profile data:", profileData ? "found" : "null");
           
           if (!isMounted) return;
           
           if (profileData) {
             if (profileData.ativo) {
-              console.log("[v0] User active, setting profile");
               setProfile(profileData);
             } else {
-              console.log("[v0] User inactive, signing out");
               // Inativo - fazer logout
               await supabase.auth.signOut();
               setUser(null);
               setProfile(null);
             }
-          } else {
-            console.log("[v0] Profile is null after fetch");
           }
           setLoading(false);
         } else if (event === "SIGNED_OUT" || !session?.user) {
-          console.log("[v0] SIGNED_OUT");
           setUser(null);
           setProfile(null);
           setLoading(false);
@@ -145,7 +136,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // v2: login via /api/login com setSession
   const signIn = async (usuario: string, password: string) => {
     try {
-      console.log("[v0] signIn v2 chamado para usuario:", usuario);
       // Validar credenciais e criar sessão via API server-side
       const res = await fetch("/api/login", {
         method: "POST",
@@ -167,7 +157,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
-        console.error("[v0] setSession error:", error.message);
         return { error: "Erro ao iniciar sessão" };
       }
 

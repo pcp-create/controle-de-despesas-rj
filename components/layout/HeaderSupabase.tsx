@@ -1,6 +1,7 @@
 "use client";
 
 import { useAppStore } from "@/lib/store";
+import { useAuth } from "@/lib/supabase/auth-context";
 import { Menu, Bell, ChevronDown, LogOut, Lock } from "lucide-react";
 import { useState } from "react";
 
@@ -10,7 +11,8 @@ interface Props {
 }
 
 export default function HeaderSupabase({ onMenuClick, onAlterarSenha }: Props) {
-  const { currentUser, logout } = useAppStore();
+  const { currentUser } = useAppStore();
+  const { signOut } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const perfilLabel: Record<string, string> = {
@@ -27,9 +29,9 @@ export default function HeaderSupabase({ onMenuClick, onAlterarSenha }: Props) {
     .join("")
     .toUpperCase();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
     setDropdownOpen(false);
+    await signOut();
   };
 
   return (
