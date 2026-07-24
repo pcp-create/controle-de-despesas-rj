@@ -65,7 +65,47 @@ export default function FinanceiroPageSupabase() {
     setConfirmLancar(null);
   };
 
-  // Extrai valores únicos de uma coluna para o popover de filtro
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  // Estado para edição inline de vencimento: { [despesaId]: string }
+  const [editandoVencimento, setEditandoVencimento] = useState<Record<string, string>>({});
+  const [salvandoVencimento, setSalvandoVencimento] = useState<Record<string, boolean>>({});
+  const now = new Date();
+  const [modoFiltro, setModoFiltro] = useState<ModoFiltro>("mes");
+  const [mesSelecionado, setMesSelecionado] = useState(now.getMonth());
+  const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());
+  const [dataInicial, setDataInicial] = useState(() => {
+    const d = new Date(now.getFullYear(), now.getMonth(), 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [dataFinal, setDataFinal] = useState(() => now.toISOString().slice(0, 10));
+
+  const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
+
+  const todasDespesas = useMemo(() => {
+    return despesas.filter((d) => {
+      // Despesas em dinheiro vão para a aba Reembolso, não aparecem aqui
+      if (d.pagamento_tipo === "dinheiro") return false;
+      const dataStr = (d.data_vencimento || d.data_despesa || d.created_at || "").slice(0, 10);
+      if (modoFiltro === "mes") {
+        const dt = new Date(dataStr + "T00:00:00");
+        return dt.getMonth() === mesSelecionado && dt.getFullYear() === anoSelecionado;
+      } else {
+        if (dataInicial && dataStr < dataInicial) return false;
+        if (dataFinal && dataStr > dataFinal) return false;
+        return true;
+      }
+    });
+  }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
+
+  // Extrai valores únicos de uma coluna para o popover de filtro — deve vir APÓS todasDespesas
   const getColValues = useCallback((key: SortKey): string[] => {
     const vals = new Set<string>();
     todasDespesas.forEach((d) => {
@@ -116,46 +156,6 @@ export default function FinanceiroPageSupabase() {
       return next;
     });
   };
-
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
-  };
-
-  // Estado para edição inline de vencimento: { [despesaId]: string }
-  const [editandoVencimento, setEditandoVencimento] = useState<Record<string, string>>({});
-  const [salvandoVencimento, setSalvandoVencimento] = useState<Record<string, boolean>>({});
-  const now = new Date();
-  const [modoFiltro, setModoFiltro] = useState<ModoFiltro>("mes");
-  const [mesSelecionado, setMesSelecionado] = useState(now.getMonth());
-  const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());
-  const [dataInicial, setDataInicial] = useState(() => {
-    const d = new Date(now.getFullYear(), now.getMonth(), 1);
-    return d.toISOString().slice(0, 10);
-  });
-  const [dataFinal, setDataFinal] = useState(() => now.toISOString().slice(0, 10));
-
-  const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
-
-  const todasDespesas = useMemo(() => {
-    return despesas.filter((d) => {
-      // Despesas em dinheiro vão para a aba Reembolso, não aparecem aqui
-      if (d.pagamento_tipo === "dinheiro") return false;
-      const dataStr = (d.data_vencimento || d.data_despesa || d.created_at || "").slice(0, 10);
-      if (modoFiltro === "mes") {
-        const dt = new Date(dataStr + "T00:00:00");
-        return dt.getMonth() === mesSelecionado && dt.getFullYear() === anoSelecionado;
-      } else {
-        if (dataInicial && dataStr < dataInicial) return false;
-        if (dataFinal && dataStr > dataFinal) return false;
-        return true;
-      }
-    });
-  }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
 
   const despesasAprovadas = todasDespesas.filter((d) => d.status_aprovacao === "AprovadoGestor");
   const totalAprovado = despesasAprovadas.reduce((s, d) => s + Number(d.valor), 0);
