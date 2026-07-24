@@ -12,9 +12,9 @@ export type AcaoAuditoria =
 
 export interface LogAuditoria {
   acao: AcaoAuditoria;
-  entidade: string; // ex: "despesa", "usuario", "tipo_despesa"
+  entidade: string;
   entidadeId: string;
-  usuarioId: string;
+  usuarioId?: string; // opcional — usa sessão ativa como fallback
   detalhes?: string;
 }
 
@@ -28,12 +28,20 @@ export async function registrarAuditoria({
   const supabase = createClient();
   if (!supabase) return { error: "Supabase não disponível" };
 
+  // Resolver user_id: usa o passado ou obtém da sessão ativa
+  let resolvedUserId = usuarioId;
+  if (!resolvedUserId || resolvedUserId === "sistema") {
+    const { data: { user } } = await supabase.auth.getUser();
+    resolvedUserId = user?.id ?? "sistema";
+  }
+
   const { error } = await supabase.from("auditoria").insert({
     acao,
     entidade,
     entidade_id: entidadeId,
-    user_id: usuarioId,
+    user_id: resolvedUserId,
     detalhes: detalhes || null,
+    created_at: new Date().toISOString(),
   });
 
   if (error) {

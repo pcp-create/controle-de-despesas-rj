@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { registrarAuditoria } from "@/lib/supabase/audit";
 import type { User } from "@supabase/supabase-js";
 
 export type Perfil = "funcionario" | "gestor" | "financeiro" | "administrador";
@@ -110,6 +111,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (profileData) {
             if (profileData.ativo) {
               setProfile(profileData);
+              // Registrar login na auditoria
+              await registrarAuditoria({
+                acao: "LOGIN",
+                entidade: "sessao",
+                entidadeId: session.user.id,
+                usuarioId: session.user.id,
+                detalhes: `Login realizado por ${profileData.nome} (${profileData.usuario})`,
+              });
             } else {
               // Inativo - fazer logout
               await supabase.auth.signOut();
@@ -169,6 +178,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     const supabase = createClient();
     try {
+      // Registrar logout antes de encerrar sessão (enquanto user_id ainda está disponível)
+      if (user && profile) {
+        await registrarAuditoria({
+          acao: "LOGOUT",
+          entidade: "sessao",
+          entidadeId: user.id,
+          usuarioId: user.id,
+          detalhes: `Logout realizado por ${profile.nome} (${profile.usuario})`,
+        });
+      }
       await supabase.auth.signOut();
       setUser(null);
       setProfile(null);
