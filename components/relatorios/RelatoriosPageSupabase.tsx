@@ -421,15 +421,17 @@ export default function RelatoriosPageSupabase() {
       // ═══════════════════════════════
       sectionTitle(`Despesas do Período (${despesasTabela.length} registros)`);
 
-      // Colunas do PDF: Valor na última posição, sem Aprovador/Data Aprovação e sem Status
+      // Colunas do PDF: proporções somam exatamente 1.0 (100% de CW)
+      // Valor na última posição, sem Aprovador/Data Aprovação e sem Status
       const colsDesp = [
-        { label: "Data",       w: CW * 0.12 },
-        { label: "Tipo",       w: CW * 0.20 },
-        { label: "Cliente",    w: CW * 0.27 },
-        { label: "OS",         w: CW * 0.12 },
-        { label: "Observação", w: CW * 0.29 },
-        { label: "Valor",      w: CW * 0.18, align: "right" as const },
+        { label: "Data",       w: CW * 0.11 },
+        { label: "Tipo",       w: CW * 0.19 },
+        { label: "Cliente",    w: CW * 0.25 },
+        { label: "OS",         w: CW * 0.11 },
+        { label: "Observação", w: CW * 0.20 },
+        { label: "Valor",      w: CW * 0.14, align: "right" as const },
       ];
+      // Verificar: 0.11+0.19+0.25+0.11+0.20+0.14 = 1.00 ✓
 
       gruposPDF.forEach((grupo) => {
         const subtotal = grupo.despesas.reduce((s, d) => s + Number(d.valor), 0);
