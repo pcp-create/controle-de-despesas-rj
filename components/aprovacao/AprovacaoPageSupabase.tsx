@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
+import type { FiltrosAprovacao } from "@/lib/supabase/use-filtros-persistidos";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles, type Despesa } from "@/lib/supabase/hooks";
 import { registrarAuditoria } from "@/lib/supabase/audit";
@@ -40,10 +42,27 @@ export default function AprovacaoPageSupabase() {
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
   
+  const { filtrosSalvos: filtrosApr, carregado: carregadoApr, salvar: salvarApr } = useFiltrosPersistidos<FiltrosAprovacao>(currentUser?.id, "aprovacao");
+  const aplicadoApr = useRef(false);
+
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("AguardandoGestor");
   const [filterFuncionario, setFilterFuncionario] = useState<string>("todos");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Restaurar filtros salvos ao montar
+  useEffect(() => {
+    if (!carregadoApr || aplicadoApr.current || !filtrosApr) return;
+    aplicadoApr.current = true;
+    setFilterStatus(filtrosApr.filterStatus);
+    setFilterFuncionario(filtrosApr.filterFuncionario);
+  }, [carregadoApr, filtrosApr]);
+
+  // Salvar ao alterar filtros
+  useEffect(() => {
+    if (!carregadoApr || !aplicadoApr.current) return;
+    salvarApr({ filterStatus, filterFuncionario });
+  }, [filterStatus, filterFuncionario]); // eslint-disable-line react-hooks/exhaustive-deps
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [reprovandoChave, setReprovandoChave] = useState<string | null>(null);
   const [justificativa, setJustificativa] = useState("");

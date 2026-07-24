@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
+import type { FiltrosFinanceiro } from "@/lib/supabase/use-filtros-persistidos";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
@@ -78,6 +80,9 @@ export default function FinanceiroPageSupabase() {
   const [editandoVencimento, setEditandoVencimento] = useState<Record<string, string>>({});
   const [salvandoVencimento, setSalvandoVencimento] = useState<Record<string, boolean>>({});
   const now = new Date();
+  const { filtrosSalvos: filtrosFin, carregado: carregadoFin, salvar: salvarFin } = useFiltrosPersistidos<FiltrosFinanceiro>(currentUser?.id, "financeiro");
+  const aplicadoFin = useRef(false);
+
   const [modoFiltro, setModoFiltro] = useState<ModoFiltro>("mes");
   const [mesSelecionado, setMesSelecionado] = useState(now.getMonth());
   const [anoSelecionado, setAnoSelecionado] = useState(now.getFullYear());
@@ -86,6 +91,24 @@ export default function FinanceiroPageSupabase() {
     return d.toISOString().slice(0, 10);
   });
   const [dataFinal, setDataFinal] = useState(() => now.toISOString().slice(0, 10));
+
+  // Restaurar filtros salvos ao montar
+  useEffect(() => {
+    if (!carregadoFin || aplicadoFin.current || !filtrosFin) return;
+    aplicadoFin.current = true;
+    setModoFiltro(filtrosFin.modoFiltro);
+    setMesSelecionado(filtrosFin.mesSelecionado);
+    setAnoSelecionado(filtrosFin.anoSelecionado);
+    setDataInicial(filtrosFin.dataInicial);
+    setDataFinal(filtrosFin.dataFinal);
+    setFiltroLancamento(filtrosFin.filtroLancamento);
+  }, [carregadoFin, filtrosFin]);
+
+  // Salvar ao alterar qualquer filtro
+  useEffect(() => {
+    if (!carregadoFin || !aplicadoFin.current) return;
+    salvarFin({ modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroLancamento });
+  }, [modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroLancamento]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
 
