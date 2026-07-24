@@ -129,14 +129,24 @@ export default function FinanceiroPageSupabase() {
     const cartaoLabel = cartao
       ? `${cartao.banco} ${cartao.bandeira} ${cartao.ultimos_digitos} ${cartao.apelido || ""}`.toLowerCase()
       : "";
+    const pagamentoLabel = (pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"]?.label || "").toLowerCase();
+    const sg = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
+    const statusLabel = (statusGeralConfig[sg]?.label || "").toLowerCase();
+    const dataFmt = formatDate(d.data_despesa);
+    const vencimentoFmt = d.data_vencimento ? formatDate(d.data_vencimento) : "";
     return (
       d.cliente.toLowerCase().includes(term) ||
-      d.numero_os.toLowerCase().includes(term) ||
+      (d.numero_os || "").toLowerCase().includes(term) ||
       (tipo?.nome || "").toLowerCase().includes(term) ||
       (tecnico?.nome || "").toLowerCase().includes(term) ||
       (d.erp_id || "").toString().includes(term) ||
       (d.documento || "").toLowerCase().includes(term) ||
-      cartaoLabel.includes(term)
+      cartaoLabel.includes(term) ||
+      pagamentoLabel.includes(term) ||
+      statusLabel.includes(term) ||
+      dataFmt.includes(term) ||
+      vencimentoFmt.includes(term) ||
+      formatCurrency(Number(d.valor)).includes(term)
     );
   });
 
