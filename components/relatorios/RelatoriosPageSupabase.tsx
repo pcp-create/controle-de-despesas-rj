@@ -17,8 +17,9 @@ import {
   Pie,
   Cell,
   Legend,
+  LabelList,
 } from "recharts";
-import { Calendar, Download, TrendingUp, DollarSign, Users, FileText, CalendarDays, Gauge, Route, Clock, Car } from "lucide-react";
+import { Calendar, Download, TrendingUp, DollarSign, Users, FileText, CalendarDays, Gauge, Route, Clock, Car, X } from "lucide-react";
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -35,7 +36,71 @@ function formatDuracaoRel(minutos: number): string {
   return h > 0 ? `${h}h ${m}min` : `${m}min`;
 }
 
-const MESES_KM = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+// Paleta para tipos de despesa — do mais forte ao mais suave
+const TIPO_COLORS = [
+  "oklch(0.45 0.22 255)",
+  "oklch(0.52 0.20 255)",
+  "oklch(0.58 0.18 255)",
+  "oklch(0.64 0.16 255)",
+  "oklch(0.70 0.14 255)",
+  "oklch(0.76 0.12 255)",
+  "oklch(0.82 0.10 255)",
+];
+
+const FUNC_COLORS = [
+  "oklch(0.55 0.18 255)",
+  "oklch(0.52 0.17 155)",
+  "oklch(0.62 0.18 60)",
+  "oklch(0.577 0.245 27.325)",
+  "oklch(0.35 0.12 255)",
+  "oklch(0.65 0.16 310)",
+  "oklch(0.60 0.18 190)",
+];
+
+// Label personalizado para BarChart horizontal (rótulo ao lado da barra)
+function CustomBarLabel(props: any) {
+  const { x, y, width, height, value } = props;
+  if (!value) return null;
+  return (
+    <text
+      x={x + width + 6}
+      y={y + height / 2}
+      fill="var(--muted-foreground)"
+      fontSize={10}
+      dominantBaseline="middle"
+    >
+      {formatCurrency(value)}
+    </text>
+  );
+}
+
+// Label no topo da barra vertical
+function CustomTopLabel(props: any) {
+  const { x, y, width, value } = props;
+  if (!value) return null;
+  return (
+    <text
+      x={x + width / 2}
+      y={y - 5}
+      textAnchor="middle"
+      fill="var(--muted-foreground)"
+      fontSize={9}
+    >
+      {formatCurrency(value)}
+    </text>
+  );
+}
+
+// Label km horizontal
+function KmBarLabel(props: any) {
+  const { x, y, width, height, value } = props;
+  if (!value) return null;
+  return (
+    <text x={x + width + 5} y={y + height / 2} fill="var(--muted-foreground)" fontSize={10} dominantBaseline="middle">
+      {value.toLocaleString("pt-BR")} km
+    </text>
+  );
+}
 
 export default function RelatoriosPageSupabase() {
   const { currentUser } = useAppStore();
@@ -47,7 +112,7 @@ export default function RelatoriosPageSupabase() {
   const { profiles } = useProfiles();
   const { registros: registrosKm } = useControleKm();
   const { frotas } = useFrotas();
-  
+
   const now = new Date();
   const [modoFiltro, setModoFiltro] = useState<ModoFiltro>("mes");
   const [mesSelecionado, setMesSelecionado] = useState(now.getMonth());
@@ -58,18 +123,19 @@ export default function RelatoriosPageSupabase() {
   });
   const [dataFinal, setDataFinal] = useState(() => now.toISOString().slice(0, 10));
 
+  // ── Filtros cruzados ──
+  const [filtroFuncionario, setFiltroFuncionario] = useState<string | null>(null);
+  const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
+
   const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
 
-  // Todas as despesas aprovadas — sem filtro de período (usado no gráfico de evolução)
   const despesasAprovadas = useMemo(() => {
     return despesas.filter((d) => d.status_aprovacao === "AprovadoGestor");
   }, [despesas]);
 
-  // Despesas aprovadas filtradas pelo período selecionado (métricas, por tipo, top técnicos)
   const despesasAno = useMemo(() => {
     return despesas.filter((d) => {
       if (d.status_aprovacao !== "AprovadoGestor") return false;
-      
       const dataStr = (d.data_despesa || d.created_at || "").slice(0, 10);
       if (modoFiltro === "mes") {
         const dt = new Date(dataStr + "T00:00:00");
@@ -82,13 +148,21 @@ export default function RelatoriosPageSupabase() {
     });
   }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
 
-  // Métricas gerais
-  const totalAno = despesasAno.reduce((s, d) => s + Number(d.valor), 0);
-  const totalLancamentos = despesasAno.length;
-  const ticketMedio = totalLancamentos > 0 ? totalAno / totalLancamentos : 0;
-  const tecnicosAtivos = new Set(despesasAno.map((d) => d.tecnico_id)).size;
+  // Despesas após filtros cruzados
+  const despesasCruzadas = useMemo(() => {
+    return despesasAno.filter((d) => {
+      if (filtroFuncionario && d.tecnico_id !== filtroFuncionario) return false;
+      if (filtroTipo && d.tipo_despesa_id !== filtroTipo) return false;
+      return true;
+    });
+  }, [despesasAno, filtroFuncionario, filtroTipo]);
 
-  // Por mês — usa todas as despesas aprovadas, sem filtro de período
+  const totalAno = despesasCruzadas.reduce((s, d) => s + Number(d.valor), 0);
+  const totalLancamentos = despesasCruzadas.length;
+  const ticketMedio = totalLancamentos > 0 ? totalAno / totalLancamentos : 0;
+  const tecnicosAtivos = new Set(despesasCruzadas.map((d) => d.tecnico_id)).size;
+
+  // Evolução mensal
   const byMes = useMemo(() => {
     const anoAtual = now.getFullYear();
     return MESES.map((m, i) => ({
@@ -96,27 +170,43 @@ export default function RelatoriosPageSupabase() {
       valor: despesasAprovadas
         .filter((d) => {
           const dt = new Date(d.data_despesa + "T12:00:00");
-          return dt.getMonth() === i && dt.getFullYear() === anoAtual;
+          if (dt.getMonth() !== i || dt.getFullYear() !== anoAtual) return false;
+          if (filtroFuncionario && d.tecnico_id !== filtroFuncionario) return false;
+          if (filtroTipo && d.tipo_despesa_id !== filtroTipo) return false;
+          return true;
         })
         .reduce((s, d) => s + Number(d.valor), 0),
     }));
-  }, [despesasAprovadas]);
+  }, [despesasAprovadas, filtroFuncionario, filtroTipo]);
 
-  // Por tipo
-  const byTipo = tiposDespesa.map((t) => ({
-    name: t.nome,
-    valor: despesasAno
-      .filter((d) => d.tipo_despesa_id === t.id)
-      .reduce((s, d) => s + Number(d.valor), 0),
-  })).filter((x) => x.valor > 0).sort((a, b) => b.valor - a.valor);
+  // Por tipo — filtrado pelo funcionário selecionado
+  const byTipo = useMemo(() => {
+    return tiposDespesa.map((t) => ({
+      id: t.id,
+      name: t.nome,
+      valor: despesasAno
+        .filter((d) => {
+          if (d.tipo_despesa_id !== t.id) return false;
+          if (filtroFuncionario && d.tecnico_id !== filtroFuncionario) return false;
+          return true;
+        })
+        .reduce((s, d) => s + Number(d.valor), 0),
+    }))
+    .filter((x) => x.valor > 0)
+    .sort((a, b) => b.valor - a.valor);
+  }, [tiposDespesa, despesasAno, filtroFuncionario]);
 
-  // Por funcionário
+  // Por funcionário — filtrado pelo tipo selecionado
   const byTecnico = useMemo(() => {
-    const funcionarios = profiles;
-    return funcionarios
+    return profiles
       .map((u) => {
-        const du = despesasAno.filter((d) => d.tecnico_id === u.id);
+        const du = despesasAno.filter((d) => {
+          if (d.tecnico_id !== u.id) return false;
+          if (filtroTipo && d.tipo_despesa_id !== filtroTipo) return false;
+          return true;
+        });
         return {
+          id: u.id,
           nome: u.nome.split(" ").slice(0, 2).join(" "),
           total: du.reduce((s, d) => s + Number(d.valor), 0),
           qtd: du.length,
@@ -125,13 +215,12 @@ export default function RelatoriosPageSupabase() {
       .filter((u) => u.total > 0)
       .sort((a, b) => b.total - a.total)
       .slice(0, 10);
-  }, [profiles, despesasAno]);
+  }, [profiles, despesasAno, filtroTipo]);
 
-  // ─── Dados de KM filtrados por período ───────────────────
+  // KM filtrado
   const registrosKmFiltrados = useMemo(() => {
     return registrosKm.filter((r) => {
       if (r.status !== "finalizado") return false;
-      // Restrição por perfil
       if (!isGestorOuAdmin && currentUser?.id && r.usuario_id !== currentUser.id) return false;
       const dataStr = r.data_inicio.slice(0, 10);
       if (modoFiltro === "mes") {
@@ -145,18 +234,13 @@ export default function RelatoriosPageSupabase() {
     });
   }, [registrosKm, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, isGestorOuAdmin, currentUser]);
 
-  // Métricas de KM
-  const totalKmPeriodo = useMemo(
-    () => registrosKmFiltrados.reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
-    [registrosKmFiltrados]
-  );
+  const totalKmPeriodo = useMemo(() => registrosKmFiltrados.reduce((s, r) => s + (r.km_percorrido ?? 0), 0), [registrosKmFiltrados]);
   const totalViagens = registrosKmFiltrados.length;
   const mediaKmViagem = totalViagens > 0 ? totalKmPeriodo / totalViagens : 0;
   const totalMinutos = registrosKmFiltrados.reduce((s, r) => s + (r.duracao_minutos ?? 0), 0);
 
-  // KM por mês (gráfico de evolução — apenas ano atual)
   const kmByMes = useMemo(() => {
-    return MESES_KM.map((m, i) => ({
+    return MESES.map((m, i) => ({
       mes: m,
       km: registrosKm
         .filter((r) => {
@@ -169,32 +253,32 @@ export default function RelatoriosPageSupabase() {
     }));
   }, [registrosKm, isGestorOuAdmin, currentUser]);
 
-  // KM por veículo
   const kmByFrota = useMemo(() => {
     return frotas
       .map((f) => ({
-        nome: `${f.placa}`,
+        nome: f.placa,
         km: registrosKmFiltrados.filter((r) => r.frota_id === f.id).reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
-        viagens: registrosKmFiltrados.filter((r) => r.frota_id === f.id).length,
       }))
       .filter((f) => f.km > 0)
       .sort((a, b) => b.km - a.km)
       .slice(0, 8);
   }, [frotas, registrosKmFiltrados]);
 
-  // KM por funcionário (só para gestor/admin)
   const kmByFuncionario = useMemo(() => {
     if (!isGestorOuAdmin) return [];
     return profiles
       .map((p) => ({
         nome: p.nome.split(" ").slice(0, 2).join(" "),
         km: registrosKmFiltrados.filter((r) => r.usuario_id === p.id).reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
-        viagens: registrosKmFiltrados.filter((r) => r.usuario_id === p.id).length,
       }))
       .filter((p) => p.km > 0)
       .sort((a, b) => b.km - a.km)
       .slice(0, 8);
   }, [profiles, registrosKmFiltrados, isGestorOuAdmin]);
+
+  const filtroFuncionarioNome = filtroFuncionario ? profiles.find((p) => p.id === filtroFuncionario)?.nome : null;
+  const filtroTipoNome = filtroTipo ? tiposDespesa.find((t) => t.id === filtroTipo)?.nome : null;
+  const temFiltroAtivo = !!filtroFuncionario || !!filtroTipo;
 
   if (isLoading) {
     return (
@@ -249,86 +333,77 @@ export default function RelatoriosPageSupabase() {
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-border rounded-lg text-xs text-muted-foreground">
                 <CalendarDays className="w-3.5 h-3.5" />
               </div>
-              <select
-                value={mesSelecionado}
-                onChange={(e) => setMesSelecionado(Number(e.target.value))}
-                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                {MESES_FULL.map((m, i) => (
-                  <option key={i} value={i}>{m}</option>
-                ))}
+              <select value={mesSelecionado} onChange={(e) => setMesSelecionado(Number(e.target.value))}
+                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring">
+                {MESES_FULL.map((m, i) => <option key={i} value={i}>{m}</option>)}
               </select>
-              <select
-                value={anoSelecionado}
-                onChange={(e) => setAnoSelecionado(Number(e.target.value))}
-                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                {anos.map((a) => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
+              <select value={anoSelecionado} onChange={(e) => setAnoSelecionado(Number(e.target.value))}
+                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-ring">
+                {anos.map((a) => <option key={a} value={a}>{a}</option>)}
               </select>
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={dataInicial}
-                onChange={(e) => setDataInicial(e.target.value)}
-                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm"
-              />
+              <input type="date" value={dataInicial} onChange={(e) => setDataInicial(e.target.value)}
+                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm" />
               <span className="text-xs text-muted-foreground">até</span>
-              <input
-                type="date"
-                value={dataFinal}
-                onChange={(e) => setDataFinal(e.target.value)}
-                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm"
-              />
+              <input type="date" value={dataFinal} onChange={(e) => setDataFinal(e.target.value)}
+                className="px-3 py-1.5 bg-white border border-border rounded-lg text-sm" />
             </div>
           )}
         </div>
       </div>
 
+      {/* Banner de filtros cruzados ativos */}
+      {temFiltroAtivo && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-primary/5 border border-primary/20 rounded-xl text-sm flex-wrap">
+          <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide mr-1">Filtrando por:</span>
+          {filtroFuncionarioNome && (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-primary text-white rounded-full text-xs font-medium">
+              {filtroFuncionarioNome}
+              <button onClick={() => setFiltroFuncionario(null)} className="hover:opacity-70">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          {filtroTipoNome && (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-accent text-white rounded-full text-xs font-medium">
+              {filtroTipoNome}
+              <button onClick={() => setFiltroTipo(null)} className="hover:opacity-70">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          )}
+          <button onClick={() => { setFiltroFuncionario(null); setFiltroTipo(null); }}
+            className="ml-auto text-xs text-muted-foreground hover:text-foreground underline">
+            Limpar filtros
+          </button>
+        </div>
+      )}
+
       {/* Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
-          <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-3">
-            <DollarSign className="w-5 h-5" />
+        {[
+          { icon: <DollarSign className="w-5 h-5" />, value: formatCurrency(totalAno), label: "Total do Período", bg: "bg-primary/10", color: "text-primary" },
+          { icon: <FileText className="w-5 h-5" />, value: totalLancamentos, label: "Lançamentos", bg: "bg-accent/10", color: "text-accent" },
+          { icon: <TrendingUp className="w-5 h-5" />, value: formatCurrency(ticketMedio), label: "Ticket Médio", bg: "bg-success/10", color: "text-success" },
+          ...(!isFuncionario ? [{ icon: <Users className="w-5 h-5" />, value: tecnicosAtivos, label: "Funcionários Ativos", bg: "bg-warning/10", color: "text-warning" }] : []),
+        ].map(({ icon, value, label, bg, color }) => (
+          <div key={label} className="bg-white rounded-xl border border-border shadow-sm p-4">
+            <div className={`w-9 h-9 rounded-lg ${bg} ${color} flex items-center justify-center mb-3`}>{icon}</div>
+            <p className="text-2xl font-bold text-foreground">{value}</p>
+            <p className="text-xs text-muted-foreground mt-1">{label}</p>
           </div>
-          <p className="text-2xl font-bold text-foreground">{formatCurrency(totalAno)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Total do Período</p>
-        </div>
-        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
-          <div className="w-9 h-9 rounded-lg bg-accent/10 text-accent flex items-center justify-center mb-3">
-            <FileText className="w-5 h-5" />
-          </div>
-          <p className="text-2xl font-bold text-foreground">{totalLancamentos}</p>
-          <p className="text-xs text-muted-foreground mt-1">Lançamentos</p>
-        </div>
-        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
-          <div className="w-9 h-9 rounded-lg bg-success/10 text-success flex items-center justify-center mb-3">
-            <TrendingUp className="w-5 h-5" />
-          </div>
-          <p className="text-2xl font-bold text-foreground">{formatCurrency(ticketMedio)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Ticket Médio</p>
-        </div>
-        {!isFuncionario && (
-          <div className="bg-white rounded-xl border border-border shadow-sm p-4">
-            <div className="w-9 h-9 rounded-lg bg-warning/10 text-warning flex items-center justify-center mb-3">
-              <Users className="w-5 h-5" />
-            </div>
-            <p className="text-2xl font-bold text-foreground">{tecnicosAtivos}</p>
-            <p className="text-xs text-muted-foreground mt-1">Funcionários Ativos</p>
-          </div>
-        )}
+        ))}
       </div>
 
       {/* Gráfico evolução mensal */}
       <div className="bg-white rounded-xl border border-border shadow-sm p-5">
         <h2 className="text-sm font-semibold text-foreground mb-4">
           Evolução Mensal — {now.getFullYear()}
-          <span className="ml-2 text-xs font-normal text-muted-foreground">(todos os meses, independente do filtro)</span>
+          <span className="ml-2 text-xs font-normal text-muted-foreground">(todos os meses, independente do filtro de período)</span>
         </h2>
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={260}>
           <LineChart data={byMes}>
             <XAxis dataKey="mes" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={70}
@@ -337,52 +412,103 @@ export default function RelatoriosPageSupabase() {
               formatter={(v: number) => [formatCurrency(v), "Valor"]}
               contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }}
             />
-            <Line type="monotone" dataKey="valor" stroke="oklch(0.55 0.18 255)" strokeWidth={2} dot={{ fill: "oklch(0.55 0.18 255)", r: 4 }} />
+            <Line type="monotone" dataKey="valor" stroke="oklch(0.55 0.18 255)" strokeWidth={2}
+              dot={{ fill: "oklch(0.55 0.18 255)", r: 4 }}
+              label={{ position: "top", fontSize: 9, fill: "var(--muted-foreground)", formatter: (v: number) => v > 0 ? `R$${(v / 1000).toFixed(1)}k` : "" }}
+            />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
+      {/* Por tipo + Top Funcionários lado a lado */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Por tipo */}
+
+        {/* Por Tipo de Despesa — BarChart horizontal, mais visual */}
         {byTipo.length > 0 && (
           <div className="bg-white rounded-xl border border-border shadow-sm p-5">
-            <h2 className="text-sm font-semibold text-foreground mb-4">Por Tipo de Despesa</h2>
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={byTipo} dataKey="valor" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2}>
-                  {byTipo.map((_, i) => {
-                    const colors = ["oklch(0.55 0.18 255)", "oklch(0.35 0.12 255)", "oklch(0.52 0.17 155)", "oklch(0.62 0.18 60)", "oklch(0.577 0.245 27.325)"];
-                    return <Cell key={i} fill={colors[i % colors.length]} />;
-                  })}
-                </Pie>
-                <Tooltip formatter={(v: number) => [formatCurrency(v), "Total"]} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
-                <Legend iconType="circle" iconSize={8} formatter={(value) => <span style={{ fontSize: 10 }}>{value}</span>} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-
-        {/* Top Funcionários — apenas para gestor/admin */}
-        {!isFuncionario && byTecnico.length > 0 && (
-          <div className="bg-white rounded-xl border border-border shadow-sm p-5">
-            <h2 className="text-sm font-semibold text-foreground mb-4">Top Funcionários</h2>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={byTecnico} layout="vertical" barSize={16}>
-                <XAxis type="number" tick={{ fontSize: 11 }} axisLine={false} tickLine={false}
-                  tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-                <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={70} />
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-sm font-semibold text-foreground">Por Tipo de Despesa</h2>
+              {filtroTipo && (
+                <button onClick={() => setFiltroTipo(null)} className="text-xs text-accent hover:underline flex items-center gap-1">
+                  <X className="w-3 h-3" /> Limpar
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">Clique numa barra para filtrar os demais gráficos</p>
+            <ResponsiveContainer width="100%" height={Math.max(200, byTipo.length * 42)}>
+              <BarChart data={byTipo} layout="vertical" barSize={22} margin={{ right: 90, left: 0 }}>
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={110} />
                 <Tooltip
                   formatter={(v: number) => [formatCurrency(v), "Total"]}
                   contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }}
                 />
-                <Bar dataKey="total" radius={[0, 4, 4, 0]} fill="oklch(0.55 0.18 255)" />
+                <Bar
+                  dataKey="valor"
+                  radius={[0, 6, 6, 0]}
+                  cursor="pointer"
+                  onClick={(data) => setFiltroTipo(filtroTipo === data.id ? null : data.id)}
+                >
+                  <LabelList dataKey="valor" content={<CustomBarLabel />} />
+                  {byTipo.map((entry, i) => (
+                    <Cell
+                      key={entry.id}
+                      fill={TIPO_COLORS[Math.min(i, TIPO_COLORS.length - 1)]}
+                      opacity={filtroTipo && filtroTipo !== entry.id ? 0.3 : 1}
+                      stroke={filtroTipo === entry.id ? "oklch(0.35 0.22 255)" : "transparent"}
+                      strokeWidth={filtroTipo === entry.id ? 2 : 0}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Top Funcionários */}
+        {!isFuncionario && byTecnico.length > 0 && (
+          <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-sm font-semibold text-foreground">Top Funcionários</h2>
+              {filtroFuncionario && (
+                <button onClick={() => setFiltroFuncionario(null)} className="text-xs text-accent hover:underline flex items-center gap-1">
+                  <X className="w-3 h-3" /> Limpar
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">Clique numa barra para filtrar os demais gráficos</p>
+            <ResponsiveContainer width="100%" height={Math.max(200, byTecnico.length * 38)}>
+              <BarChart data={byTecnico} layout="vertical" barSize={18} margin={{ right: 90, left: 0 }}>
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={80} />
+                <Tooltip
+                  formatter={(v: number) => [formatCurrency(v), "Total"]}
+                  contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }}
+                />
+                <Bar
+                  dataKey="total"
+                  radius={[0, 4, 4, 0]}
+                  cursor="pointer"
+                  onClick={(data) => setFiltroFuncionario(filtroFuncionario === data.id ? null : data.id)}
+                >
+                  <LabelList dataKey="total" content={<CustomBarLabel />} />
+                  {byTecnico.map((entry) => (
+                    <Cell
+                      key={entry.id}
+                      fill={FUNC_COLORS[byTecnico.indexOf(entry) % FUNC_COLORS.length]}
+                      opacity={filtroFuncionario && filtroFuncionario !== entry.id ? 0.3 : 1}
+                      stroke={filtroFuncionario === entry.id ? "oklch(0.35 0.22 255)" : "transparent"}
+                      strokeWidth={filtroFuncionario === entry.id ? 2 : 0}
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         )}
       </div>
 
-      {/* ── Seção Controle de KM ── */}
+      {/* ── Seção KM ── */}
       <div className="flex items-center gap-3 pt-2">
         <div className="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center">
           <Gauge className="w-4 h-4" />
@@ -391,93 +517,70 @@ export default function RelatoriosPageSupabase() {
         <div className="h-px flex-1 bg-border" />
       </div>
 
-      {/* Cards KM */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
-          <div className="w-9 h-9 rounded-lg bg-accent/10 text-accent flex items-center justify-center mb-3">
-            <Route className="w-5 h-5" />
+        {[
+          { icon: <Route className="w-5 h-5" />, value: formatKmRel(totalKmPeriodo), label: "KM Total Percorrido", bg: "bg-accent/10", color: "text-accent" },
+          { icon: <Car className="w-5 h-5" />, value: totalViagens, label: "Viagens Finalizadas", bg: "bg-primary/10", color: "text-primary" },
+          { icon: <Gauge className="w-5 h-5" />, value: formatKmRel(mediaKmViagem), label: "Média por Viagem", bg: "bg-success/10", color: "text-success" },
+          { icon: <Clock className="w-5 h-5" />, value: totalMinutos > 0 ? formatDuracaoRel(totalMinutos) : "—", label: "Tempo Total em Rota", bg: "bg-warning/10", color: "text-warning" },
+        ].map(({ icon, value, label, bg, color }) => (
+          <div key={label} className="bg-white rounded-xl border border-border shadow-sm p-4">
+            <div className={`w-9 h-9 rounded-lg ${bg} ${color} flex items-center justify-center mb-3`}>{icon}</div>
+            <p className="text-2xl font-bold text-foreground">{value}</p>
+            <p className="text-xs text-muted-foreground mt-1">{label}</p>
           </div>
-          <p className="text-2xl font-bold text-foreground">{formatKmRel(totalKmPeriodo)}</p>
-          <p className="text-xs text-muted-foreground mt-1">KM Total Percorrido</p>
-        </div>
-        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
-          <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-3">
-            <Car className="w-5 h-5" />
-          </div>
-          <p className="text-2xl font-bold text-foreground">{totalViagens}</p>
-          <p className="text-xs text-muted-foreground mt-1">Viagens Finalizadas</p>
-        </div>
-        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
-          <div className="w-9 h-9 rounded-lg bg-success/10 text-success flex items-center justify-center mb-3">
-            <Gauge className="w-5 h-5" />
-          </div>
-          <p className="text-2xl font-bold text-foreground">{formatKmRel(mediaKmViagem)}</p>
-          <p className="text-xs text-muted-foreground mt-1">Média por Viagem</p>
-        </div>
-        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
-          <div className="w-9 h-9 rounded-lg bg-warning/10 text-warning flex items-center justify-center mb-3">
-            <Clock className="w-5 h-5" />
-          </div>
-          <p className="text-2xl font-bold text-foreground">{totalMinutos > 0 ? formatDuracaoRel(totalMinutos) : "—"}</p>
-          <p className="text-xs text-muted-foreground mt-1">Tempo Total em Rota</p>
-        </div>
+        ))}
       </div>
 
-      {/* Gráfico KM por mês */}
       {kmByMes.some((m) => m.km > 0) && (
         <div className="bg-white rounded-xl border border-border shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-foreground mb-4">
-            KM Percorrido por Mês — {now.getFullYear()}
-          </h3>
-          <ResponsiveContainer width="100%" height={220}>
+          <h3 className="text-sm font-semibold text-foreground mb-4">KM Percorrido por Mês — {now.getFullYear()}</h3>
+          <ResponsiveContainer width="100%" height={240}>
             <BarChart data={kmByMes} barSize={28}>
               <XAxis dataKey="mes" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={60}
                 tickFormatter={(v) => `${v} km`} />
-              <Tooltip
-                formatter={(v: number) => [`${v.toLocaleString("pt-BR")} km`, "KM"]}
-                contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }}
-              />
-              <Bar dataKey="km" radius={[4, 4, 0, 0]} fill="oklch(0.52 0.17 155)" />
+              <Tooltip formatter={(v: number) => [`${v.toLocaleString("pt-BR")} km`, "KM"]}
+                contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }} />
+              <Bar dataKey="km" radius={[4, 4, 0, 0]} fill="oklch(0.52 0.17 155)">
+                <LabelList dataKey="km" position="top" style={{ fontSize: 9, fill: "var(--muted-foreground)" }}
+                  formatter={(v: number) => v > 0 ? `${v.toLocaleString("pt-BR")}` : ""} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* KM por veículo */}
         {kmByFrota.length > 0 && (
           <div className="bg-white rounded-xl border border-border shadow-sm p-5">
             <h3 className="text-sm font-semibold text-foreground mb-4">KM por Veículo</h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={kmByFrota} layout="vertical" barSize={16}>
-                <XAxis type="number" tick={{ fontSize: 11 }} axisLine={false} tickLine={false}
-                  tickFormatter={(v) => `${v} km`} />
+            <ResponsiveContainer width="100%" height={Math.max(180, kmByFrota.length * 36)}>
+              <BarChart data={kmByFrota} layout="vertical" barSize={16} margin={{ right: 80 }}>
+                <XAxis type="number" hide />
                 <YAxis type="category" dataKey="nome" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={65} />
-                <Tooltip
-                  formatter={(v: number) => [`${v.toLocaleString("pt-BR")} km`, "KM"]}
-                  contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }}
-                />
-                <Bar dataKey="km" radius={[0, 4, 4, 0]} fill="oklch(0.55 0.18 255)" />
+                <Tooltip formatter={(v: number) => [`${v.toLocaleString("pt-BR")} km`, "KM"]}
+                  contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }} />
+                <Bar dataKey="km" radius={[0, 4, 4, 0]} fill="oklch(0.55 0.18 255)">
+                  <LabelList dataKey="km" content={<KmBarLabel />} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         )}
 
-        {/* KM por funcionário — apenas gestor/admin */}
         {isGestorOuAdmin && kmByFuncionario.length > 0 && (
           <div className="bg-white rounded-xl border border-border shadow-sm p-5">
             <h3 className="text-sm font-semibold text-foreground mb-4">KM por Funcionário</h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={kmByFuncionario} layout="vertical" barSize={16}>
-                <XAxis type="number" tick={{ fontSize: 11 }} axisLine={false} tickLine={false}
-                  tickFormatter={(v) => `${v} km`} />
+            <ResponsiveContainer width="100%" height={Math.max(180, kmByFuncionario.length * 36)}>
+              <BarChart data={kmByFuncionario} layout="vertical" barSize={16} margin={{ right: 80 }}>
+                <XAxis type="number" hide />
                 <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={75} />
-                <Tooltip
-                  formatter={(v: number) => [`${v.toLocaleString("pt-BR")} km`, "KM"]}
-                  contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }}
-                />
-                <Bar dataKey="km" radius={[0, 4, 4, 0]} fill="oklch(0.577 0.245 27.325)" />
+                <Tooltip formatter={(v: number) => [`${v.toLocaleString("pt-BR")} km`, "KM"]}
+                  contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }} />
+                <Bar dataKey="km" radius={[0, 4, 4, 0]} fill="oklch(0.577 0.245 27.325)">
+                  <LabelList dataKey="km" content={<KmBarLabel />} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
