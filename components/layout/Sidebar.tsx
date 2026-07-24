@@ -1,6 +1,7 @@
 "use client";
 
 import { useAppStore } from "@/lib/store";
+import { useAuth } from "@/lib/supabase/auth-context";
 import type { PageKey } from "./AppShell";
 import {
   LayoutDashboard,
@@ -66,7 +67,8 @@ export default function Sidebar({
   mobile,
   onClose,
 }: Props) {
-  const { currentUser, logout } = useAppStore();
+  const { currentUser } = useAppStore();
+  const { signOut } = useAuth();
   const visible = NAV.filter((n) => n.profiles.includes(currentUser?.perfil ?? ""));
 
   return (
@@ -146,7 +148,7 @@ export default function Sidebar({
       {/* Footer */}
       <div className="p-2 border-t border-sidebar-border">
         <button
-          onClick={() => logout()}
+          onClick={() => signOut()}
           title={collapsed && !mobile ? "Sair" : undefined}
           className={`flex items-center gap-2 w-full rounded-lg text-sm text-sidebar-foreground/60 hover:text-white hover:bg-sidebar-accent transition py-2 ${
             collapsed && !mobile ? "justify-center px-0" : "px-3"
