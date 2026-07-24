@@ -144,12 +144,9 @@ export default function RelatoriosPageSupabase() {
   const handleExportarPDF = async () => {
     setExportando(true);
     try {
-      const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
-        import("jspdf"),
-        import("html2canvas"),
-      ]);
+      const { default: jsPDF } = await import("jspdf");
 
-      // Agrupar despesas por funcionário (igual à tabela)
+      // Agrupar despesas por funcionário
       const gruposPDF: { nome: string; despesas: typeof despesasCruzadas }[] = [];
       const seenPDF = new Map<string, number>();
       despesasCruzadas.forEach((d) => {
@@ -163,201 +160,326 @@ export default function RelatoriosPageSupabase() {
       });
       gruposPDF.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
-      // Montar HTML de impressão
-      const container = document.createElement("div");
-      container.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1100px;background:#fff;font-family:Inter,sans-serif;color:#111;padding:40px;box-sizing:border-box;";
-
-      const periodoPDF = periodoLabel;
-      const tituloFiltros = [
-        filtroFuncionario ? `Funcionário: ${profiles.find((p) => p.id === filtroFuncionario)?.nome}` : "",
-        filtroTipo ? `Tipo: ${tiposDespesa.find((t) => t.id === filtroTipo)?.nome}` : "",
-      ].filter(Boolean).join(" | ");
-
-      container.innerHTML = `
-        <div style="border-bottom:2px solid #2563eb;padding-bottom:16px;margin-bottom:24px;">
-          <div style="display:flex;justify-content:space-between;align-items:flex-end;">
-            <div>
-              <h1 style="font-size:22px;font-weight:700;margin:0 0 4px;color:#1e40af;">Relatório de Despesas</h1>
-              <p style="font-size:13px;color:#6b7280;margin:0;">${periodoPDF}${tituloFiltros ? ` &nbsp;|&nbsp; ${tituloFiltros}` : ""}</p>
-            </div>
-            <p style="font-size:11px;color:#9ca3af;margin:0;">Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
-          </div>
-        </div>
-
-        <!-- Cards -->
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;">
-          ${[
-            { label: "Total do Período", val: formatCurrency(totalAno), color: "#2563eb" },
-            { label: "Lançamentos", val: String(totalLancamentos), color: "#16a34a" },
-            { label: "Ticket Médio", val: formatCurrency(ticketMedio), color: "#d97706" },
-            ...(isGestorOuAdmin ? [{ label: "Funcionários", val: String(tecnicosAtivos), color: "#7c3aed" }] : []),
-          ].map(c => `
-            <div style="border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;border-top:3px solid ${c.color};">
-              <p style="font-size:11px;color:#6b7280;margin:0 0 4px;text-transform:uppercase;letter-spacing:.5px;">${c.label}</p>
-              <p style="font-size:20px;font-weight:700;color:#111;margin:0;">${c.val}</p>
-            </div>
-          `).join("")}
-        </div>
-
-        <!-- Top Funcionários -->
-        ${byTecnico.length > 0 ? `
-        <div style="margin-bottom:28px;">
-          <h2 style="font-size:14px;font-weight:600;margin:0 0 12px;color:#374151;">Top Funcionários</h2>
-          <table style="width:100%;border-collapse:collapse;font-size:12px;">
-            <thead>
-              <tr style="background:#f3f4f6;">
-                <th style="text-align:left;padding:7px 10px;border:1px solid #e5e7eb;color:#6b7280;text-transform:uppercase;font-size:10px;">Funcionário</th>
-                <th style="text-align:center;padding:7px 10px;border:1px solid #e5e7eb;color:#6b7280;text-transform:uppercase;font-size:10px;">Qtd</th>
-                <th style="text-align:right;padding:7px 10px;border:1px solid #e5e7eb;color:#6b7280;text-transform:uppercase;font-size:10px;">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${byTecnico.map((t, i) => `
-                <tr style="background:${i % 2 === 0 ? "#fff" : "#f9fafb"};">
-                  <td style="padding:7px 10px;border:1px solid #e5e7eb;">${t.nome}</td>
-                  <td style="padding:7px 10px;border:1px solid #e5e7eb;text-align:center;">${t.qtd}</td>
-                  <td style="padding:7px 10px;border:1px solid #e5e7eb;text-align:right;font-weight:600;">${formatCurrency(t.total)}</td>
-                </tr>
-              `).join("")}
-            </tbody>
-          </table>
-        </div>
-        ` : ""}
-
-        <!-- Por Tipo de Despesa -->
-        ${byTipo.length > 0 ? `
-        <div style="margin-bottom:28px;">
-          <h2 style="font-size:14px;font-weight:600;margin:0 0 12px;color:#374151;">Por Tipo de Despesa</h2>
-          <table style="width:100%;border-collapse:collapse;font-size:12px;">
-            <thead>
-              <tr style="background:#f3f4f6;">
-                <th style="text-align:left;padding:7px 10px;border:1px solid #e5e7eb;color:#6b7280;text-transform:uppercase;font-size:10px;">Tipo</th>
-                <th style="text-align:right;padding:7px 10px;border:1px solid #e5e7eb;color:#6b7280;text-transform:uppercase;font-size:10px;">Total</th>
-                <th style="text-align:right;padding:7px 10px;border:1px solid #e5e7eb;color:#6b7280;text-transform:uppercase;font-size:10px;">%</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${byTipo.map((t, i) => `
-                <tr style="background:${i % 2 === 0 ? "#fff" : "#f9fafb"};">
-                  <td style="padding:7px 10px;border:1px solid #e5e7eb;">${t.name}</td>
-                  <td style="padding:7px 10px;border:1px solid #e5e7eb;text-align:right;font-weight:600;">${formatCurrency(t.valor)}</td>
-                  <td style="padding:7px 10px;border:1px solid #e5e7eb;text-align:right;">${totalAno > 0 ? ((t.valor / totalAno) * 100).toFixed(1) + "%" : "—"}</td>
-                </tr>
-              `).join("")}
-            </tbody>
-          </table>
-        </div>
-        ` : ""}
-
-        <!-- Evolução Mensal -->
-        <div style="margin-bottom:28px;">
-          <h2 style="font-size:14px;font-weight:600;margin:0 0 12px;color:#374151;">Evolução Mensal — ${anoSelecionado}</h2>
-          <table style="width:100%;border-collapse:collapse;font-size:12px;">
-            <thead>
-              <tr style="background:#f3f4f6;">
-                ${MESES.map(m => `<th style="text-align:center;padding:7px 6px;border:1px solid #e5e7eb;color:#6b7280;text-transform:uppercase;font-size:10px;">${m}</th>`).join("")}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                ${byMes.map(m => `<td style="padding:8px 6px;border:1px solid #e5e7eb;text-align:center;font-weight:${m.valor > 0 ? "600" : "400"};color:${m.valor > 0 ? "#111" : "#9ca3af"};">${m.valor > 0 ? formatCurrency(m.valor) : "—"}</td>`).join("")}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Tabela agrupada por funcionário -->
-        <div>
-          <h2 style="font-size:14px;font-weight:600;margin:0 0 12px;color:#374151;">Despesas do Período (${despesasCruzadas.length} registros)</h2>
-          ${gruposPDF.map(grupo => {
-            const subtotal = grupo.despesas.reduce((s, d) => s + Number(d.valor), 0);
-            const rows = grupo.despesas
-              .slice()
-              .sort((a, b) => a.data_despesa.localeCompare(b.data_despesa))
-              .map((d, i) => {
-                const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
-                const aprovador = profiles.find((p) => p.id === d.aprovado_por);
-                return `<tr style="background:${i % 2 === 0 ? "#fff" : "#f9fafb"};">
-                  <td style="padding:6px 8px;border:1px solid #e5e7eb;">${formatDate(d.data_despesa)}</td>
-                  <td style="padding:6px 8px;border:1px solid #e5e7eb;">${tipo?.nome ?? "—"}</td>
-                  <td style="padding:6px 8px;border:1px solid #e5e7eb;">${d.cliente}</td>
-                  <td style="padding:6px 8px;border:1px solid #e5e7eb;">${d.numero_os ?? "—"}</td>
-                  <td style="padding:6px 8px;border:1px solid #e5e7eb;text-align:right;font-weight:600;">${formatCurrency(Number(d.valor))}</td>
-                  <td style="padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;max-width:160px;">${d.observacao ?? "—"}</td>
-                  ${!isFuncionario ? `
-                    <td style="padding:6px 8px;border:1px solid #e5e7eb;">${aprovador?.nome ?? "—"}</td>
-                    <td style="padding:6px 8px;border:1px solid #e5e7eb;">${d.aprovado_em ? formatDate(d.aprovado_em.slice(0, 10)) : "—"}</td>
-                  ` : ""}
-                </tr>`;
-              }).join("");
-            return `
-              <div style="margin-bottom:20px;page-break-inside:avoid;">
-                <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;margin-bottom:0;">
-                  <span style="font-size:13px;font-weight:700;color:#1e40af;">${grupo.nome}</span>
-                  <span style="font-size:13px;font-weight:700;color:#1e40af;">${formatCurrency(subtotal)} &nbsp;&bull;&nbsp; ${grupo.despesas.length} ${grupo.despesas.length === 1 ? "despesa" : "despesas"}</span>
-                </div>
-                <table style="width:100%;border-collapse:collapse;font-size:11px;border-top:none;">
-                  <thead>
-                    <tr style="background:#f3f4f6;">
-                      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">Data</th>
-                      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">Tipo</th>
-                      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">Cliente</th>
-                      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">OS</th>
-                      <th style="text-align:right;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">Valor</th>
-                      <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">Observação</th>
-                      ${!isFuncionario ? `
-                        <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">Aprovador</th>
-                        <th style="text-align:left;padding:6px 8px;border:1px solid #e5e7eb;color:#6b7280;font-size:10px;text-transform:uppercase;">Data Aprov.</th>
-                      ` : ""}
-                    </tr>
-                  </thead>
-                  <tbody>${rows}</tbody>
-                </table>
-              </div>
-            `;
-          }).join("")}
-
-          <!-- Total geral -->
-          <div style="background:#1e40af;color:#fff;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
-            <span style="font-size:13px;font-weight:600;">Total Geral &nbsp;&bull;&nbsp; ${despesasCruzadas.length} despesas &nbsp;&bull;&nbsp; ${gruposPDF.length} funcionários</span>
-            <span style="font-size:15px;font-weight:700;">${formatCurrency(totalAno)}</span>
-          </div>
-        </div>
-      `;
-
-      document.body.appendChild(container);
-
-      const canvas = await html2canvas(container, {
-        scale: 1.8,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-        width: 1100,
-      });
-
-      document.body.removeChild(container);
-
-      const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const pdfW = pdf.internal.pageSize.getWidth();
-      const pdfH = pdf.internal.pageSize.getHeight();
-      const ratio = canvas.width / canvas.height;
-      const imgH = pdfW / ratio;
-      let posY = 0;
+      const PW = 210; // largura A4
+      const PH = 297; // altura A4
+      const ML = 14;  // margem esquerda
+      const MR = 14;  // margem direita
+      const CW = PW - ML - MR; // largura útil
+      const BOTTOM_MARGIN = 15;
 
-      while (posY < canvas.height) {
-        const sliceH = Math.min(pdfH * (canvas.width / pdfW), canvas.height - posY);
-        const sliceCanvas = document.createElement("canvas");
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = sliceH;
-        const ctx = sliceCanvas.getContext("2d")!;
-        ctx.drawImage(canvas, 0, posY, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-        const sliceData = sliceCanvas.toDataURL("image/png");
-        if (posY > 0) pdf.addPage();
-        pdf.addImage(sliceData, "PNG", 0, 0, pdfW, (sliceH * pdfW) / canvas.width);
-        posY += sliceH;
+      let y = 0;
+
+      // ── Helpers de desenho ──
+      const newPage = () => {
+        pdf.addPage();
+        y = 14;
+      };
+
+      const checkY = (needed: number) => {
+        if (y + needed > PH - BOTTOM_MARGIN) newPage();
+      };
+
+      const text = (str: string, x: number, yy: number, opts?: Parameters<typeof pdf.text>[3]) => {
+        pdf.text(str, x, yy, opts);
+      };
+
+      const headerBar = (label: string) => {
+        checkY(10);
+        pdf.setFillColor(37, 99, 235);
+        pdf.rect(ML, y, CW, 7, "F");
+        pdf.setFontSize(9);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(255, 255, 255);
+        text(label.toUpperCase(), ML + 2, y + 4.8);
+        pdf.setTextColor(0, 0, 0);
+        y += 9;
+      };
+
+      const sectionTitle = (label: string) => {
+        checkY(10);
+        pdf.setFontSize(11);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(30, 64, 175);
+        text(label, ML, y);
+        y += 1;
+        pdf.setDrawColor(37, 99, 235);
+        pdf.setLineWidth(0.4);
+        pdf.line(ML, y, ML + CW, y);
+        pdf.setTextColor(0, 0, 0);
+        y += 5;
+      };
+
+      const tableHeader = (cols: { label: string; w: number; align?: "left" | "right" | "center" }[]) => {
+        checkY(8);
+        pdf.setFillColor(243, 244, 246);
+        pdf.rect(ML, y, CW, 6.5, "F");
+        pdf.setFontSize(8);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(107, 114, 128);
+        let cx = ML + 1;
+        cols.forEach((col) => {
+          const align = col.align ?? "left";
+          const tx = align === "right" ? cx + col.w - 1 : align === "center" ? cx + col.w / 2 : cx + 1;
+          text(col.label.toUpperCase(), tx, y + 4.5, { align });
+          cx += col.w;
+        });
+        pdf.setTextColor(0, 0, 0);
+        y += 6.5;
+      };
+
+      const tableRow = (
+        cols: { val: string; w: number; align?: "left" | "right" | "center"; bold?: boolean }[],
+        bgGray: boolean
+      ) => {
+        checkY(6.5);
+        if (bgGray) {
+          pdf.setFillColor(249, 250, 251);
+          pdf.rect(ML, y, CW, 6, "F");
+        }
+        pdf.setFontSize(8.5);
+        pdf.setTextColor(17, 24, 39);
+        let cx = ML + 1;
+        cols.forEach((col) => {
+          pdf.setFont("helvetica", col.bold ? "bold" : "normal");
+          const align = col.align ?? "left";
+          const tx = align === "right" ? cx + col.w - 1 : align === "center" ? cx + col.w / 2 : cx + 1;
+          const maxW = col.w - 2;
+          const lines = pdf.splitTextToSize(col.val, maxW) as string[];
+          text(lines[0], tx, y + 4.2, { align });
+          cx += col.w;
+        });
+        pdf.setDrawColor(229, 231, 235);
+        pdf.setLineWidth(0.1);
+        pdf.line(ML, y + 6, ML + CW, y + 6);
+        y += 6;
+      };
+
+      // ═══════════════════════════════
+      // CABEÇALHO DA PÁGINA
+      // ═══════════════════════════════
+      y = 14;
+      pdf.setFillColor(30, 64, 175);
+      pdf.rect(0, 0, PW, 22, "F");
+      pdf.setFontSize(16);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(255, 255, 255);
+      text("Relatório de Despesas", ML, 10);
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "normal");
+      text(periodoLabel, ML, 16);
+      const dataGeracao = `Gerado em ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+      text(dataGeracao, PW - MR, 16, { align: "right" });
+
+      if (filtroFuncionario || filtroTipo) {
+        const filtrosAtivos = [
+          filtroFuncionario ? `Funcionário: ${profiles.find((p) => p.id === filtroFuncionario)?.nome}` : "",
+          filtroTipo ? `Tipo: ${tiposDespesa.find((t) => t.id === filtroTipo)?.nome}` : "",
+        ].filter(Boolean).join("  |  ");
+        text(`Filtros ativos: ${filtrosAtivos}`, ML, 20.5);
       }
 
-      const nomeArquivo = `relatorio-despesas-${periodoLabel.replace(/\s+/g, "-").toLowerCase()}.pdf`;
+      pdf.setTextColor(0, 0, 0);
+      y = 28;
+
+      // ═══════════════════════════════
+      // CARDS DE RESUMO
+      // ═══════════════════════════════
+      const cards = [
+        { label: "Total do Período", val: formatCurrency(totalAno), color: [37, 99, 235] as [number,number,number] },
+        { label: "Lançamentos", val: String(totalLancamentos), color: [22, 163, 74] as [number,number,number] },
+        { label: "Ticket Médio", val: formatCurrency(ticketMedio), color: [217, 119, 6] as [number,number,number] },
+        ...(isGestorOuAdmin ? [{ label: "Funcionários Ativos", val: String(tecnicosAtivos), color: [124, 58, 237] as [number,number,number] }] : []),
+      ];
+      const cardW = CW / cards.length;
+      cards.forEach((card, i) => {
+        const cx = ML + i * cardW;
+        pdf.setFillColor(248, 250, 252);
+        pdf.roundedRect(cx, y, cardW - 2, 16, 2, 2, "F");
+        pdf.setFillColor(...card.color);
+        pdf.rect(cx, y, cardW - 2, 1.5, "F");
+        pdf.setFontSize(7.5);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(107, 114, 128);
+        text(card.label, cx + (cardW - 2) / 2, y + 6, { align: "center" });
+        pdf.setFontSize(12);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...card.color);
+        text(card.val, cx + (cardW - 2) / 2, y + 13, { align: "center" });
+      });
+      pdf.setTextColor(0, 0, 0);
+      y += 22;
+
+      // ═══════════════════════════════
+      // TOP FUNCIONÁRIOS
+      // ═══════════════════════════════
+      if (byTecnico.length > 0) {
+        sectionTitle("Top Funcionários");
+        const colsFun = [
+          { label: "Funcionário", w: CW * 0.55 },
+          { label: "Qtd", w: CW * 0.15, align: "center" as const },
+          { label: "Total", w: CW * 0.30, align: "right" as const },
+        ];
+        tableHeader(colsFun);
+        byTecnico.forEach((t, i) => {
+          tableRow([
+            { val: t.nome, w: colsFun[0].w },
+            { val: String(t.qtd), w: colsFun[1].w, align: "center" },
+            { val: formatCurrency(t.total), w: colsFun[2].w, align: "right", bold: true },
+          ], i % 2 !== 0);
+        });
+        y += 6;
+      }
+
+      // ═══════════════════════════════
+      // POR TIPO DE DESPESA
+      // ═══════════════════════════════
+      if (byTipo.length > 0) {
+        sectionTitle("Por Tipo de Despesa");
+        const colsTipo = [
+          { label: "Tipo", w: CW * 0.55 },
+          { label: "Total", w: CW * 0.25, align: "right" as const },
+          { label: "%", w: CW * 0.20, align: "right" as const },
+        ];
+        tableHeader(colsTipo);
+        byTipo.forEach((t, i) => {
+          tableRow([
+            { val: t.name, w: colsTipo[0].w },
+            { val: formatCurrency(t.valor), w: colsTipo[1].w, align: "right", bold: true },
+            { val: totalAno > 0 ? ((t.valor / totalAno) * 100).toFixed(1) + "%" : "—", w: colsTipo[2].w, align: "right" },
+          ], i % 2 !== 0);
+        });
+        y += 6;
+      }
+
+      // ═══════════════════════════════
+      // EVOLUÇÃO MENSAL
+      // ═══════════════════════════════
+      sectionTitle(`Evolução Mensal — ${anoSelecionado}`);
+      const mesW = CW / 12;
+      // Cabeçalho meses
+      checkY(14);
+      pdf.setFillColor(243, 244, 246);
+      pdf.rect(ML, y, CW, 6, "F");
+      pdf.setFontSize(7.5);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(107, 114, 128);
+      MESES.forEach((m, i) => text(m, ML + i * mesW + mesW / 2, y + 4.2, { align: "center" }));
+      y += 6;
+      // Valores
+      pdf.setFontSize(7.5);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(17, 24, 39);
+      byMes.forEach((m, i) => {
+        const val = m.valor > 0 ? (m.valor >= 1000 ? `R$${(m.valor / 1000).toFixed(1)}k` : formatCurrency(m.valor)) : "—";
+        if (m.valor > 0) {
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(37, 99, 235);
+        } else {
+          pdf.setFont("helvetica", "normal");
+          pdf.setTextColor(156, 163, 175);
+        }
+        text(val, ML + i * mesW + mesW / 2, y + 4.5, { align: "center" });
+      });
+      pdf.setTextColor(0, 0, 0);
+      y += 12;
+
+      // ═══════════════════════════════
+      // TABELA AGRUPADA POR FUNCIONÁRIO
+      // ═══════════════════════════════
+      sectionTitle(`Despesas do Período (${despesasCruzadas.length} registros)`);
+
+      const colsDesp = isFuncionario
+        ? [
+            { label: "Data",       w: CW * 0.12 },
+            { label: "Tipo",       w: CW * 0.18 },
+            { label: "Cliente",    w: CW * 0.25 },
+            { label: "OS",         w: CW * 0.13 },
+            { label: "Valor",      w: CW * 0.16, align: "right" as const },
+            { label: "Observação", w: CW * 0.16 },
+          ]
+        : [
+            { label: "Data",       w: CW * 0.10 },
+            { label: "Tipo",       w: CW * 0.15 },
+            { label: "Cliente",    w: CW * 0.19 },
+            { label: "OS",         w: CW * 0.10 },
+            { label: "Valor",      w: CW * 0.13, align: "right" as const },
+            { label: "Observação", w: CW * 0.14 },
+            { label: "Aprovador",  w: CW * 0.11 },
+            { label: "Dt. Aprov.", w: CW * 0.08 },
+          ];
+
+      gruposPDF.forEach((grupo) => {
+        const subtotal = grupo.despesas.reduce((s, d) => s + Number(d.valor), 0);
+        const qtd = grupo.despesas.length;
+
+        // Linha do funcionário
+        checkY(8);
+        pdf.setFillColor(239, 246, 255);
+        pdf.rect(ML, y, CW, 7, "F");
+        pdf.setFontSize(9.5);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(30, 64, 175);
+        text(grupo.nome, ML + 2, y + 5);
+        text(`${formatCurrency(subtotal)}  •  ${qtd} ${qtd === 1 ? "despesa" : "despesas"}`, ML + CW - 1, y + 5, { align: "right" });
+        pdf.setTextColor(0, 0, 0);
+        y += 7;
+
+        // Cabeçalho colunas (apenas no primeiro grupo de cada página se necessário)
+        tableHeader(colsDesp);
+
+        grupo.despesas
+          .slice()
+          .sort((a, b) => a.data_despesa.localeCompare(b.data_despesa))
+          .forEach((d, i) => {
+            const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
+            const aprovador = profiles.find((p) => p.id === d.aprovado_por);
+            const rowData = isFuncionario
+              ? [
+                  { val: formatDate(d.data_despesa), w: colsDesp[0].w },
+                  { val: tipo?.nome ?? "—", w: colsDesp[1].w },
+                  { val: d.cliente, w: colsDesp[2].w },
+                  { val: d.numero_os ?? "—", w: colsDesp[3].w },
+                  { val: formatCurrency(Number(d.valor)), w: colsDesp[4].w, align: "right" as const, bold: true },
+                  { val: d.observacao ?? "—", w: colsDesp[5].w },
+                ]
+              : [
+                  { val: formatDate(d.data_despesa), w: colsDesp[0].w },
+                  { val: tipo?.nome ?? "—", w: colsDesp[1].w },
+                  { val: d.cliente, w: colsDesp[2].w },
+                  { val: d.numero_os ?? "—", w: colsDesp[3].w },
+                  { val: formatCurrency(Number(d.valor)), w: colsDesp[4].w, align: "right" as const, bold: true },
+                  { val: d.observacao ?? "—", w: colsDesp[5].w },
+                  { val: aprovador?.nome ?? "—", w: colsDesp[6].w },
+                  { val: d.aprovado_em ? formatDate(d.aprovado_em.slice(0, 10)) : "—", w: colsDesp[7].w },
+                ];
+            tableRow(rowData, i % 2 !== 0);
+          });
+
+        y += 4;
+      });
+
+      // ── Total geral ──
+      checkY(10);
+      pdf.setFillColor(30, 64, 175);
+      pdf.rect(ML, y, CW, 9, "F");
+      pdf.setFontSize(10);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(255, 255, 255);
+      text(`Total Geral  •  ${despesasCruzadas.length} despesas  •  ${gruposPDF.length} funcionários`, ML + 2, y + 6);
+      text(formatCurrency(totalAno), ML + CW - 1, y + 6, { align: "right" });
+
+      // ── Número de páginas ──
+      const totalPages = (pdf as any).internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(8);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(156, 163, 175);
+        pdf.text(`Página ${i} de ${totalPages}`, PW / 2, PH - 6, { align: "center" });
+      }
+
+      const nomeArquivo = `relatorio-despesas-${periodoLabel.replace(/[\s/]/g, "-").toLowerCase()}.pdf`;
       pdf.save(nomeArquivo);
     } catch (err) {
       console.error("[v0] Erro ao exportar PDF:", err);
