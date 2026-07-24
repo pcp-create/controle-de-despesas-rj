@@ -261,13 +261,9 @@ export default function RelatoriosPageSupabase() {
       // ════════════════════════════════════════
       // 1. CABEÇALHO
       // ════════════════════════════════════════
-      // Fundo navy completo
+      // Fundo navy uniforme — cor única
       pdf.setFillColor(...NAVY);
       pdf.rect(0, 0, PW, 32, "F");
-
-      // Acento degradê (faixa mais clara no canto direito)
-      pdf.setFillColor(35, 65, 125);
-      pdf.rect(PW * 0.55, 0, PW * 0.45, 32, "F");
 
       // Logo
       const LOGO_H = 22;
@@ -339,43 +335,35 @@ export default function RelatoriosPageSupabase() {
       // 2. CARDS DE RESUMO (com círculo ícone)
       // ════════════════════════════════════════
       const cardsData = [
-        { label: "Total do Periodo",   val: formatCurrency(totalAno),   color: AZURE,   letra: "$" },
-        { label: "Lancamentos",         val: String(totalLancamentos),    color: C_GREEN, letra: "#" },
-        { label: "Ticket Medio",        val: formatCurrency(ticketMedio), color: C_ORG,   letra: "~" },
-        ...(isGestorOuAdmin ? [{ label: "Funcionarios Ativos", val: String(tecnicosAtivos), color: AZURE as [number,number,number], letra: "@" }] : []),
+        { label: "Total do Periodo",    val: formatCurrency(totalAno),   color: AZURE  },
+        { label: "Lancamentos",          val: String(totalLancamentos),    color: C_GREEN },
+        { label: "Ticket Medio",         val: formatCurrency(ticketMedio), color: C_ORG   },
+        ...(isGestorOuAdmin ? [{ label: "Funcionarios Ativos", val: String(tecnicosAtivos), color: AZURE as [number,number,number] }] : []),
       ];
       const cardW = CW / cardsData.length;
-      const cardH = 22;
+      const cardH = 20;
       cardsData.forEach((card, i) => {
         const cx2 = ML + i * cardW;
-        // Card com borda
+        // Card branco com borda
         pdf.setFillColor(255, 255, 255);
         pdf.roundedRect(cx2, y, cardW - 2, cardH, 2, 2, "F");
         pdf.setDrawColor(...BORDER);
         pdf.setLineWidth(0.3);
         pdf.roundedRect(cx2, y, cardW - 2, cardH, 2, 2, "S");
-
-        // Círculo colorido ícone
-        const circR = 5.5;
-        const circX = cx2 + 4 + circR;
-        const circY = y + cardH / 2;
+        // Linha superior colorida
         pdf.setFillColor(...card.color);
-        pdf.circle(circX, circY, circR, "F");
-        pdf.setFontSize(8);
-        pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(255, 255, 255);
-        t(card.letra, circX, circY + 2.5, { align: "center" });
+        pdf.rect(cx2, y, cardW - 2, 1.5, "F");
 
-        // Textos
-        const textX = cx2 + 4 + circR * 2 + 3;
+        // Título do card
         pdf.setFontSize(7);
         pdf.setFont("helvetica", "normal");
         pdf.setTextColor(107, 114, 128);
-        t(card.label, textX, y + 8);
-        pdf.setFontSize(13);
+        t(card.label, cx2 + (cardW - 2) / 2, y + 7, { align: "center" });
+        // Valor do card
+        pdf.setFontSize(12);
         pdf.setFont("helvetica", "bold");
         pdf.setTextColor(...card.color);
-        t(card.val, textX, y + 17);
+        t(card.val, cx2 + (cardW - 2) / 2, y + 15, { align: "center" });
       });
       pdf.setTextColor(17, 24, 39);
       y += cardH + 8;
@@ -540,32 +528,20 @@ export default function RelatoriosPageSupabase() {
       ];
       // 0.12+0.18+0.24+0.10+0.22+0.14 = 1.00 ✓
 
-      gruposPDF.forEach((grupo, gi) => {
+      gruposPDF.forEach((grupo) => {
         const subtotal = grupo.despesas.reduce((s, d) => s + Number(d.valor), 0);
         const qtd = grupo.despesas.length;
-        const avatarColor = AVATAR_COLORS[gi % AVATAR_COLORS.length];
 
-        // Linha do funcionário com avatar
+        // Linha do funcionário — apenas nome, sem avatar
         checkY(10);
         pdf.setFillColor(...LIGHT);
         pdf.rect(ML, y, CW, 8, "F");
-
-        // Avatar círculo com iniciais
-        const AVR = 4;
-        const avX = ML + 4 + AVR;
-        const avY = y + 4;
-        pdf.setFillColor(...avatarColor);
-        pdf.circle(avX, avY, AVR, "F");
-        pdf.setFontSize(6.5);
-        pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(255, 255, 255);
-        t(grupo.iniciais, avX, avY + 2, { align: "center" });
 
         // Nome
         pdf.setFontSize(9);
         pdf.setFont("helvetica", "bold");
         pdf.setTextColor(...NAVY);
-        t(grupo.nome, ML + 4 + AVR * 2 + 3, y + 5.5);
+        t(grupo.nome, ML + 4, y + 5.5);
 
         // Subtotal e qtd à direita
         pdf.setFontSize(8.5);
