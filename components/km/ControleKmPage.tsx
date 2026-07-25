@@ -251,7 +251,8 @@ export default function ControleKmPage() {
     const result = await finalizarKm(
       targetRegistro.id,
       Number(fin.km_final),
-      fin.observacao.trim() || undefined
+      fin.observacao.trim() || undefined,
+      targetRegistro.frota_id
     );
     setLoading(false);
 
