@@ -706,7 +706,14 @@ export default function ControleKmPage() {
                             {(() => {
                               const q = buscaVeiculo.toLowerCase();
                               const filtrados = frotasDisponiveis.filter((f) =>
-                                !q || f.placa.toLowerCase().includes(q) || f.marca.toLowerCase().includes(q) || f.modelo.toLowerCase().includes(q)
+                                !q ||
+                                f.placa.toLowerCase().includes(q) ||
+                                f.marca.toLowerCase().includes(q) ||
+                                f.modelo.toLowerCase().includes(q) ||
+                                (f.tipo ?? "").toLowerCase().includes(q) ||
+                                (f.cor ?? "").toLowerCase().includes(q) ||
+                                String(f.ano ?? "").includes(q) ||
+                                (f.observacao ?? "").toLowerCase().includes(q)
                               );
                               if (filtrados.length === 0) return (
                                 <p className="px-4 py-5 text-sm text-muted-foreground text-center">
