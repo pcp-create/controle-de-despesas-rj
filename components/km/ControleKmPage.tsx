@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useControleKm, useFrotas, useProfiles, type ControleKm } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import {
@@ -98,6 +98,7 @@ export default function ControleKmPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [mostrarListaVeiculos, setMostrarListaVeiculos] = useState(false);
 
   // Registro aberto do usuário logado
   const registroAberto = useMemo(
@@ -168,6 +169,8 @@ export default function ControleKmPage() {
     setForm({ ...EMPTY_FORM, frota_id: padraodDisponivel ? veiculoPadrao! : "" });
     setErrors({});
     setFeedback(null);
+    // Se tem veículo padrão disponível, começa com lista fechada; senão, abre direto
+    setMostrarListaVeiculos(!padraodDisponivel);
     setModal("iniciar");
   };
 
@@ -629,54 +632,100 @@ export default function ControleKmPage() {
 
           <form onSubmit={handleIniciar} className="p-5 flex flex-col gap-4">
             {/* Veículo */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-foreground">Veículo *</label>
-                {(() => {
-                  const padrao = (currentUser as any)?.frota_padrao_id as string | null;
-                  if (padrao && form.frota_id === padrao) {
-                    return (
-                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                        <Car className="w-3 h-3" />
-                        Veículo padrão
-                      </span>
-                    );
-                  }
-                  if (padrao && frotasDisponiveis.find((f) => f.id === padrao)) {
-                    return (
-                      <button
-                        type="button"
-                        onClick={() => setForm({ ...form, frota_id: padrao })}
-                        className="text-xs text-primary underline hover:no-underline"
+            {(() => {
+              const padrao = (currentUser as any)?.frota_padrao_id as string | null;
+              const veiculoPadrao = padrao ? frotasDisponiveis.find((f) => f.id === padrao) : null;
+              const veiculoSelecionado = form.frota_id ? frotasDisponiveis.find((f) => f.id === form.frota_id) : null;
+
+              return (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">Veículo *</label>
+
+                  {frotasDisponiveis.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic">Nenhum veículo disponível no momento.</p>
+                  ) : !mostrarListaVeiculos ? (
+                    /* ── Modo card: mostra o veículo padrão (ou selecionado) ── */
+                    <div className="flex flex-col gap-2">
+                      {veiculoSelecionado ? (
+                        <div className="flex items-center justify-between px-4 py-3 rounded-lg border-2 border-primary bg-primary/5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                              <Car className="w-4 h-4 text-primary" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-foreground">
+                                {veiculoSelecionado.placa}
+                                {veiculoSelecionado.id === padrao && (
+                                  <span className="ml-2 text-xs font-normal px-1.5 py-0.5 rounded-full bg-primary/15 text-primary">Padrão</span>
+                                )}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {veiculoSelecionado.marca} {veiculoSelecionado.modelo}
+                                {veiculoSelecionado.ano ? ` · ${veiculoSelecionado.ano}` : ""}
+                                {" · "}{veiculoSelecionado.quilometragem.toLocaleString("pt-BR")} km
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setMostrarListaVeiculos(true)}
+                            className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 shrink-0 ml-2"
+                          >
+                            Usar outro
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setMostrarListaVeiculos(true)}
+                          className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed border-input hover:border-primary hover:bg-primary/5 transition-colors text-sm text-muted-foreground hover:text-primary"
+                        >
+                          <Car className="w-4 h-4" />
+                          Selecionar veículo
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    /* ── Modo lista: select completo ── */
+                    <div className="flex flex-col gap-2">
+                      <select
+                        value={form.frota_id}
+                        onChange={(e) => {
+                          setForm({ ...form, frota_id: e.target.value });
+                          if (e.target.value) setMostrarListaVeiculos(false);
+                        }}
+                        autoFocus
+                        className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                       >
-                        Usar veículo padrão
-                      </button>
-                    );
-                  }
-                  return null;
-                })()}
-              </div>
-              {frotasDisponiveis.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">Nenhum veículo disponível no momento.</p>
-              ) : (
-                <select
-                  value={form.frota_id}
-                  onChange={(e) => setForm({ ...form, frota_id: e.target.value })}
-                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">Selecione o veículo</option>
-                  {frotasDisponiveis.map((f) => {
-                    const isPadrao = f.id === (currentUser as any)?.frota_padrao_id;
-                    return (
-                      <option key={f.id} value={f.id}>
-                        {isPadrao ? "★ " : ""}{f.placa} — {f.marca} {f.modelo} {f.ano ? `(${f.ano})` : ""} · {f.quilometragem.toLocaleString("pt-BR")} km atual{isPadrao ? " · Padrão" : ""}
-                      </option>
-                    );
-                  })}
-                </select>
-              )}
-              {errors.frota_id && <span className="text-xs text-destructive">{errors.frota_id}</span>}
-            </div>
+                        <option value="">Selecione o veículo</option>
+                        {frotasDisponiveis.map((f) => {
+                          const isPadrao = f.id === padrao;
+                          return (
+                            <option key={f.id} value={f.id}>
+                              {isPadrao ? "★ " : ""}{f.placa} — {f.marca} {f.modelo}{f.ano ? ` (${f.ano})` : ""} · {f.quilometragem.toLocaleString("pt-BR")} km{isPadrao ? " · Padrão" : ""}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      {veiculoPadrao && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm({ ...form, frota_id: padrao! });
+                            setMostrarListaVeiculos(false);
+                          }}
+                          className="text-xs text-primary hover:underline self-start"
+                        >
+                          Voltar ao veículo padrão ({veiculoPadrao.placa})
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {errors.frota_id && <span className="text-xs text-destructive">{errors.frota_id}</span>}
+                </div>
+              );
+            })()}
 
             {/* KM Inicial */}
             <div className="flex flex-col gap-1.5">
