@@ -99,6 +99,7 @@ export default function ControleKmPage() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [mostrarListaVeiculos, setMostrarListaVeiculos] = useState(false);
+  const [buscaVeiculo, setBuscaVeiculo] = useState("");
 
   // Registro aberto do usuário logado
   const registroAberto = useMemo(
@@ -171,6 +172,7 @@ export default function ControleKmPage() {
     setFeedback(null);
     // Se tem veículo padrão disponível, começa com lista fechada; senão, abre direto
     setMostrarListaVeiculos(!padraodDisponivel);
+    setBuscaVeiculo("");
     setModal("iniciar");
   };
 
@@ -686,33 +688,75 @@ export default function ControleKmPage() {
                       )}
                     </div>
                   ) : (
-                    /* ── Modo lista: select completo ── */
+                    /* ── Modo lista: busca + lista filtrada ── */
                     <div className="flex flex-col gap-2">
-                      <select
-                        value={form.frota_id}
-                        onChange={(e) => {
-                          setForm({ ...form, frota_id: e.target.value });
-                          if (e.target.value) setMostrarListaVeiculos(false);
-                        }}
-                        autoFocus
-                        className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                      >
-                        <option value="">Selecione o veículo</option>
-                        {frotasDisponiveis.map((f) => {
-                          const isPadrao = f.id === padrao;
-                          return (
-                            <option key={f.id} value={f.id}>
-                              {isPadrao ? "★ " : ""}{f.placa} — {f.marca} {f.modelo}{f.ano ? ` (${f.ano})` : ""} · {f.quilometragem.toLocaleString("pt-BR")} km{isPadrao ? " · Padrão" : ""}
-                            </option>
-                          );
-                        })}
-                      </select>
+                      {/* Campo de busca */}
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                        <input
+                          type="text"
+                          autoFocus
+                          value={buscaVeiculo}
+                          onChange={(e) => setBuscaVeiculo(e.target.value)}
+                          placeholder="Buscar por placa, marca ou modelo..."
+                          className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                      </div>
+
+                      {/* Lista de veículos filtrada */}
+                      <div className="flex flex-col gap-1 max-h-48 overflow-y-auto rounded-lg border border-input bg-background">
+                        {frotasDisponiveis
+                          .filter((f) => {
+                            const q = buscaVeiculo.toLowerCase();
+                            return !q || f.placa.toLowerCase().includes(q) || f.marca.toLowerCase().includes(q) || f.modelo.toLowerCase().includes(q);
+                          })
+                          .map((f) => {
+                            const isPadrao = f.id === padrao;
+                            return (
+                              <button
+                                key={f.id}
+                                type="button"
+                                onClick={() => {
+                                  setForm({ ...form, frota_id: f.id });
+                                  setMostrarListaVeiculos(false);
+                                  setBuscaVeiculo("");
+                                }}
+                                className="flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/60 transition-colors border-b border-border last:border-0"
+                              >
+                                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                                  <Car className="w-4 h-4 text-muted-foreground" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                                    {f.placa}
+                                    {isPadrao && (
+                                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-normal">Padrão</span>
+                                    )}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground truncate">
+                                    {f.marca} {f.modelo}{f.ano ? ` · ${f.ano}` : ""} · {f.quilometragem.toLocaleString("pt-BR")} km
+                                  </p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        {frotasDisponiveis.filter((f) => {
+                          const q = buscaVeiculo.toLowerCase();
+                          return !q || f.placa.toLowerCase().includes(q) || f.marca.toLowerCase().includes(q) || f.modelo.toLowerCase().includes(q);
+                        }).length === 0 && (
+                          <p className="px-3 py-4 text-sm text-muted-foreground text-center">
+                            Nenhum veículo encontrado.
+                          </p>
+                        )}
+                      </div>
+
                       {veiculoPadrao && (
                         <button
                           type="button"
                           onClick={() => {
                             setForm({ ...form, frota_id: padrao! });
                             setMostrarListaVeiculos(false);
+                            setBuscaVeiculo("");
                           }}
                           className="text-xs text-primary hover:underline self-start"
                         >
