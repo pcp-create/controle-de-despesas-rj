@@ -29,11 +29,17 @@ ALTER TABLE public.frotas    ADD COLUMN IF NOT EXISTS km_atualizado_em TIMESTAMP
 -- RLS
 ALTER TABLE public.controle_km ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "usuarios_veem_proprios_km"
+DROP POLICY IF EXISTS "usuarios_veem_proprios_km"    ON public.controle_km;
+DROP POLICY IF EXISTS "gestores_veem_todos_km"        ON public.controle_km;
+DROP POLICY IF EXISTS "usuarios_inserem_km"           ON public.controle_km;
+DROP POLICY IF EXISTS "usuarios_atualizam_proprio_km" ON public.controle_km;
+DROP POLICY IF EXISTS "admin_deleta_km"               ON public.controle_km;
+
+CREATE POLICY "usuarios_veem_proprios_km"
   ON public.controle_km FOR SELECT
   USING (auth.uid() = usuario_id);
 
-CREATE POLICY IF NOT EXISTS "gestores_veem_todos_km"
+CREATE POLICY "gestores_veem_todos_km"
   ON public.controle_km FOR SELECT
   USING (
     EXISTS (
@@ -43,15 +49,15 @@ CREATE POLICY IF NOT EXISTS "gestores_veem_todos_km"
     )
   );
 
-CREATE POLICY IF NOT EXISTS "usuarios_inserem_km"
+CREATE POLICY "usuarios_inserem_km"
   ON public.controle_km FOR INSERT
   WITH CHECK (auth.uid() = usuario_id);
 
-CREATE POLICY IF NOT EXISTS "usuarios_atualizam_proprio_km"
+CREATE POLICY "usuarios_atualizam_proprio_km"
   ON public.controle_km FOR UPDATE
   USING (auth.uid() = usuario_id);
 
-CREATE POLICY IF NOT EXISTS "admin_deleta_km"
+CREATE POLICY "admin_deleta_km"
   ON public.controle_km FOR DELETE
   USING (
     EXISTS (
