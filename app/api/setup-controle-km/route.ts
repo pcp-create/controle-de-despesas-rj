@@ -12,12 +12,8 @@ CREATE TABLE IF NOT EXISTS public.controle_km (
   usuario_id      UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   km_inicial      NUMERIC(10,2) NOT NULL,
   km_final        NUMERIC(10,2),
-  km_percorrido   NUMERIC(10,2) GENERATED ALWAYS AS (km_final - km_inicial) STORED,
   data_inicio     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   data_fim        TIMESTAMPTZ,
-  duracao_minutos INTEGER GENERATED ALWAYS AS (
-    EXTRACT(EPOCH FROM (data_fim - data_inicio)) / 60
-  )::INTEGER STORED,
   destino         TEXT,
   motivo          TEXT,
   observacao      TEXT,
