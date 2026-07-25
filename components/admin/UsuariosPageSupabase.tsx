@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAppStore } from "@/lib/store";
+import { useFrotas } from "@/lib/supabase/hooks";
 import {
   Search,
   PlusCircle,
@@ -17,6 +18,7 @@ import {
   Loader2,
   Key,
   CreditCard,
+  Car,
 } from "lucide-react";
 import { mockEmpresas, mockFornecedores, mockCondicoesPagamento, mockOperacoesFinanceiras, mockMoedas } from "@/lib/mock-data";
 
@@ -35,6 +37,7 @@ interface UsuarioForm {
   area: string;
   telefone: string;
   gestor_id: string | null;
+  frota_padrao_id: string | null;
   senha?: string;
   empresaId?: string;
   fornecedorId?: string;
@@ -52,6 +55,7 @@ const initialForm: UsuarioForm = {
   area: "",
   telefone: "",
   gestor_id: null,
+  frota_padrao_id: null,
   senha: "",
   empresaId: "",
   fornecedorId: "",
@@ -67,6 +71,18 @@ export default function UsuariosPageSupabase() {
   const [search, setSearch] = useState("");
   const [filterPerfil, setFilterPerfil] = useState<string>("todos");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [migrationNeeded, setMigrationNeeded] = useState<string | null>(null);
+
+  // Verifica se a coluna frota_padrao_id já existe no banco
+  useEffect(() => {
+    if (currentUser?.perfil !== "administrador") return;
+    fetch("/api/setup-frota-padrao")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.needsMigration) setMigrationNeeded(data.sql);
+      })
+      .catch(() => {});
+  }, [currentUser?.perfil]);
   
   // Modal states
   const [showModal, setShowModal] = useState(false);
@@ -118,6 +134,7 @@ export default function UsuariosPageSupabase() {
         area: user.area || "",
         telefone: user.telefone || "",
         gestor_id: user.gestor_id || null,
+        frota_padrao_id: user.frota_padrao_id || null,
         senha: "",
         empresaId: user.empresaId || "",
         fornecedorId: user.fornecedorId || "",
@@ -170,6 +187,7 @@ export default function UsuariosPageSupabase() {
             area: form.area || null,
             telefone: form.telefone || null,
             gestor_id: form.gestor_id || null,
+            frota_padrao_id: form.frota_padrao_id || null,
             empresa_id: form.empresaId || null,
             fornecedor_id: form.fornecedorId || null,
             condicao_pagamento_id: form.condicaoPagamentoId || null,
@@ -457,6 +475,8 @@ export default function UsuariosPageSupabase() {
   };
 
   const gestores = users.filter((p) => p.perfil === "gestor" || p.perfil === "administrador");
+  const { frotas } = useFrotas();
+  const frotasAtivas = frotas.filter((f) => f.ativo);
 
   return (
     <div className="flex flex-col gap-6">
@@ -476,6 +496,22 @@ export default function UsuariosPageSupabase() {
           </button>
         )}
       </div>
+
+      {/* Banner de migration pendente */}
+      {migrationNeeded && (
+        <div className="rounded-lg px-4 py-3 text-sm bg-warning/10 border border-warning/30 text-warning-foreground flex flex-col gap-2">
+          <p className="font-medium text-foreground flex items-center gap-2">
+            <Car className="w-4 h-4 text-warning" />
+            Configuração necessária: campo "Veículo padrão"
+          </p>
+          <p className="text-muted-foreground text-xs">
+            Execute o SQL abaixo no <strong>Supabase SQL Editor</strong> (Dashboard → SQL Editor) para ativar o veículo padrão por funcionário:
+          </p>
+          <code className="bg-muted text-foreground text-xs px-3 py-2 rounded-md block font-mono break-all">
+            {migrationNeeded}
+          </code>
+        </div>
+      )}
 
       {/* Feedback */}
       {feedback && (
@@ -523,6 +559,7 @@ export default function UsuariosPageSupabase() {
           const perfil = perfilConfig[u.perfil as keyof typeof perfilConfig];
           const PerfilIcon = perfil.icon;
           const gestor = gestores.find((g) => g.id === u.gestor_id);
+          const frotaPadrao = frotasAtivas.find((f) => f.id === u.frota_padrao_id);
 
           return (
             <div
@@ -556,6 +593,12 @@ export default function UsuariosPageSupabase() {
                     {gestor && (
                       <span className="text-xs text-muted-foreground">
                         Gestor: {gestor.nome.split(" ")[0]}
+                      </span>
+                    )}
+                    {frotaPadrao && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        <Car className="w-3 h-3" />
+                        {frotaPadrao.placa}
                       </span>
                     )}
                   </div>
@@ -770,6 +813,29 @@ export default function UsuariosPageSupabase() {
                       </select>
                     </div>
                   )}
+
+                  {/* Veículo padrão — visível para todos os perfis */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                      <Car className="w-4 h-4 text-muted-foreground" />
+                      Veículo padrão
+                    </label>
+                    <select
+                      value={form.frota_padrao_id || ""}
+                      onChange={(e) => setForm({ ...form, frota_padrao_id: e.target.value || null })}
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    >
+                      <option value="">Nenhum (selecionar ao iniciar viagem)</option>
+                      {frotasAtivas.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.placa} — {f.marca} {f.modelo}{f.ano ? ` (${f.ano})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground">
+                      Quando definido, o veículo será pré-selecionado no Controle de KM.
+                    </p>
+                  </div>
                 </>
               )}
 

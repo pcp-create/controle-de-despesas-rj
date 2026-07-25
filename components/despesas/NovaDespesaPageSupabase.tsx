@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
-import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2, Receipt } from "lucide-react";
+import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2, Receipt, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/helpers";
 
 interface Props {
@@ -44,8 +44,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     // Campos de hospedagem
     dataCheckin:  editDespesa?.data_checkin  || "",
     dataCheckout: editDespesa?.data_checkout || "",
-    // Campos de combustível
-    frotaId: editDespesa?.frota_id || "",
+    // Campos de combustível — pré-seleciona veículo padrão em nova despesa
+    frotaId: editDespesa?.frota_id || ((currentUser as any)?.frota_padrao_id as string | null) || "",
     kmAtual: editDespesa?.km_atual?.toString() || "",
   });
 
@@ -70,6 +70,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   const calculaDiarias = (tipoSelecionado as any)?.calculaDiarias === true || tipoSelecionado?.calcula_diarias === true;
   const isCombustivel = tipoSelecionado?.nome?.toLowerCase().includes("combust") ?? false;
   const frotasAtivas = frotas.filter((f) => f.ativo);
+
+  // Combobox de veículo no bloco de abastecimento
+  const frotaPadraoId = !editDespesa ? ((currentUser as any)?.frota_padrao_id as string | null) ?? null : null;
+  const [mostrarListaFrota, setMostrarListaFrota] = useState(false);
+  const [buscaFrota, setBuscaFrota] = useState("");
 
   // Quando faturado, apenas tipos de combustível ficam disponíveis
   const tiposDisponiveis = pagamentoTipo === "faturado"
@@ -700,20 +705,127 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                   <div className="px-3 py-2.5 rounded-lg border border-input bg-muted text-sm text-muted-foreground">
                     Nenhum veículo cadastrado na frota
                   </div>
-                ) : (
-                  <select
-                    value={form.frotaId}
-                    onChange={(e) => setForm({ ...form, frotaId: e.target.value })}
-                    className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  >
-                    <option value="">Selecione o veículo...</option>
-                    {frotasAtivas.map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.placa} — {f.marca} {f.modelo}{f.ano ? ` (${f.ano})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                ) : (() => {
+                  const veiculoPadrao = frotaPadraoId ? frotasAtivas.find((f) => f.id === frotaPadraoId) : null;
+                  const veiculoSelecionado = form.frotaId ? frotasAtivas.find((f) => f.id === form.frotaId) : null;
+
+                  return (
+                    <div className="flex flex-col gap-1.5">
+                      {!mostrarListaFrota ? (
+                        /* ── Card do veículo selecionado ── */
+                        veiculoSelecionado ? (
+                          <div className="flex items-center justify-between px-4 py-3 rounded-lg border-2 border-primary bg-primary/5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                                <Car className="w-4 h-4 text-primary" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">
+                                  {veiculoSelecionado.placa}
+                                  {veiculoSelecionado.id === frotaPadraoId && (
+                                    <span className="ml-2 text-xs font-normal px-1.5 py-0.5 rounded-full bg-primary/15 text-primary">Padrão</span>
+                                  )}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {veiculoSelecionado.marca} {veiculoSelecionado.modelo}
+                                  {veiculoSelecionado.ano ? ` · ${veiculoSelecionado.ano}` : ""}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => { setMostrarListaFrota(true); setBuscaFrota(""); }}
+                              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 shrink-0 ml-2"
+                            >
+                              Usar outro
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => { setMostrarListaFrota(true); setBuscaFrota(""); }}
+                            className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 border-dashed border-input hover:border-primary hover:bg-primary/5 transition-colors text-sm text-muted-foreground hover:text-primary"
+                          >
+                            <Car className="w-4 h-4" />
+                            Selecionar veículo
+                          </button>
+                        )
+                      ) : (
+                        /* ── Combobox suspenso ── */
+                        <div className="flex flex-col gap-1.5">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                            <input
+                              type="text"
+                              autoFocus
+                              value={buscaFrota}
+                              onChange={(e) => setBuscaFrota(e.target.value)}
+                              placeholder="Buscar por placa, marca ou modelo..."
+                              className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                            />
+                            {/* Dropdown suspenso */}
+                            <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-lg border border-border bg-white shadow-lg overflow-hidden">
+                              <div className="max-h-56 overflow-y-auto">
+                                {(() => {
+                                  const q = buscaFrota.toLowerCase();
+                                  const filtrados = frotasAtivas.filter((f) =>
+                                    !q || f.placa.toLowerCase().includes(q) || f.marca.toLowerCase().includes(q) || f.modelo.toLowerCase().includes(q)
+                                  );
+                                  if (filtrados.length === 0) return (
+                                    <p className="px-4 py-5 text-sm text-muted-foreground text-center">
+                                      Nenhum veículo encontrado.
+                                    </p>
+                                  );
+                                  return filtrados.map((f) => (
+                                    <button
+                                      key={f.id}
+                                      type="button"
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        setForm({ ...form, frotaId: f.id });
+                                        setMostrarListaFrota(false);
+                                        setBuscaFrota("");
+                                      }}
+                                      className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/50 transition-colors border-b border-border/50 last:border-0"
+                                    >
+                                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                                        <Car className="w-3.5 h-3.5 text-muted-foreground" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                                          {f.placa}
+                                          {f.id === frotaPadraoId && (
+                                            <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-normal">Padrão</span>
+                                          )}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground truncate">
+                                          {f.marca} {f.modelo}{f.ano ? ` · ${f.ano}` : ""}
+                                        </p>
+                                      </div>
+                                    </button>
+                                  ));
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                          {veiculoPadrao && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setForm({ ...form, frotaId: frotaPadraoId! });
+                                setMostrarListaFrota(false);
+                                setBuscaFrota("");
+                              }}
+                              className="text-xs text-primary hover:underline self-start"
+                            >
+                              Voltar ao veículo padrão ({veiculoPadrao.placa})
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {errors.frotaId && <span className="text-xs text-destructive">{errors.frotaId}</span>}
               </div>
 
@@ -813,15 +925,19 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         </div>
 
         {/* Info tipo */}
-        {tipoSelecionado && !calculaDiarias && tipoSelecionado.limite_maximo && (
+        {tipoSelecionado && !calculaDiarias && tipoSelecionado.limite_maximo != null && (
           <div className={`flex items-start gap-2 p-3 rounded-lg text-xs border ${
-            statusLimite === "ok"
+            tipoSelecionado.limite_maximo === 0
+              ? "bg-warning/5 border-warning/20 text-muted-foreground"
+              : statusLimite === "ok"
               ? "bg-success/5 border-success/20 text-success"
               : statusLimite === "excede"
               ? "bg-destructive/5 border-destructive/20 text-destructive"
               : "bg-accent/5 border-accent/20 text-muted-foreground"
           }`}>
-            {statusLimite === "ok" ? (
+            {tipoSelecionado.limite_maximo === 0 ? (
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-warning" />
+            ) : statusLimite === "ok" ? (
               <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-success" />
             ) : statusLimite === "excede" ? (
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -829,9 +945,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               <Info className="w-4 h-4 mt-0.5 shrink-0 text-accent" />
             )}
             <span>
-              {statusLimite === "ok" && `Valor dentro do limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — aprovação automática.`}
-              {statusLimite === "excede" && `Valor excede o limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — será enviado para aprovação do gestor.`}
-              {!statusLimite && <>Limite máximo: {formatCurrency(tipoSelecionado.limite_maximo)}</>}
+              {tipoSelecionado.limite_maximo === 0 && "Esta categoria não possui limite definido — qualquer valor será enviado para aprovação do gestor."}
+              {tipoSelecionado.limite_maximo !== 0 && statusLimite === "ok" && `Valor dentro do limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — aprovação automática.`}
+              {tipoSelecionado.limite_maximo !== 0 && statusLimite === "excede" && `Valor excede o limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — será enviado para aprovação do gestor.`}
+              {tipoSelecionado.limite_maximo !== 0 && !statusLimite && <>Limite máximo: {formatCurrency(tipoSelecionado.limite_maximo)}</>}
             </span>
           </div>
         )}

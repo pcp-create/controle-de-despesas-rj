@@ -8,6 +8,7 @@ import {
   FileText,
   PlusCircle,
   BarChart3,
+  Car,
 } from "lucide-react";
 
 interface Props {
@@ -20,9 +21,10 @@ export default function BottomNav({ currentPage, onNavigate }: Props) {
   const perfil = currentUser?.perfil;
 
   const items: { key: PageKey; icon: React.ReactNode; label: string }[] = [
-    { key: "dashboard",       icon: <LayoutDashboard className="w-5 h-5" />, label: "Início"     },
     { key: "nova-despesa",    icon: <PlusCircle      className="w-5 h-5" />, label: "Nova"       },
     { key: "minhas-despesas", icon: <FileText        className="w-5 h-5" />, label: "Despesas"   },
+    { key: "dashboard",       icon: <LayoutDashboard className="w-5 h-5" />, label: "Início"     },
+    { key: "controle-km",     icon: <Car             className="w-5 h-5" />, label: "Viagem"     },
     { key: "relatorios",      icon: <BarChart3       className="w-5 h-5" />, label: "Relatórios" },
   ];
 
