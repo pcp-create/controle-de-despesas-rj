@@ -160,7 +160,12 @@ export default function ControleKmPage() {
       setTimeout(() => setFeedback(null), 4000);
       return;
     }
-    setForm({ ...EMPTY_FORM });
+    // Pré-selecionar veículo padrão do funcionário (se disponível e não estiver em uso)
+    const veiculoPadrao = currentUser && "frota_padrao_id" in currentUser
+      ? (currentUser as any).frota_padrao_id as string | null
+      : null;
+    const padraodDisponivel = veiculoPadrao && !frotasComViagem.has(veiculoPadrao);
+    setForm({ ...EMPTY_FORM, frota_id: padraodDisponivel ? veiculoPadrao! : "" });
     setErrors({});
     setFeedback(null);
     setModal("iniciar");
@@ -625,7 +630,32 @@ export default function ControleKmPage() {
           <form onSubmit={handleIniciar} className="p-5 flex flex-col gap-4">
             {/* Veículo */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-foreground">Veículo *</label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-foreground">Veículo *</label>
+                {(() => {
+                  const padrao = (currentUser as any)?.frota_padrao_id as string | null;
+                  if (padrao && form.frota_id === padrao) {
+                    return (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                        <Car className="w-3 h-3" />
+                        Veículo padrão
+                      </span>
+                    );
+                  }
+                  if (padrao && frotasDisponiveis.find((f) => f.id === padrao)) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, frota_id: padrao })}
+                        className="text-xs text-primary underline hover:no-underline"
+                      >
+                        Usar veículo padrão
+                      </button>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
               {frotasDisponiveis.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic">Nenhum veículo disponível no momento.</p>
               ) : (
@@ -635,11 +665,14 @@ export default function ControleKmPage() {
                   className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 >
                   <option value="">Selecione o veículo</option>
-                  {frotasDisponiveis.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.placa} — {f.marca} {f.modelo} {f.ano ? `(${f.ano})` : ""} · {f.quilometragem.toLocaleString("pt-BR")} km atual
-                    </option>
-                  ))}
+                  {frotasDisponiveis.map((f) => {
+                    const isPadrao = f.id === (currentUser as any)?.frota_padrao_id;
+                    return (
+                      <option key={f.id} value={f.id}>
+                        {isPadrao ? "★ " : ""}{f.placa} — {f.marca} {f.modelo} {f.ano ? `(${f.ano})` : ""} · {f.quilometragem.toLocaleString("pt-BR")} km atual{isPadrao ? " · Padrão" : ""}
+                      </option>
+                    );
+                  })}
                 </select>
               )}
               {errors.frota_id && <span className="text-xs text-destructive">{errors.frota_id}</span>}

@@ -110,6 +110,7 @@ export interface Profile {
   perfil: "funcionario" | "gestor" | "financeiro" | "administrador";
   ativo: boolean;
   gestor_id: string | null;
+  frota_padrao_id: string | null;
   primeiro_acesso: boolean;
   empresa_id: number | null;
   fornecedor_id: number | null;
