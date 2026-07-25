@@ -925,15 +925,19 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         </div>
 
         {/* Info tipo */}
-        {tipoSelecionado && !calculaDiarias && tipoSelecionado.limite_maximo && (
+        {tipoSelecionado && !calculaDiarias && tipoSelecionado.limite_maximo != null && (
           <div className={`flex items-start gap-2 p-3 rounded-lg text-xs border ${
-            statusLimite === "ok"
+            tipoSelecionado.limite_maximo === 0
+              ? "bg-warning/5 border-warning/20 text-muted-foreground"
+              : statusLimite === "ok"
               ? "bg-success/5 border-success/20 text-success"
               : statusLimite === "excede"
               ? "bg-destructive/5 border-destructive/20 text-destructive"
               : "bg-accent/5 border-accent/20 text-muted-foreground"
           }`}>
-            {statusLimite === "ok" ? (
+            {tipoSelecionado.limite_maximo === 0 ? (
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-warning" />
+            ) : statusLimite === "ok" ? (
               <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-success" />
             ) : statusLimite === "excede" ? (
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -941,9 +945,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               <Info className="w-4 h-4 mt-0.5 shrink-0 text-accent" />
             )}
             <span>
-              {statusLimite === "ok" && `Valor dentro do limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — aprovação automática.`}
-              {statusLimite === "excede" && `Valor excede o limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — será enviado para aprovação do gestor.`}
-              {!statusLimite && <>Limite máximo: {formatCurrency(tipoSelecionado.limite_maximo)}</>}
+              {tipoSelecionado.limite_maximo === 0 && "Esta categoria não possui limite definido — qualquer valor será enviado para aprovação do gestor."}
+              {tipoSelecionado.limite_maximo !== 0 && statusLimite === "ok" && `Valor dentro do limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — aprovação automática.`}
+              {tipoSelecionado.limite_maximo !== 0 && statusLimite === "excede" && `Valor excede o limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — será enviado para aprovação do gestor.`}
+              {tipoSelecionado.limite_maximo !== 0 && !statusLimite && <>Limite máximo: {formatCurrency(tipoSelecionado.limite_maximo)}</>}
             </span>
           </div>
         )}
