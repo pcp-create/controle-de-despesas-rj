@@ -100,6 +100,15 @@ export default function ControleKmPage() {
   const [loading, setLoading] = useState(false);
   const [mostrarListaVeiculos, setMostrarListaVeiculos] = useState(false);
   const [buscaVeiculo, setBuscaVeiculo] = useState("");
+  const [setupSql, setSetupSql] = useState<string | null>(null);
+
+  // Verifica se a tabela controle_km existe no banco
+  useEffect(() => {
+    fetch("/api/setup-controle-km")
+      .then((r) => r.json())
+      .then((d) => { if (d.needsMigration) setSetupSql(d.sql); })
+      .catch(() => {});
+  }, []);
 
   // Registro aberto do usuário logado
   const registroAberto = useMemo(
@@ -339,6 +348,23 @@ export default function ControleKmPage() {
           </button>
         </div>
       </div>
+
+      {/* Banner de setup — tabela controle_km ainda não existe */}
+      {setupSql && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+            <p className="text-sm font-medium text-foreground">Configuração necessária: tabela de Controle de KM</p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            A tabela <code className="font-mono bg-muted px-1 rounded">controle_km</code> ainda não existe no banco.
+            Execute o SQL abaixo no <strong>Supabase SQL Editor</strong> (Dashboard → SQL Editor) e recarregue a página.
+          </p>
+          <pre className="bg-muted text-foreground text-xs px-3 py-2 rounded-md overflow-x-auto font-mono whitespace-pre-wrap break-all">
+            {setupSql}
+          </pre>
+        </div>
+      )}
 
       {/* Feedback global */}
       {feedback && (
