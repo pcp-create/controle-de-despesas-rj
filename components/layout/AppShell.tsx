@@ -31,6 +31,7 @@ export type PageKey =
   | "usuarios"
   | "tipos-despesa"
   | "frotas"
+  | "controle-km"
   | "auditoria"
   | "alterar-senha";
 
