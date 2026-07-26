@@ -447,10 +447,16 @@ export default function ControleKmPage() {
         </div>
         <div className="bg-white rounded-xl border border-border shadow-sm p-4">
           <div className="w-9 h-9 rounded-lg bg-warning/10 text-warning flex items-center justify-center mb-3">
-            <Play className="w-5 h-5" />
+            <Clock className="w-5 h-5" />
           </div>
-          <p className="text-2xl font-bold text-foreground">{abertosCount}</p>
-          <p className="text-xs text-muted-foreground mt-1">Em andamento</p>
+          {registroAberto ? (
+            <p className="text-2xl font-bold text-warning leading-none">
+              <ElapsedTimer start={registroAberto.data_inicio} />
+            </p>
+          ) : (
+            <p className="text-2xl font-bold text-muted-foreground">--</p>
+          )}
+          <p className="text-xs text-muted-foreground mt-1">Tempo percorrido</p>
         </div>
         <div className="bg-white rounded-xl border border-border shadow-sm p-4">
           <div className="w-9 h-9 rounded-lg bg-success/10 text-success flex items-center justify-center mb-3">
