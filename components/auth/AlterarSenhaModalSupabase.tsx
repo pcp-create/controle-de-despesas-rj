@@ -34,6 +34,12 @@ export default function AlterarSenhaModalSupabase({ forced, onClose }: Props) {
       return;
     }
 
+    if (novaSenha === "123456") {
+      setError("A nova senha não pode ser igual à senha padrão. Escolha uma senha diferente.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const supabase = createClient();
 
