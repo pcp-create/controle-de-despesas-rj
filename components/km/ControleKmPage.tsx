@@ -184,6 +184,30 @@ export default function ControleKmPage() {
   const abertosCount = registrosVisiveis.filter((r) => r.status === "aberto").length;
   const finalizadosCount = registrosVisiveis.filter((r) => r.status === "finalizado").length;
 
+  // Somatória do tempo de todas as viagens finalizadas (em segundos)
+  const totalSegundos = useMemo(
+    () =>
+      registrosVisiveis
+        .filter((r) => r.status === "finalizado" && r.data_fim)
+        .reduce((s, r) => {
+          const secs = Math.floor(
+            (new Date(r.data_fim!).getTime() - new Date(r.data_inicio).getTime()) / 1000
+          );
+          return s + (secs > 0 ? secs : 0);
+        }, 0),
+    [registrosVisiveis]
+  );
+
+  const formatTotalTempo = (secs: number) => {
+    if (secs === 0) return "0s";
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (h > 0) return `${h}h ${String(m).padStart(2, "0")}min`;
+    if (m > 0) return `${m}min ${String(s).padStart(2, "0")}s`;
+    return `${s}s`;
+  };
+
   // ─── Handlers ───────────────────────────────────────────
 
   const openIniciar = () => {
@@ -449,13 +473,7 @@ export default function ControleKmPage() {
           <div className="w-9 h-9 rounded-lg bg-warning/10 text-warning flex items-center justify-center mb-3">
             <Clock className="w-5 h-5" />
           </div>
-          {registroAberto ? (
-            <p className="text-2xl font-bold text-warning leading-none">
-              <ElapsedTimer start={registroAberto.data_inicio} />
-            </p>
-          ) : (
-            <p className="text-2xl font-bold text-muted-foreground">--</p>
-          )}
+          <p className="text-2xl font-bold text-foreground">{formatTotalTempo(totalSegundos)}</p>
           <p className="text-xs text-muted-foreground mt-1">Tempo percorrido</p>
         </div>
         <div className="bg-white rounded-xl border border-border shadow-sm p-4">
