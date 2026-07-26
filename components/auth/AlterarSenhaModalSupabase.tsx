@@ -55,8 +55,13 @@ export default function AlterarSenhaModalSupabase({ forced, onClose }: Props) {
         setError("Erro ao salvar: " + updateError.message);
       } else {
         setSuccess("Senha alterada com sucesso!");
+        // Recarrega o currentUser — quando primeiro_acesso voltar false,
+        // o AppShell desmonta o modal forçado automaticamente.
+        // Para o modal voluntário, chama onClose após o reload.
         await loadSupabaseData();
-        setTimeout(() => { onClose?.(); }, 1500);
+        if (!forced) {
+          onClose?.();
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao alterar senha");
