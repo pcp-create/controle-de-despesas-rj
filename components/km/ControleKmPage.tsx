@@ -46,11 +46,13 @@ function ElapsedTimer({ start }: { start: string }) {
       const h = Math.floor(diff / 3600);
       const m = Math.floor((diff % 3600) / 60);
       const s = diff % 60;
-      setElapsed(
-        h > 0
-          ? `${h}h ${String(m).padStart(2, "0")}min`
-          : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
-      );
+      if (h > 0) {
+        setElapsed(`${h}h ${String(m).padStart(2, "0")}min ${String(s).padStart(2, "0")}s`);
+      } else if (m > 0) {
+        setElapsed(`${m}min ${String(s).padStart(2, "0")}s`);
+      } else {
+        setElapsed(`${s}s`);
+      }
     };
     calc();
     const t = setInterval(calc, 1000);
@@ -82,6 +84,7 @@ export default function ControleKmPage() {
   const { currentUser } = useAppStore();
 
   // Controle de perfil
+  // Somente administrador e gestor podem ver viagens de todos os funcionários
   const isGestorOuAdmin = currentUser?.perfil === "administrador" || currentUser?.perfil === "gestor";
 
   // Filtros
@@ -100,6 +103,17 @@ export default function ControleKmPage() {
   const [loading, setLoading] = useState(false);
   const [mostrarListaVeiculos, setMostrarListaVeiculos] = useState(false);
   const [buscaVeiculo, setBuscaVeiculo] = useState("");
+  const [filtroFrotaAberto, setFiltroFrotaAberto] = useState(false);
+  const [filtroFrotaBusca, setFiltroFrotaBusca] = useState("");
+  const [setupSql, setSetupSql] = useState<string | null>(null);
+
+  // Verifica se a tabela controle_km existe no banco
+  useEffect(() => {
+    fetch("/api/setup-controle-km")
+      .then((r) => r.json())
+      .then((d) => { if (d.needsMigration) setSetupSql(d.sql); })
+      .catch(() => {});
+  }, []);
 
   // Registro aberto do usuário logado
   const registroAberto = useMemo(
@@ -119,9 +133,14 @@ export default function ControleKmPage() {
   const registrosFiltrados = useMemo(() => {
     let list = [...registros];
 
-    // Restrição por perfil
+    // Restrição por perfil — vê as próprias viagens + viagens do veículo padrão
     if (!isGestorOuAdmin && currentUser?.id) {
-      list = list.filter((r) => r.usuario_id === currentUser.id);
+      const frotaPadraoId = (currentUser as any)?.frota_padrao_id as string | null;
+      list = list.filter(
+        (r) =>
+          r.usuario_id === currentUser.id ||
+          (frotaPadraoId != null && r.frota_id === frotaPadraoId)
+      );
     }
 
     if (filtroStatus !== "todos") list = list.filter((r) => r.status === filtroStatus);
@@ -146,13 +165,48 @@ export default function ControleKmPage() {
     return list;
   }, [registros, filtroStatus, filtroFrota, filtroFuncionario, search, frotas, profiles, isGestorOuAdmin, currentUser]);
 
-  // Stats
+  // Stats — sempre baseadas na lista com todos os filtros ativos
   const totalKm = useMemo(
-    () => registros.filter((r) => r.status === "finalizado").reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
-    [registros]
+    () =>
+      registrosFiltrados
+        .filter((r) => r.status === "finalizado")
+        .reduce((s, r) => {
+          const percorrido =
+            r.km_percorrido != null
+              ? r.km_percorrido
+              : r.km_final != null
+              ? r.km_final - r.km_inicial
+              : 0;
+          return s + percorrido;
+        }, 0),
+    [registrosFiltrados]
   );
-  const abertosCount = registros.filter((r) => r.status === "aberto").length;
-  const finalizadosCount = registros.filter((r) => r.status === "finalizado").length;
+  const abertosCount = registrosFiltrados.filter((r) => r.status === "aberto").length;
+  const finalizadosCount = registrosFiltrados.filter((r) => r.status === "finalizado").length;
+
+  // Somatória do tempo de todas as viagens finalizadas (em segundos)
+  const totalSegundos = useMemo(
+    () =>
+      registrosFiltrados
+        .filter((r) => r.status === "finalizado" && r.data_fim)
+        .reduce((s, r) => {
+          const secs = Math.floor(
+            (new Date(r.data_fim!).getTime() - new Date(r.data_inicio).getTime()) / 1000
+          );
+          return s + (secs > 0 ? secs : 0);
+        }, 0),
+    [registrosFiltrados]
+  );
+
+  const formatTotalTempo = (secs: number) => {
+    if (secs === 0) return "0s";
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (h > 0) return `${h}h ${String(m).padStart(2, "0")}min`;
+    if (m > 0) return `${m}min ${String(s).padStart(2, "0")}s`;
+    return `${s}s`;
+  };
 
   // ─── Handlers ───────────────────────────────────────────
 
@@ -170,7 +224,7 @@ export default function ControleKmPage() {
     setForm({ ...EMPTY_FORM, frota_id: padraodDisponivel ? veiculoPadrao! : "" });
     setErrors({});
     setFeedback(null);
-    // Se tem veículo padrão disponível, começa com lista fechada; senão, abre direto
+    // Se tem veículo padrão dispon��vel, começa com lista fechada; senão, abre direto
     setMostrarListaVeiculos(!padraodDisponivel);
     setBuscaVeiculo("");
     setModal("iniciar");
@@ -251,7 +305,8 @@ export default function ControleKmPage() {
     const result = await finalizarKm(
       targetRegistro.id,
       Number(fin.km_final),
-      fin.observacao.trim() || undefined
+      fin.observacao.trim() || undefined,
+      targetRegistro.frota_id
     );
     setLoading(false);
 
@@ -283,7 +338,7 @@ export default function ControleKmPage() {
         frota ? `${frota.placa} - ${frota.marca} ${frota.modelo}` : "",
         r.km_inicial,
         r.km_final ?? "",
-        r.km_percorrido ?? "",
+        r.km_percorrido ?? (r.km_final != null ? r.km_final - r.km_inicial : "") ,
         r.duracao_minutos != null ? formatDuracao(r.duracao_minutos) : "",
         r.destino ?? "",
         r.motivo ?? "",
@@ -338,6 +393,23 @@ export default function ControleKmPage() {
           </button>
         </div>
       </div>
+
+      {/* Banner de setup — tabela controle_km ainda não existe */}
+      {setupSql && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
+            <p className="text-sm font-medium text-foreground">Configuração necessária: tabela de Controle de KM</p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            A tabela <code className="font-mono bg-muted px-1 rounded">controle_km</code> ainda não existe no banco.
+            Execute o SQL abaixo no <strong>Supabase SQL Editor</strong> (Dashboard → SQL Editor) e recarregue a página.
+          </p>
+          <pre className="bg-muted text-foreground text-xs px-3 py-2 rounded-md overflow-x-auto font-mono whitespace-pre-wrap break-all">
+            {setupSql}
+          </pre>
+        </div>
+      )}
 
       {/* Feedback global */}
       {feedback && (
@@ -399,10 +471,10 @@ export default function ControleKmPage() {
         </div>
         <div className="bg-white rounded-xl border border-border shadow-sm p-4">
           <div className="w-9 h-9 rounded-lg bg-warning/10 text-warning flex items-center justify-center mb-3">
-            <Play className="w-5 h-5" />
+            <Clock className="w-5 h-5" />
           </div>
-          <p className="text-2xl font-bold text-foreground">{abertosCount}</p>
-          <p className="text-xs text-muted-foreground mt-1">Em andamento</p>
+          <p className="text-2xl font-bold text-foreground">{formatTotalTempo(totalSegundos)}</p>
+          <p className="text-xs text-muted-foreground mt-1">Tempo percorrido</p>
         </div>
         <div className="bg-white rounded-xl border border-border shadow-sm p-4">
           <div className="w-9 h-9 rounded-lg bg-success/10 text-success flex items-center justify-center mb-3">
@@ -438,19 +510,95 @@ export default function ControleKmPage() {
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
         </div>
+        {/* Filtro de veículo — combobox suspenso */}
         <div className="relative">
-          <Car className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <select
-            value={filtroFrota}
-            onChange={(e) => setFiltroFrota(e.target.value)}
-            className="pl-9 pr-8 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
+          <div
+            className="flex items-center gap-2 pl-3 pr-8 py-2 rounded-lg border border-input bg-background text-sm cursor-pointer focus-within:ring-2 focus-within:ring-ring min-w-[180px]"
+            onClick={() => { setFiltroFrotaAberto(true); setFiltroFrotaBusca(""); }}
           >
-            <option value="">Todos os veículos</option>
-            {frotas.filter((f) => f.ativo).map((f) => (
-              <option key={f.id} value={f.id}>{f.placa} — {f.marca} {f.modelo}</option>
-            ))}
-          </select>
+            <Car className="w-4 h-4 text-muted-foreground shrink-0" />
+            <span className={filtroFrota ? "text-foreground" : "text-muted-foreground"}>
+              {filtroFrota
+                ? frotas.find((f) => f.id === filtroFrota)?.placa ?? "Veículo"
+                : "Todos os veículos"}
+            </span>
+            {filtroFrota && (
+              <button
+                type="button"
+                onMouseDown={(e) => { e.stopPropagation(); setFiltroFrota(""); setFiltroFrotaAberto(false); }}
+                className="ml-auto text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+
+          {filtroFrotaAberto && (
+            <div className="absolute left-0 top-full mt-1 z-50 w-72 rounded-lg border border-border bg-white shadow-lg overflow-hidden">
+              {/* Input de busca */}
+              <div className="p-2 border-b border-border">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="text"
+                    autoFocus
+                    value={filtroFrotaBusca}
+                    onChange={(e) => setFiltroFrotaBusca(e.target.value)}
+                    onBlur={() => setTimeout(() => setFiltroFrotaAberto(false), 150)}
+                    placeholder="Buscar por placa, marca ou modelo..."
+                    className="w-full pl-9 pr-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
+              {/* Lista filtrada */}
+              <div className="max-h-56 overflow-y-auto">
+                {/* Opção "Todos" */}
+                <button
+                  type="button"
+                  onMouseDown={() => { setFiltroFrota(""); setFiltroFrotaAberto(false); setFiltroFrotaBusca(""); }}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/50 transition-colors border-b border-border/50 ${!filtroFrota ? "bg-primary/5" : ""}`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                    <Car className="w-3.5 h-3.5 text-muted-foreground" />
+                  </div>
+                  <span className="text-sm font-medium text-foreground">Todos os veículos</span>
+                </button>
+                {(() => {
+                  const q = filtroFrotaBusca.toLowerCase();
+                  const lista = frotas.filter((f) => f.ativo && (
+                    !q ||
+                    f.placa.toLowerCase().includes(q) ||
+                    f.marca.toLowerCase().includes(q) ||
+                    f.modelo.toLowerCase().includes(q) ||
+                    (f.tipo ?? "").toLowerCase().includes(q) ||
+                    (f.cor ?? "").toLowerCase().includes(q) ||
+                    String(f.ano ?? "").includes(q) ||
+                    (f.observacao ?? "").toLowerCase().includes(q)
+                  ));
+                  if (lista.length === 0) return (
+                    <p className="px-4 py-4 text-sm text-muted-foreground text-center">Nenhum veículo encontrado.</p>
+                  );
+                  return lista.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onMouseDown={() => { setFiltroFrota(f.id); setFiltroFrotaAberto(false); setFiltroFrotaBusca(""); }}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/50 transition-colors border-b border-border/50 last:border-0 ${filtroFrota === f.id ? "bg-primary/5" : ""}`}
+                    >
+                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                        <Car className="w-3.5 h-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">{f.placa}</p>
+                        <p className="text-xs text-muted-foreground truncate">{f.marca} {f.modelo}{f.ano ? ` · ${f.ano}` : ""}</p>
+                      </div>
+                    </button>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
         </div>
         {isGestorOuAdmin && (
           <div className="relative">
@@ -558,10 +706,10 @@ export default function ControleKmPage() {
                           )}
                         </span>
                       </div>
-                      {r.km_percorrido != null && (
+                      {(r.km_percorrido != null || r.km_final != null) && (
                         <div className="flex flex-col gap-0.5">
                           <span className="text-muted-foreground">Percorrido</span>
-                          <span className="font-semibold text-primary">{formatKm(r.km_percorrido)}</span>
+                          <span className="font-semibold text-primary">{formatKm(r.km_percorrido ?? (r.km_final != null ? r.km_final - r.km_inicial : null))}</span>
                         </div>
                       )}
                       {isAberto ? (
@@ -569,12 +717,32 @@ export default function ControleKmPage() {
                           <span className="text-muted-foreground">Tempo</span>
                           <ElapsedTimer start={r.data_inicio} />
                         </div>
-                      ) : r.duracao_minutos != null ? (
+                      ) : (
                         <div className="flex flex-col gap-0.5">
                           <span className="text-muted-foreground">Duração</span>
-                          <span className="font-semibold text-foreground">{formatDuracao(r.duracao_minutos)}</span>
+                          <span className="font-semibold text-foreground">
+                            {(() => {
+                              // duracao_minutos pode não existir na tabela — calcular na app
+                              const minutos =
+                                r.duracao_minutos != null
+                                  ? r.duracao_minutos
+                                  : r.data_fim
+                                  ? Math.floor((new Date(r.data_fim).getTime() - new Date(r.data_inicio).getTime()) / 1000 / 60)
+                                  : null;
+                              if (minutos == null) return "—";
+                              const h = Math.floor(minutos / 60);
+                              const m = minutos % 60;
+                              const totalSecs = r.data_fim
+                                ? Math.floor((new Date(r.data_fim).getTime() - new Date(r.data_inicio).getTime()) / 1000)
+                                : null;
+                              const s = totalSecs != null ? totalSecs % 60 : 0;
+                              if (h > 0) return `${h}h ${String(m).padStart(2, "0")}min ${String(s).padStart(2, "0")}s`;
+                              if (m > 0) return `${m}min ${String(s).padStart(2, "0")}s`;
+                              return `${s}s`;
+                            })()}
+                          </span>
                         </div>
-                      ) : null}
+                      )}
                     </div>
                   </div>
                 </div>

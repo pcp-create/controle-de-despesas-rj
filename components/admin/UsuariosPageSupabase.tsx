@@ -241,6 +241,8 @@ export default function UsuariosPageSupabase() {
         const { error: updateError } = await supabase
           .from("profiles")
           .update({
+            primeiro_acesso: true, // força troca de senha no primeiro login
+            senha: form.senha,
             area: form.area && form.area.trim() ? form.area : null,
             telefone: form.telefone && form.telefone.trim() ? form.telefone : null,
             empresa_id: form.empresaId && form.empresaId.trim() ? form.empresaId : null,
@@ -318,36 +320,27 @@ export default function UsuariosPageSupabase() {
   };
 
   const handleResetPassword = async (user: any) => {
-    const novaSenh = "12345";
-    
     try {
       setFormLoading(true);
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
 
-      // Atualizar senha no Supabase
-      const { error } = await supabase
-        .from("profiles")
-        .update({ 
-          senha: novaSenh,
-          primeiro_acesso: true 
-        })
-        .eq("id", user.id);
+      const res = await fetch("/api/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id }),
+      });
 
-      if (error) {
-        console.error("[v0] Erro ao resetar senha:", error);
-        setFeedback({ type: "error", msg: "Erro ao resetar senha: " + error.message });
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        setFeedback({ type: "error", msg: "Erro ao resetar senha: " + (data.error ?? res.statusText) });
       } else {
-        // Recarregar dados do Supabase
         const { loadSupabaseData } = useAppStore.getState();
         await loadSupabaseData();
-        
-        setFeedback({ type: "success", msg: `Senha de ${user.nome} resetada para: ${novaSenh}` });
+        setFeedback({ type: "success", msg: `Senha de ${user.nome} resetada para: ${data.senha}` });
       }
-      
+
       setTimeout(() => setFeedback(null), 5000);
     } catch (err) {
-      console.error("[v0] Erro ao resetar senha:", err);
       setFeedback({ type: "error", msg: "Erro ao resetar senha" });
     } finally {
       setFormLoading(false);

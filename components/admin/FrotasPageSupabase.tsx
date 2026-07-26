@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   ToggleLeft,
   ToggleRight,
+  Clock,
 } from "lucide-react";
 
 const TIPOS_VEICULO = ["Carro", "Moto", "Caminhão", "Van", "Pickup", "Utilitário", "Outro"];
@@ -246,10 +247,29 @@ export default function FrotasPageSupabase() {
                   </div>
                 )}
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-muted-foreground">KM</span>
+                  <span className="text-muted-foreground">KM atual</span>
                   <span className="font-medium text-foreground">{frota.quilometragem.toLocaleString("pt-BR")} km</span>
                 </div>
               </div>
+
+              {/* Última atualização de KM via Controle de KM */}
+              {frota.km_atualizado_em && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5">
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    KM atualizado em{" "}
+                    <span className="font-medium text-foreground">
+                      {new Date(frota.km_atualizado_em).toLocaleString("pt-BR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </span>
+                </div>
+              )}
 
               {frota.observacao && (
                 <p className="text-xs text-muted-foreground border-t border-border pt-2">{frota.observacao}</p>

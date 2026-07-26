@@ -96,6 +96,7 @@ export interface Frota {
   cor: string | null;
   tipo: string | null;
   quilometragem: number;
+  km_atualizado_em: string | null;
   observacao: string | null;
   ativo: boolean;
   created_at: string;
@@ -940,11 +941,22 @@ export function useControleKm() {
       .single();
 
     if (error) return { error: error.message };
+
+    // Atualiza KM do veículo no cadastro da frota com o km_inicial informado
+    await supabase
+      .from("frotas")
+      .update({
+        quilometragem: payload.km_inicial,
+        km_atualizado_em: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", payload.frota_id);
+
     mutate();
     return { data: inserted, error: null };
   };
 
-  const finalizarKm = async (id: string, km_final: number, observacao?: string) => {
+  const finalizarKm = async (id: string, km_final: number, observacao?: string, frota_id?: string) => {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
@@ -960,6 +972,19 @@ export function useControleKm() {
       .eq("id", id);
 
     if (error) return { error: error.message };
+
+    // Atualiza KM do veículo no cadastro da frota com o km_final (valor mais recente)
+    if (frota_id) {
+      await supabase
+        .from("frotas")
+        .update({
+          quilometragem: km_final,
+          km_atualizado_em: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", frota_id);
+    }
+
     mutate();
     return { error: null };
   };

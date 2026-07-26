@@ -11,7 +11,7 @@ interface Props {
 }
 
 export default function AlterarSenhaModalSupabase({ forced, onClose }: Props) {
-  const { currentUser, loadSupabaseData } = useAppStore();
+  const { currentUser, loadSupabaseData, setCurrentUser } = useAppStore();
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [error, setError] = useState("");
@@ -34,30 +34,44 @@ export default function AlterarSenhaModalSupabase({ forced, onClose }: Props) {
       return;
     }
 
+    if (novaSenha === "123456") {
+      setError("A nova senha não pode ser igual à senha padrão. Escolha uma senha diferente.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const supabase = createClient();
 
-      // Atualizar senha na tabela profiles
+      // 1. Atualizar senha no Supabase Auth (necessário para o login funcionar)
+      const { error: authError } = await supabase.auth.updateUser({ password: novaSenha });
+      if (authError) {
+        setError("Erro ao alterar senha: " + authError.message);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Atualizar senha e primeiro_acesso na tabela profiles
       const { error: updateError } = await supabase
         .from("profiles")
-        .update({ 
-          senha: novaSenha,
-          primeiro_acesso: false 
-        })
+        .update({ senha: novaSenha, primeiro_acesso: false })
         .eq("id", currentUser?.id);
 
       if (updateError) {
-        console.error("[v0] Erro ao atualizar senha:", updateError);
-        setError("Erro ao alterar senha: " + updateError.message);
+        setError("Erro ao salvar: " + updateError.message);
       } else {
         setSuccess("Senha alterada com sucesso!");
-        await loadSupabaseData();
-        setTimeout(() => {
+        // Atualiza o currentUser no store imediatamente — isso faz o
+        // AppShell desmontar o modal forçado sem aguardar um reload completo.
+        if (currentUser) {
+          setCurrentUser({ ...currentUser, primeiro_acesso: false, senha: novaSenha });
+        }
+        loadSupabaseData(); // revalida em background sem bloquear o fechamento
+        if (!forced) {
           onClose?.();
-        }, 1500);
+        }
       }
     } catch (err) {
-      console.error("[v0] Erro ao alterar senha:", err);
       setError(err instanceof Error ? err.message : "Erro ao alterar senha");
     }
     
@@ -83,8 +97,9 @@ export default function AlterarSenhaModalSupabase({ forced, onClose }: Props) {
 
         <div className="p-5">
           {forced && (
-            <div className="mb-4 rounded-lg bg-warning/10 border border-warning/30 px-3 py-2 text-sm text-warning">
-              Por segurança, altere a senha padrão antes de continuar.
+            <div className="mb-4 rounded-lg bg-warning/10 border border-warning/30 px-4 py-3 text-sm text-warning flex flex-col gap-1">
+              <span className="font-semibold">Primeiro acesso detectado</span>
+              <span className="text-warning/80">Por segurança, você precisa criar uma senha pessoal antes de continuar. Não será possível usar o sistema com a senha padrão.</span>
             </div>
           )}
 

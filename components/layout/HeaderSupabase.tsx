@@ -51,7 +51,6 @@ export default function HeaderSupabase({ onMenuClick, onAlterarSenha }: Props) {
       <div className="flex items-center gap-2">
         <button className="relative p-2 rounded-lg hover:bg-muted transition text-muted-foreground">
           <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-destructive" />
         </button>
 
         <div className="relative">
@@ -79,10 +78,10 @@ export default function HeaderSupabase({ onMenuClick, onAlterarSenha }: Props) {
                 className="fixed inset-0 z-10"
                 onClick={() => setDropdownOpen(false)}
               />
-              <div className="absolute right-0 top-full mt-1 z-20 w-48 bg-white rounded-xl shadow-lg border border-border py-1">
-                <div className="px-3 py-2 border-b border-border">
+              <div className="absolute right-0 top-full mt-1 z-20 w-64 bg-white rounded-xl shadow-lg border border-border py-1">
+                <div className="px-3 py-2 border-b border-border overflow-hidden">
                   <p className="text-sm font-medium text-foreground truncate">{currentUser?.nome}</p>
-                  <p className="text-xs text-muted-foreground">{currentUser?.email}</p>
+                  <p className="text-xs text-muted-foreground truncate">{currentUser?.email}</p>
                 </div>
                 <button
                   onClick={() => { setDropdownOpen(false); onAlterarSenha(); }}
