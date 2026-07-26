@@ -623,12 +623,32 @@ export default function ControleKmPage() {
                           <span className="text-muted-foreground">Tempo</span>
                           <ElapsedTimer start={r.data_inicio} />
                         </div>
-                      ) : r.duracao_minutos != null ? (
+                      ) : (
                         <div className="flex flex-col gap-0.5">
                           <span className="text-muted-foreground">Duração</span>
-                          <span className="font-semibold text-foreground">{formatDuracao(r.duracao_minutos)}</span>
+                          <span className="font-semibold text-foreground">
+                            {(() => {
+                              // duracao_minutos pode não existir na tabela — calcular na app
+                              const minutos =
+                                r.duracao_minutos != null
+                                  ? r.duracao_minutos
+                                  : r.data_fim
+                                  ? Math.floor((new Date(r.data_fim).getTime() - new Date(r.data_inicio).getTime()) / 1000 / 60)
+                                  : null;
+                              if (minutos == null) return "—";
+                              const h = Math.floor(minutos / 60);
+                              const m = minutos % 60;
+                              const totalSecs = r.data_fim
+                                ? Math.floor((new Date(r.data_fim).getTime() - new Date(r.data_inicio).getTime()) / 1000)
+                                : null;
+                              const s = totalSecs != null ? totalSecs % 60 : 0;
+                              if (h > 0) return `${h}h ${String(m).padStart(2, "0")}min ${String(s).padStart(2, "0")}s`;
+                              if (m > 0) return `${m}min ${String(s).padStart(2, "0")}s`;
+                              return `${s}s`;
+                            })()}
+                          </span>
                         </div>
-                      ) : null}
+                      )}
                     </div>
                   </div>
                 </div>
