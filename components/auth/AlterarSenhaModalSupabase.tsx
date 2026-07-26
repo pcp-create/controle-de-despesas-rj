@@ -11,7 +11,7 @@ interface Props {
 }
 
 export default function AlterarSenhaModalSupabase({ forced, onClose }: Props) {
-  const { currentUser, loadSupabaseData } = useAppStore();
+  const { currentUser, loadSupabaseData, setCurrentUser } = useAppStore();
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [error, setError] = useState("");
@@ -61,10 +61,12 @@ export default function AlterarSenhaModalSupabase({ forced, onClose }: Props) {
         setError("Erro ao salvar: " + updateError.message);
       } else {
         setSuccess("Senha alterada com sucesso!");
-        // Recarrega o currentUser — quando primeiro_acesso voltar false,
-        // o AppShell desmonta o modal forçado automaticamente.
-        // Para o modal voluntário, chama onClose após o reload.
-        await loadSupabaseData();
+        // Atualiza o currentUser no store imediatamente — isso faz o
+        // AppShell desmontar o modal forçado sem aguardar um reload completo.
+        if (currentUser) {
+          setCurrentUser({ ...currentUser, primeiro_acesso: false, senha: novaSenha });
+        }
+        loadSupabaseData(); // revalida em background sem bloquear o fechamento
         if (!forced) {
           onClose?.();
         }
