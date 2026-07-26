@@ -241,6 +241,8 @@ export default function UsuariosPageSupabase() {
         const { error: updateError } = await supabase
           .from("profiles")
           .update({
+            primeiro_acesso: true, // força troca de senha no primeiro login
+            senha: form.senha,
             area: form.area && form.area.trim() ? form.area : null,
             telefone: form.telefone && form.telefone.trim() ? form.telefone : null,
             empresa_id: form.empresaId && form.empresaId.trim() ? form.empresaId : null,
@@ -318,7 +320,7 @@ export default function UsuariosPageSupabase() {
   };
 
   const handleResetPassword = async (user: any) => {
-    const novaSenh = "12345";
+    const novaSenh = "123456";
     
     try {
       setFormLoading(true);

@@ -159,7 +159,13 @@ export default function AppShellSupabase() {
         </button>
       )}
 
-      {showAlterarSenha && (
+      {/* Modal forçado no primeiro acesso — não pode ser fechado */}
+      {currentUser?.primeiro_acesso && (
+        <AlterarSenhaModalSupabase forced />
+      )}
+
+      {/* Modal voluntário de alteração de senha */}
+      {!currentUser?.primeiro_acesso && showAlterarSenha && (
         <AlterarSenhaModalSupabase
           onClose={() => setShowAlterarSenha(false)}
         />
