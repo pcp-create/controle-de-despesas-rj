@@ -46,11 +46,13 @@ function ElapsedTimer({ start }: { start: string }) {
       const h = Math.floor(diff / 3600);
       const m = Math.floor((diff % 3600) / 60);
       const s = diff % 60;
-      setElapsed(
-        h > 0
-          ? `${h}h ${String(m).padStart(2, "0")}min ${String(s).padStart(2, "0")}s`
-          : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
-      );
+      if (h > 0) {
+        setElapsed(`${h}h ${String(m).padStart(2, "0")}min ${String(s).padStart(2, "0")}s`);
+      } else if (m > 0) {
+        setElapsed(`${m}min ${String(s).padStart(2, "0")}s`);
+      } else {
+        setElapsed(`${s}s`);
+      }
     };
     calc();
     const t = setInterval(calc, 1000);
