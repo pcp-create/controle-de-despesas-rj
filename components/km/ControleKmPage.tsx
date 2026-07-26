@@ -48,7 +48,7 @@ function ElapsedTimer({ start }: { start: string }) {
       const s = diff % 60;
       setElapsed(
         h > 0
-          ? `${h}h ${String(m).padStart(2, "0")}min`
+          ? `${h}h ${String(m).padStart(2, "0")}min ${String(s).padStart(2, "0")}s`
           : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
       );
     };
@@ -155,13 +155,32 @@ export default function ControleKmPage() {
     return list;
   }, [registros, filtroStatus, filtroFrota, filtroFuncionario, search, frotas, profiles, isGestorOuAdmin, currentUser]);
 
-  // Stats
+  // Stats — baseadas na lista já filtrada por perfil (funcionário vê só os próprios)
+  const registrosVisiveis = useMemo(() => {
+    if (!isGestorOuAdmin && currentUser?.id) {
+      return registros.filter((r) => r.usuario_id === currentUser.id);
+    }
+    return registros;
+  }, [registros, isGestorOuAdmin, currentUser]);
+
   const totalKm = useMemo(
-    () => registros.filter((r) => r.status === "finalizado").reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
-    [registros]
+    () =>
+      registrosVisiveis
+        .filter((r) => r.status === "finalizado")
+        .reduce((s, r) => {
+          // km_percorrido pode não existir na tabela — calcular na aplicação
+          const percorrido =
+            r.km_percorrido != null
+              ? r.km_percorrido
+              : r.km_final != null
+              ? r.km_final - r.km_inicial
+              : 0;
+          return s + percorrido;
+        }, 0),
+    [registrosVisiveis]
   );
-  const abertosCount = registros.filter((r) => r.status === "aberto").length;
-  const finalizadosCount = registros.filter((r) => r.status === "finalizado").length;
+  const abertosCount = registrosVisiveis.filter((r) => r.status === "aberto").length;
+  const finalizadosCount = registrosVisiveis.filter((r) => r.status === "finalizado").length;
 
   // ─── Handlers ───────────────────────────────────────────
 
@@ -293,7 +312,7 @@ export default function ControleKmPage() {
         frota ? `${frota.placa} - ${frota.marca} ${frota.modelo}` : "",
         r.km_inicial,
         r.km_final ?? "",
-        r.km_percorrido ?? "",
+        r.km_percorrido ?? (r.km_final != null ? r.km_final - r.km_inicial : "") ,
         r.duracao_minutos != null ? formatDuracao(r.duracao_minutos) : "",
         r.destino ?? "",
         r.motivo ?? "",
@@ -585,10 +604,10 @@ export default function ControleKmPage() {
                           )}
                         </span>
                       </div>
-                      {r.km_percorrido != null && (
+                      {(r.km_percorrido != null || r.km_final != null) && (
                         <div className="flex flex-col gap-0.5">
                           <span className="text-muted-foreground">Percorrido</span>
-                          <span className="font-semibold text-primary">{formatKm(r.km_percorrido)}</span>
+                          <span className="font-semibold text-primary">{formatKm(r.km_percorrido ?? (r.km_final != null ? r.km_final - r.km_inicial : null))}</span>
                         </div>
                       )}
                       {isAberto ? (
