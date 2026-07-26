@@ -157,20 +157,12 @@ export default function ControleKmPage() {
     return list;
   }, [registros, filtroStatus, filtroFrota, filtroFuncionario, search, frotas, profiles, isGestorOuAdmin, currentUser]);
 
-  // Stats — baseadas na lista já filtrada por perfil (funcionário vê só os próprios)
-  const registrosVisiveis = useMemo(() => {
-    if (!isGestorOuAdmin && currentUser?.id) {
-      return registros.filter((r) => r.usuario_id === currentUser.id);
-    }
-    return registros;
-  }, [registros, isGestorOuAdmin, currentUser]);
-
+  // Stats — sempre baseadas na lista com todos os filtros ativos
   const totalKm = useMemo(
     () =>
-      registrosVisiveis
+      registrosFiltrados
         .filter((r) => r.status === "finalizado")
         .reduce((s, r) => {
-          // km_percorrido pode não existir na tabela — calcular na aplicação
           const percorrido =
             r.km_percorrido != null
               ? r.km_percorrido
@@ -179,15 +171,15 @@ export default function ControleKmPage() {
               : 0;
           return s + percorrido;
         }, 0),
-    [registrosVisiveis]
+    [registrosFiltrados]
   );
-  const abertosCount = registrosVisiveis.filter((r) => r.status === "aberto").length;
-  const finalizadosCount = registrosVisiveis.filter((r) => r.status === "finalizado").length;
+  const abertosCount = registrosFiltrados.filter((r) => r.status === "aberto").length;
+  const finalizadosCount = registrosFiltrados.filter((r) => r.status === "finalizado").length;
 
   // Somatória do tempo de todas as viagens finalizadas (em segundos)
   const totalSegundos = useMemo(
     () =>
-      registrosVisiveis
+      registrosFiltrados
         .filter((r) => r.status === "finalizado" && r.data_fim)
         .reduce((s, r) => {
           const secs = Math.floor(
@@ -195,7 +187,7 @@ export default function ControleKmPage() {
           );
           return s + (secs > 0 ? secs : 0);
         }, 0),
-    [registrosVisiveis]
+    [registrosFiltrados]
   );
 
   const formatTotalTempo = (secs: number) => {
