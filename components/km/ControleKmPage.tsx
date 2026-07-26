@@ -103,6 +103,8 @@ export default function ControleKmPage() {
   const [loading, setLoading] = useState(false);
   const [mostrarListaVeiculos, setMostrarListaVeiculos] = useState(false);
   const [buscaVeiculo, setBuscaVeiculo] = useState("");
+  const [filtroFrotaAberto, setFiltroFrotaAberto] = useState(false);
+  const [filtroFrotaBusca, setFiltroFrotaBusca] = useState("");
   const [setupSql, setSetupSql] = useState<string | null>(null);
 
   // Verifica se a tabela controle_km existe no banco
@@ -222,7 +224,7 @@ export default function ControleKmPage() {
     setForm({ ...EMPTY_FORM, frota_id: padraodDisponivel ? veiculoPadrao! : "" });
     setErrors({});
     setFeedback(null);
-    // Se tem veículo padrão disponível, começa com lista fechada; senão, abre direto
+    // Se tem veículo padrão dispon��vel, começa com lista fechada; senão, abre direto
     setMostrarListaVeiculos(!padraodDisponivel);
     setBuscaVeiculo("");
     setModal("iniciar");
@@ -508,19 +510,95 @@ export default function ControleKmPage() {
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
         </div>
+        {/* Filtro de veículo — combobox suspenso */}
         <div className="relative">
-          <Car className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <select
-            value={filtroFrota}
-            onChange={(e) => setFiltroFrota(e.target.value)}
-            className="pl-9 pr-8 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
+          <div
+            className="flex items-center gap-2 pl-3 pr-8 py-2 rounded-lg border border-input bg-background text-sm cursor-pointer focus-within:ring-2 focus-within:ring-ring min-w-[180px]"
+            onClick={() => { setFiltroFrotaAberto(true); setFiltroFrotaBusca(""); }}
           >
-            <option value="">Todos os veículos</option>
-            {frotas.filter((f) => f.ativo).map((f) => (
-              <option key={f.id} value={f.id}>{f.placa} — {f.marca} {f.modelo}</option>
-            ))}
-          </select>
+            <Car className="w-4 h-4 text-muted-foreground shrink-0" />
+            <span className={filtroFrota ? "text-foreground" : "text-muted-foreground"}>
+              {filtroFrota
+                ? frotas.find((f) => f.id === filtroFrota)?.placa ?? "Veículo"
+                : "Todos os veículos"}
+            </span>
+            {filtroFrota && (
+              <button
+                type="button"
+                onMouseDown={(e) => { e.stopPropagation(); setFiltroFrota(""); setFiltroFrotaAberto(false); }}
+                className="ml-auto text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+
+          {filtroFrotaAberto && (
+            <div className="absolute left-0 top-full mt-1 z-50 w-72 rounded-lg border border-border bg-white shadow-lg overflow-hidden">
+              {/* Input de busca */}
+              <div className="p-2 border-b border-border">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="text"
+                    autoFocus
+                    value={filtroFrotaBusca}
+                    onChange={(e) => setFiltroFrotaBusca(e.target.value)}
+                    onBlur={() => setTimeout(() => setFiltroFrotaAberto(false), 150)}
+                    placeholder="Buscar por placa, marca ou modelo..."
+                    className="w-full pl-9 pr-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              </div>
+              {/* Lista filtrada */}
+              <div className="max-h-56 overflow-y-auto">
+                {/* Opção "Todos" */}
+                <button
+                  type="button"
+                  onMouseDown={() => { setFiltroFrota(""); setFiltroFrotaAberto(false); setFiltroFrotaBusca(""); }}
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/50 transition-colors border-b border-border/50 ${!filtroFrota ? "bg-primary/5" : ""}`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                    <Car className="w-3.5 h-3.5 text-muted-foreground" />
+                  </div>
+                  <span className="text-sm font-medium text-foreground">Todos os veículos</span>
+                </button>
+                {(() => {
+                  const q = filtroFrotaBusca.toLowerCase();
+                  const lista = frotas.filter((f) => f.ativo && (
+                    !q ||
+                    f.placa.toLowerCase().includes(q) ||
+                    f.marca.toLowerCase().includes(q) ||
+                    f.modelo.toLowerCase().includes(q) ||
+                    (f.tipo ?? "").toLowerCase().includes(q) ||
+                    (f.cor ?? "").toLowerCase().includes(q) ||
+                    String(f.ano ?? "").includes(q) ||
+                    (f.observacao ?? "").toLowerCase().includes(q)
+                  ));
+                  if (lista.length === 0) return (
+                    <p className="px-4 py-4 text-sm text-muted-foreground text-center">Nenhum veículo encontrado.</p>
+                  );
+                  return lista.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onMouseDown={() => { setFiltroFrota(f.id); setFiltroFrotaAberto(false); setFiltroFrotaBusca(""); }}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/50 transition-colors border-b border-border/50 last:border-0 ${filtroFrota === f.id ? "bg-primary/5" : ""}`}
+                    >
+                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                        <Car className="w-3.5 h-3.5 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">{f.placa}</p>
+                        <p className="text-xs text-muted-foreground truncate">{f.marca} {f.modelo}{f.ano ? ` · ${f.ano}` : ""}</p>
+                      </div>
+                    </button>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
         </div>
         {isGestorOuAdmin && (
           <div className="relative">
