@@ -131,9 +131,14 @@ export default function ControleKmPage() {
   const registrosFiltrados = useMemo(() => {
     let list = [...registros];
 
-    // Restrição por perfil
+    // Restrição por perfil — vê as próprias viagens + viagens do veículo padrão
     if (!isGestorOuAdmin && currentUser?.id) {
-      list = list.filter((r) => r.usuario_id === currentUser.id);
+      const frotaPadraoId = (currentUser as any)?.frota_padrao_id as string | null;
+      list = list.filter(
+        (r) =>
+          r.usuario_id === currentUser.id ||
+          (frotaPadraoId != null && r.frota_id === frotaPadraoId)
+      );
     }
 
     if (filtroStatus !== "todos") list = list.filter((r) => r.status === filtroStatus);
