@@ -84,6 +84,7 @@ export default function ControleKmPage() {
   const { currentUser } = useAppStore();
 
   // Controle de perfil
+  // Somente administrador e gestor podem ver viagens de todos os funcionários
   const isGestorOuAdmin = currentUser?.perfil === "administrador" || currentUser?.perfil === "gestor";
 
   // Filtros
