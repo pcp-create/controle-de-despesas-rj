@@ -14,12 +14,14 @@ export async function GET() {
   });
 
   // Verifica colunas necessárias
-  const { error: checkProfiles } = await supabase.from("profiles").select("frota_padrao_id").limit(1);
-  const { error: checkFrotas } = await supabase.from("frotas").select("km_atualizado_em").limit(1);
+  const { error: checkProfiles }   = await supabase.from("profiles").select("frota_padrao_id").limit(1);
+  const { error: checkFrotas }     = await supabase.from("frotas").select("km_atualizado_em").limit(1);
+  const { error: checkTiposErp }   = await supabase.from("tipos_despesa").select("codigo_produto_erp").limit(1);
 
   const missingCols: string[] = [];
   if (checkProfiles) missingCols.push("profiles.frota_padrao_id");
-  if (checkFrotas) missingCols.push("frotas.km_atualizado_em");
+  if (checkFrotas)   missingCols.push("frotas.km_atualizado_em");
+  if (checkTiposErp) missingCols.push("tipos_despesa.codigo_produto_erp");
 
   if (missingCols.length === 0) {
     return NextResponse.json({ success: true, message: "Todas as colunas já existem." });
@@ -27,7 +29,8 @@ export async function GET() {
 
   const sqls: string[] = [];
   if (checkProfiles) sqls.push("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS frota_padrao_id UUID REFERENCES frotas(id) ON DELETE SET NULL;");
-  if (checkFrotas) sqls.push("ALTER TABLE frotas ADD COLUMN IF NOT EXISTS km_atualizado_em TIMESTAMPTZ;");
+  if (checkFrotas)   sqls.push("ALTER TABLE frotas ADD COLUMN IF NOT EXISTS km_atualizado_em TIMESTAMPTZ;");
+  if (checkTiposErp) sqls.push("ALTER TABLE tipos_despesa ADD COLUMN IF NOT EXISTS codigo_produto_erp TEXT;");
 
   const sql = sqls.join("\n");
 

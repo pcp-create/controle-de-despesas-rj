@@ -19,6 +19,7 @@ export interface TipoDespesa {
   exige_comprovante: boolean;
   documento_padrao: string | null;
   centro_custo_erp_id: string | null;
+  codigo_produto_erp: string | null;
   ativo: boolean;
 }
 
@@ -188,6 +189,82 @@ const fetchProfiles = async (): Promise<Profile[]> => {
   return data || [];
 };
 
+// ─── Interface e Hook de Áreas / Setores ─────────────────────────────────────
+export interface Area {
+  id: string;
+  nome: string;
+  ativo: boolean;
+  ordem: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export function useAreas() {
+  const { data, error, isLoading, mutate } = useSWR(
+    "areas",
+    async () => {
+      const supabase = getSupabase();
+      if (!supabase) return [];
+      const { data, error } = await supabase
+        .from("areas")
+        .select("*")
+        .eq("ativo", true)
+        .order("ordem")
+        .order("nome");
+      if (error) throw error;
+      return (data || []) as Area[];
+    },
+    { revalidateOnFocus: false }
+  );
+
+  const addArea = async (nome: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const maxOrdem = (data as Area[] || []).reduce((m, a) => Math.max(m, a.ordem), 0);
+    const { error } = await supabase
+      .from("areas")
+      .insert({ nome: nome.trim(), ordem: maxOrdem + 1 });
+    if (error) return { error: error.message };
+    mutate();
+    return { error: null };
+  };
+
+  const updateArea = async (id: string, nome: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { error } = await supabase
+      .from("areas")
+      .update({ nome: nome.trim(), updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return { error: error.message };
+    mutate();
+    return { error: null };
+  };
+
+  const deleteArea = async (id: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    // Soft delete — mantém integridade com profiles que já usam a área
+    const { error } = await supabase
+      .from("areas")
+      .update({ ativo: false, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return { error: error.message };
+    mutate();
+    return { error: null };
+  };
+
+  return {
+    areas: (data || []) as Area[],
+    isLoading,
+    error,
+    mutate,
+    addArea,
+    updateArea,
+    deleteArea,
+  };
+}
+
 // Hooks
 // Interface para Centro de Custo por área
 export interface TipoDespesaCentroCusto {
@@ -233,12 +310,28 @@ export function useTipoDespesaCentroCusto(tipoDespesaId: string | null) {
     const supabase = getSupabase();
     if (!supabase || !tipoDespesaId) return { error: "Dados insuficientes" };
 
-    const { error } = await supabase
+    // Verifica se já existe registro para esse tipo+área
+    const { data: existing } = await supabase
       .from("tipos_despesa_centro_custo")
-      .upsert(
-        { tipo_despesa_id: tipoDespesaId, area, centro_custo_erp, updated_at: new Date().toISOString() },
-        { onConflict: "tipo_despesa_id,area" }
-      );
+      .select("id")
+      .eq("tipo_despesa_id", tipoDespesaId)
+      .eq("area", area)
+      .maybeSingle();
+
+    let error;
+
+    if (existing?.id) {
+      const res = await supabase
+        .from("tipos_despesa_centro_custo")
+        .update({ centro_custo_erp, updated_at: new Date().toISOString() })
+        .eq("id", existing.id);
+      error = res.error;
+    } else {
+      const res = await supabase
+        .from("tipos_despesa_centro_custo")
+        .insert({ tipo_despesa_id: tipoDespesaId, area, centro_custo_erp });
+      error = res.error;
+    }
 
     if (error) return { error: error.message };
     mutate();

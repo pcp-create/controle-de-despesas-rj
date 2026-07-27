@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { useAppStore } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
-import { useTipoDespesaCentroCusto } from "@/lib/supabase/hooks";
+import { useTipoDespesaCentroCusto, useAreas, type Area as AreaRecord } from "@/lib/supabase/hooks";
 import { formatCurrency } from "@/lib/helpers";
 import {
   Search,
@@ -21,50 +21,53 @@ import {
   Save,
 } from "lucide-react";
 
-// ─── Áreas disponíveis ────────────────────────────────────────────────────────
-const AREAS = ["Administrativo", "Comercial", "Manutenção"] as const;
-type Area = (typeof AREAS)[number];
-
 // ─── Sub-componente: painel de CC por área ────────────────────────────────────
-function CentroCustoPanel({ tipoDespesaId }: { tipoDespesaId: string }) {
+function CentroCustoPanel({ tipoDespesaId, areas }: { tipoDespesaId: string; areas: AreaRecord[] }) {
   const { centrosCusto, isLoading, upsertCentroCusto, deleteCentroCusto } =
     useTipoDespesaCentroCusto(tipoDespesaId);
 
-  // Estado de edição local: area → valor editando
-  const [editing, setEditing] = useState<Partial<Record<Area, string>>>({});
-  const [saving, setSaving] = useState<Partial<Record<Area, boolean>>>({});
+  const [editing, setEditing] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const getValor = (area: Area) => {
-    const cc = centrosCusto.find((c) => c.area === area);
+  const getValor = (areaNome: string) => {
+    const cc = centrosCusto.find((c) => c.area === areaNome);
     return cc?.centro_custo_erp || "";
   };
 
-  const handleEdit = (area: Area) => {
-    setEditing((prev) => ({ ...prev, [area]: getValor(area) }));
+  const handleEdit = (areaNome: string) => {
+    setEditing((prev) => ({ ...prev, [areaNome]: getValor(areaNome) }));
   };
 
-  const handleCancel = (area: Area) => {
+  const handleCancel = (areaNome: string) => {
     setEditing((prev) => {
       const next = { ...prev };
-      delete next[area];
+      delete next[areaNome];
       return next;
     });
   };
 
-  const handleSave = async (area: Area) => {
-    const valor = editing[area] ?? "";
-    setSaving((prev) => ({ ...prev, [area]: true }));
+  const handleSave = async (areaNome: string) => {
+    const valor = editing[areaNome] ?? "";
+    setSaving((prev) => ({ ...prev, [areaNome]: true }));
+    setSaveError(null);
+
+    let result: { error: string | null } | undefined;
 
     if (!valor.trim()) {
-      // Sem valor → remover o registro se existir
-      const cc = centrosCusto.find((c) => c.area === area);
-      if (cc) await deleteCentroCusto(cc.id);
+      const cc = centrosCusto.find((c) => c.area === areaNome);
+      if (cc) result = await deleteCentroCusto(cc.id);
     } else {
-      await upsertCentroCusto(area, valor.trim());
+      result = await upsertCentroCusto(areaNome, valor.trim());
     }
 
-    setSaving((prev) => { const n = { ...prev }; delete n[area]; return n; });
-    handleCancel(area);
+    setSaving((prev) => { const n = { ...prev }; delete n[areaNome]; return n; });
+
+    if (result?.error) {
+      setSaveError(result.error);
+    } else {
+      handleCancel(areaNome);
+    }
   };
 
   if (isLoading) {
@@ -84,14 +87,25 @@ function CentroCustoPanel({ tipoDespesaId }: { tipoDespesaId: string }) {
           Centro de Custo ERP (M8) por Área / Setor
         </span>
       </div>
+      {saveError && (
+        <div className="px-3 py-2 bg-destructive/5 border-b border-destructive/20 text-xs text-destructive">
+          Erro ao salvar: {saveError}
+        </div>
+      )}
       <div className="divide-y divide-border">
-        {AREAS.map((area) => {
+        {areas.length === 0 && (
+          <p className="px-3 py-3 text-xs text-muted-foreground">
+            Nenhuma área cadastrada. Adicione áreas em Usuários → Gerenciar áreas.
+          </p>
+        )}
+        {areas.map((areaItem) => {
+          const area = areaItem.nome;
           const valor = getValor(area);
           const isEditing = editing[area] !== undefined;
           const isSaving = saving[area] === true;
 
           return (
-            <div key={area} className="flex items-center gap-3 px-3 py-2.5">
+            <div key={areaItem.id} className="flex items-center gap-3 px-3 py-2.5">
               <span className="text-sm font-medium text-foreground w-32 shrink-0">{area}</span>
 
               {isEditing ? (
@@ -160,6 +174,7 @@ function CentroCustoPanel({ tipoDespesaId }: { tipoDespesaId: string }) {
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function TiposDespesaPageSupabase() {
   const { tiposDespesa, loadSupabaseData } = useAppStore();
+  const { areas } = useAreas();
   const formRef = useRef<HTMLDivElement>(null);
 
   const [search, setSearch] = useState("");
@@ -177,6 +192,7 @@ export default function TiposDespesaPageSupabase() {
     calcula_diarias: false,
     exige_comprovante: true,
     documento_padrao: "",
+    codigo_produto_erp: "",
     ativo: true,
   };
   const [form, setForm] = useState(emptyForm);
@@ -245,6 +261,7 @@ export default function TiposDespesaPageSupabase() {
         calcula_diarias: form.calcula_diarias,
         exige_comprovante: form.exige_comprovante,
         documento_padrao: form.documento_padrao || null,
+        codigo_produto_erp: form.codigo_produto_erp || null,
         ativo: form.ativo,
       };
 
@@ -253,11 +270,11 @@ export default function TiposDespesaPageSupabase() {
         if (error) {
           setFeedback({ type: "error", msg: `Erro: ${error.message}` });
         } else {
-          setFeedback({ type: "success", msg: "Tipo atualizado! Agora configure os Centros de Custo por área abaixo." });
-          setSavedId(editingId);
+          setFeedback({ type: "success", msg: "Tipo de despesa atualizado com sucesso!" });
           setEditingId(null);
           setShowNew(false);
           setForm(emptyForm);
+          setSavedId(null);
           await loadSupabaseData();
           setTimeout(() => setFeedback(null), 4000);
         }
@@ -292,6 +309,7 @@ export default function TiposDespesaPageSupabase() {
       calcula_diarias: (tipo as any).calculaDiarias === true,
       exige_comprovante: tipo.exigeComprovante,
       documento_padrao: tipo.documentoPadrao || "",
+      codigo_produto_erp: tipo.codigo_produto_erp || "",
       ativo: tipo.ativo,
     });
     setEditingId(tipo.id);
@@ -306,6 +324,7 @@ export default function TiposDespesaPageSupabase() {
     setEditingId(null);
     setShowNew(false);
     setForm(emptyForm);
+    setSavedId(null);
   };
 
   return (
@@ -394,6 +413,20 @@ export default function TiposDespesaPageSupabase() {
                 disabled={loading}
               />
             </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Código de Produto ERP M8</label>
+              <input
+                type="text"
+                value={form.codigo_produto_erp}
+                onChange={(e) => setForm({ ...form, codigo_produto_erp: e.target.value })}
+                className="px-3 py-2 rounded-lg border border-input bg-background text-sm font-mono"
+                placeholder="Ex: PROD-0042"
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">
+                Código do item correspondente no sistema ERP M8.
+              </p>
+            </div>
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -445,7 +478,7 @@ export default function TiposDespesaPageSupabase() {
           </div>
 
           {/* Painel de Centro de Custo por área — visível ao editar tipo existente */}
-          {savedId && <CentroCustoPanel tipoDespesaId={savedId} />}
+          {savedId && <CentroCustoPanel tipoDespesaId={savedId} areas={areas} />}
 
           {/* Aviso quando é tipo novo ainda não salvo */}
           {!savedId && showNew && (
@@ -536,7 +569,7 @@ export default function TiposDespesaPageSupabase() {
                   </div>
 
                   {/* CC por área inline no card mobile */}
-                  {savedId === t.id && <CentroCustoPanel tipoDespesaId={t.id} />}
+                  {savedId === t.id && <CentroCustoPanel tipoDespesaId={t.id} areas={areas} />}
 
                   <div className="flex gap-2">
                     <button
@@ -647,7 +680,7 @@ export default function TiposDespesaPageSupabase() {
                       {savedId === t.id && !editingId && (
                         <tr key={`${t.id}-cc`} className="bg-muted/20">
                           <td colSpan={7} className="px-4 py-3">
-                            <CentroCustoPanel tipoDespesaId={t.id} />
+                            <CentroCustoPanel tipoDespesaId={t.id} areas={areas} />
                           </td>
                         </tr>
                       )}

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useAppStore } from "@/lib/store";
-import { useFrotas } from "@/lib/supabase/hooks";
+import { useFrotas, useAreas } from "@/lib/supabase/hooks";
+import GestaoAreasModal from "./GestaoAreasModal";
 import {
   Search,
   PlusCircle,
@@ -470,6 +471,8 @@ export default function UsuariosPageSupabase() {
   const gestores = users.filter((p) => p.perfil === "gestor" || p.perfil === "administrador");
   const { frotas } = useFrotas();
   const frotasAtivas = frotas.filter((f) => f.ativo);
+  const { areas } = useAreas();
+  const [showGestaoAreas, setShowGestaoAreas] = useState(false);
 
   return (
     <div className="flex flex-col gap-6">
@@ -776,16 +779,27 @@ export default function UsuariosPageSupabase() {
                   </div>
 
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Área / Setor</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium text-foreground">Área / Setor</label>
+                      {currentUser?.perfil === "administrador" && (
+                        <button
+                          type="button"
+                          onClick={() => setShowGestaoAreas(true)}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Gerenciar áreas
+                        </button>
+                      )}
+                    </div>
                     <select
                       value={form.area}
                       onChange={(e) => setForm({ ...form, area: e.target.value })}
                       className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     >
                       <option value="">Selecione a área...</option>
-                      <option value="Administrativo">Administrativo</option>
-                      <option value="Comercial">Comercial</option>
-                      <option value="Manutenção">Manutenção</option>
+                      {areas.map((a) => (
+                        <option key={a.id} value={a.nome}>{a.nome}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -1118,6 +1132,11 @@ export default function UsuariosPageSupabase() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de gestão de áreas */}
+      {showGestaoAreas && (
+        <GestaoAreasModal onClose={() => setShowGestaoAreas(false)} />
       )}
     </div>
   );
