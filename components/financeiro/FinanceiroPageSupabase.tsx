@@ -891,7 +891,7 @@ export default function FinanceiroPageSupabase() {
                         {/* Badge ERP M8 */}
                         {d.lancado_sistema && (() => {
                           const erpStatus = d.erp_status || "pendente";
-                          if (d.lancado_erp || erpStatus === "integrado") {
+                          if (erpStatus === "integrado") {
                             const integradoPorProfile = profiles.find((p) => p.id === d.lancado_erp_por);
                             return (
                               <div className="flex flex-col gap-0.5">

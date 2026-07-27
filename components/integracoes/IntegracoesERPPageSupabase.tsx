@@ -44,7 +44,7 @@ export default function IntegracoesERPPageSupabase() {
 
   // Despesas que tiveram alguma interação com o ERP (lançadas no sistema ou com erp_status relevante)
   const despesasErp = despesas
-    .filter((d) => d.lancado_sistema || d.lancado_erp || (d.erp_status && d.erp_status !== "pendente"))
+    .filter((d) => d.lancado_sistema || (d.erp_status && d.erp_status !== "pendente"))
     .filter((d) => {
       if (filterStatus !== "todos" && d.erp_status !== filterStatus) return false;
       if (search) {
@@ -63,7 +63,7 @@ export default function IntegracoesERPPageSupabase() {
 
   const erros     = despesas.filter((d) => d.erp_status === "erro").length;
   const enviados  = despesas.filter((d) => d.erp_status === "processando").length;
-  const integrados = despesas.filter((d) => d.erp_status === "integrado" || d.lancado_erp).length;
+  const integrados = despesas.filter((d) => d.erp_status === "integrado").length;
 
   const handleRetry = async (id: string) => {
     const userId = authUser?.id ?? currentUser?.id;
@@ -178,7 +178,7 @@ export default function IntegracoesERPPageSupabase() {
             <tbody>
               {despesasErp.map((d) => {
                 const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
-                const erpStatusKey = d.erp_status || (d.lancado_erp ? "integrado" : "pendente");
+                const erpStatusKey = d.erp_status || "pendente";
                 const status = statusConfig[erpStatusKey] ?? { label: erpStatusKey, color: "bg-muted text-muted-foreground", icon: Clock };
                 const StatusIcon = status.icon;
                 const isError = erpStatusKey === "erro";
