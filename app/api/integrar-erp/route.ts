@@ -138,7 +138,7 @@ export async function POST(request: Request) {
       tenant:   M8_TENANT,
       username: M8_USERNAME,
       password: M8_PASSWORD,
-      company:  M8_COMPANY,
+      company:  Number(M8_COMPANY),
       domain:   M8_DOMAIN || "",
     };
 
