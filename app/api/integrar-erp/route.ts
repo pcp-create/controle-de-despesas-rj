@@ -212,31 +212,31 @@ export async function POST(request: Request) {
     }
   }
 
-  // ─── Etapa 3: Anexar comprovante ──────────────────────────────────────────
-  if ((despesa as any).comprovante_url) {
-    try {
-      const res = await fetch(`${M8_API_URL}/v1/compras/notafiscal/${erpId}/produto`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          url: (despesa as any).comprovante_url,
-          nome: (despesa as any).comprovante_nome,
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as any).message || `HTTP ${res.status}`);
-      }
-    } catch (err: any) {
-      await salvarProgresso(supabase, despesaId, {
-        erp_status: "erro",
-        erp_etapa_erro: 3,
-        erp_erro: `Etapa 3 (Anexar comprovante): ${err.message}`,
-        erp_payload: payload,
-        erp_id: erpId,
-      });
-      return NextResponse.json({ error: err.message, etapa: 3 }, { status: 502 });
+  // ─── Etapa 3: Produto ────────────────────────────────────────────────────
+  try {
+    const res = await fetch(`${M8_API_URL}/v1/compras/notafiscal/${erpId}/produto`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        url: (despesa as any).comprovante_url,
+        nome: (despesa as any).comprovante_nome,
+      }),
+    });
+    if (!res.ok) {
+      const rawErr = await res.text();
+      let bodyErr: any;
+      try { bodyErr = JSON.parse(rawErr); } catch { bodyErr = { message: rawErr }; }
+      throw new Error(`HTTP ${res.status} — ${rawErr.slice(0, 400)}`);
     }
+  } catch (err: any) {
+    await salvarProgresso(supabase, despesaId, {
+      erp_status: "erro",
+      erp_etapa_erro: 3,
+      erp_erro: err.message,
+      erp_payload: payload,
+      erp_id: erpId,
+    });
+    return NextResponse.json({ error: err.message, etapa: 3 }, { status: 502 });
   }
 
   // ─── Etapa 4: Vincular centro de custo ────────────────────────────────────
