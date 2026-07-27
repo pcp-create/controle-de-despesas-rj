@@ -7,7 +7,7 @@ import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks"
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
 import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
-import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle } from "lucide-react";
+import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle, Clock, Send, CheckCircle } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -23,7 +23,7 @@ export default function FinanceiroPageSupabase() {
 
   const [search, setSearch] = useState("");
   // Lançamento ERP
-  const [filtroLancamento, setFiltroLancamento] = useState<"todos" | "lancado" | "pendente">("pendente");
+  const [filtroLancamento, setFiltroLancamento] = useState<"todos" | "pendente" | "lancado" | "integrado">("todos");
   const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
   const [lancando, setLancando] = useState<Record<string, boolean>>({});
   const [erroLancar, setErroLancar] = useState<string | null>(null);
@@ -293,13 +293,19 @@ export default function FinanceiroPageSupabase() {
     );
   });
 
+  // Contadores dos 3 status ERP (sobre todas as despesas do período filtrado)
+  const qtdErpPendente  = despesasFiltradas.filter((d) => !d.lancado_sistema).length;
+  const qtdErpLancado   = despesasFiltradas.filter((d) => d.lancado_sistema && d.erp_status !== "integrado").length;
+  const qtdErpIntegrado = despesasFiltradas.filter((d) => d.erp_status === "integrado").length;
+
   // Aplica filtros por coluna e ordenação
   const despesasExibidas = useMemo(() => {
     let list = despesasFiltradas;
 
-    // Filtro lançamento
-    if (filtroLancamento === "lancado")  list = list.filter((d) => d.lancado_erp);
-    if (filtroLancamento === "pendente") list = list.filter((d) => !d.lancado_erp);
+    // Filtro lançamento — 3 status
+    if (filtroLancamento === "pendente")  list = list.filter((d) => !d.lancado_sistema);
+    if (filtroLancamento === "lancado")   list = list.filter((d) => d.lancado_sistema && d.erp_status !== "integrado");
+    if (filtroLancamento === "integrado") list = list.filter((d) => d.erp_status === "integrado");
 
     // Filtros por coluna — cada chave tem um Set de valores permitidos
     Object.entries(colFilters).forEach(([key, selected]) => {
@@ -703,6 +709,43 @@ export default function FinanceiroPageSupabase() {
               </p>
             </div>
           </div>
+          {/* Cards de status ERP */}
+          <div className="grid grid-cols-3 gap-3 mb-2">
+            <button
+              type="button"
+              onClick={() => setFiltroLancamento(filtroLancamento === "pendente" ? "todos" : "pendente")}
+              className={`rounded-xl border p-3 text-left transition ${filtroLancamento === "pendente" ? "border-warning ring-1 ring-warning/30 bg-warning/5" : "border-border bg-white hover:border-warning/40"}`}
+            >
+              <div className="w-7 h-7 rounded-lg bg-warning/10 text-warning flex items-center justify-center mb-1.5">
+                <Clock className="w-4 h-4" />
+              </div>
+              <p className="text-xl font-bold text-foreground">{qtdErpPendente}</p>
+              <p className="text-xs text-muted-foreground">Pendente</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltroLancamento(filtroLancamento === "lancado" ? "todos" : "lancado")}
+              className={`rounded-xl border p-3 text-left transition ${filtroLancamento === "lancado" ? "border-primary ring-1 ring-primary/30 bg-primary/5" : "border-border bg-white hover:border-primary/40"}`}
+            >
+              <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-1.5">
+                <Send className="w-4 h-4" />
+              </div>
+              <p className="text-xl font-bold text-foreground">{qtdErpLancado}</p>
+              <p className="text-xs text-muted-foreground">Lançado</p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltroLancamento(filtroLancamento === "integrado" ? "todos" : "integrado")}
+              className={`rounded-xl border p-3 text-left transition ${filtroLancamento === "integrado" ? "border-success ring-1 ring-success/30 bg-success/5" : "border-border bg-white hover:border-success/40"}`}
+            >
+              <div className="w-7 h-7 rounded-lg bg-success/10 text-success flex items-center justify-center mb-1.5">
+                <CheckCircle className="w-4 h-4" />
+              </div>
+              <p className="text-xl font-bold text-foreground">{qtdErpIntegrado}</p>
+              <p className="text-xs text-muted-foreground">Enviado ERP</p>
+            </button>
+          </div>
+
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -718,12 +761,13 @@ export default function FinanceiroPageSupabase() {
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               <select
                 value={filtroLancamento}
-                onChange={(e) => setFiltroLancamento(e.target.value as "todos" | "lancado" | "pendente")}
+                onChange={(e) => setFiltroLancamento(e.target.value as "todos" | "pendente" | "lancado" | "integrado")}
                 className="pl-9 pr-8 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
               >
                 <option value="todos">Todos</option>
+                <option value="pendente">Pendente</option>
                 <option value="lancado">Lançado</option>
-                <option value="pendente">Pendentes</option>
+                <option value="integrado">Enviado ERP</option>
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             </div>
