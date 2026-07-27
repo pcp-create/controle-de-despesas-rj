@@ -166,11 +166,14 @@ export async function POST(request: Request) {
     let body: any;
     try { body = JSON.parse(rawBody); } catch { body = { message: rawBody }; }
 
-    if (!res.ok || !body.token) {
-      console.log("[v0] M8 Etapa 1 — resposta completa:", JSON.stringify(body));
-      throw new Error(body.message || body.error || body.detail || body.msg || `HTTP ${res.status}`);
+    // Aceita as variantes mais comuns do campo de token
+    token = body.token || body.accessToken || body.access_token || body.bearerToken || body.jwt;
+
+    console.log("[v0] M8 Etapa 1 — campos da resposta:", Object.keys(body));
+
+    if (!res.ok || !token) {
+      throw new Error(body.message || body.error || body.detail || body.msg || `HTTP ${res.status} sem token`);
     }
-    token = body.token;
   } catch (err: any) {
     await salvarProgresso(supabase, despesaId, {
       erp_status: "erro",
