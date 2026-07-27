@@ -4,6 +4,11 @@ import { NextResponse } from "next/server";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
+export async function POST(request: Request) {
+  if (!supabaseServiceKey) {
+    return NextResponse.json({ error: "Service key não configurada" }, { status: 500 });
+  }
+
   const M8_API_URL  = process.env.M8_API_URL;
   const M8_TENANT   = process.env.M8_TENANT;
   const M8_USERNAME = process.env.M8_USERNAME;
@@ -19,7 +24,6 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   if (!M8_COMPANY)  varsFaltando.push("M8_COMPANY");
 
   if (varsFaltando.length > 0) {
-    // Não altera nada no banco — apenas informa quais variáveis estão faltando
     return NextResponse.json(
       {
         error: `Variáveis de ambiente não configuradas: ${varsFaltando.join(", ")}. Configure-as em Settings → Vars no painel do projeto.`,
@@ -28,11 +32,6 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
       },
       { status: 503 }
     );
-  }
-
-export async function POST(request: Request) {
-  if (!supabaseServiceKey) {
-    return NextResponse.json({ error: "Service key não configurada" }, { status: 500 });
   }
 
   const { despesaId, userId } = await request.json();
