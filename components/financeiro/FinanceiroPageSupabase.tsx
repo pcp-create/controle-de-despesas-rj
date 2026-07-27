@@ -962,21 +962,34 @@ export default function FinanceiroPageSupabase() {
                       <div className="flex flex-col gap-1 min-w-[130px]">
                         {/* Badge Sistema */}
                         {d.lancado_sistema ? (
-                          <div className="flex items-center gap-1">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-success bg-success/10 px-1.5 py-0.5 rounded-full">
-                              <Check className="w-2.5 h-2.5" /> Sistema
-                            </span>
-                            {/* Estornar só disponível antes de integrar ao ERP M8 */}
-                            {d.erp_status !== "integrado" && (
-                              <button
-                                type="button"
-                                title="Estornar lançamento"
-                                onClick={() => estornarLancamento(d.id)}
-                                className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
-                              >
-                                <RotateCcw className="w-2.5 h-2.5" />
-                              </button>
-                            )}
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-success bg-success/10 px-1.5 py-0.5 rounded-full">
+                                <Check className="w-2.5 h-2.5" /> Sistema
+                              </span>
+                              {/* Estornar só disponível antes de integrar ao ERP M8 */}
+                              {d.erp_status !== "integrado" && (
+                                <button
+                                  type="button"
+                                  title="Estornar lançamento"
+                                  onClick={() => estornarLancamento(d.id)}
+                                  className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+                                >
+                                  <RotateCcw className="w-2.5 h-2.5" />
+                                </button>
+                              )}
+                            </div>
+                            {d.lancado_sistema_por && (() => {
+                              const p = profiles.find((x) => x.id === d.lancado_sistema_por);
+                              return (
+                                <span className="text-[10px] text-muted-foreground leading-tight pl-0.5">
+                                  {p ? p.nome.split(" ")[0] : "—"}
+                                  {d.lancado_sistema_em && (
+                                    <> · {new Date(d.lancado_sistema_em).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</>
+                                  )}
+                                </span>
+                              );
+                            })()}
                           </div>
                         ) : aprovado ? (
                           d.pagamento_tipo === "faturado" ? (
