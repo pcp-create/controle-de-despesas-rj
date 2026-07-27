@@ -198,6 +198,12 @@ export const useAppStore = create<AppState>()(
             erpId: despesa.erp_id,
             erpPayload: despesa.erp_payload,
             erpResposta: despesa.erp_resposta,
+            lancado_sistema: despesa.lancado_sistema ?? false,
+            lancado_sistema_em: despesa.lancado_sistema_em ?? null,
+            lancado_sistema_por: despesa.lancado_sistema_por ?? null,
+            erp_status: despesa.erp_status ?? "pendente",
+            erp_etapa_erro: despesa.erp_etapa_erro ?? null,
+            erp_erro: despesa.erp_erro ?? null,
             dataCriacao: despesa.created_at,
             dataAtualizacao: despesa.updated_at,
           }));
