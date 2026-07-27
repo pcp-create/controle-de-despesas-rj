@@ -25,7 +25,8 @@ export default function FinanceiroPageSupabase() {
   // Lançamento ERP
   const [filtroLancamento, setFiltroLancamento] = useState<"todos" | "pendente" | "lancado" | "integrado">("todos");
   const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
-  const [confirmNFERP, setConfirmNFERP] = useState(false); // alerta NF antes de enviar ao ERP
+  const [confirmNFERP, setConfirmNFERP] = useState(false); // alerta NF antes de enviar ao ERP (modal lançar)
+  const [confirmNFERPDireto, setConfirmNFERPDireto] = useState<string | null>(null); // id da despesa aguardando confirmação NF no envio direto
   const [lancando, setLancando] = useState<Record<string, boolean>>({});
   const [erroLancar, setErroLancar] = useState<string | null>(null);
   const [enviandoERP, setEnviandoERP] = useState<Record<string, boolean>>({});
@@ -1080,11 +1081,12 @@ export default function FinanceiroPageSupabase() {
 
                               // pendente: aguardando envio ao ERP
                               if (d.pagamento_tipo === "faturado") return null;
+                              const isNFDireto = /^nf$/i.test((d.documento || "").trim()) || /nota\s*fiscal/i.test((d.documento || "").trim());
                               return (
                                 <button
                                   type="button"
                                   disabled={enviandoERP[d.id]}
-                                  onClick={() => handleEnviarERP(d.id)}
+                                  onClick={() => isNFDireto ? setConfirmNFERPDireto(d.id) : handleEnviarERP(d.id)}
                                   className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-muted text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/10 transition disabled:opacity-50"
                                 >
                                   {enviandoERP[d.id]
@@ -1252,6 +1254,41 @@ export default function FinanceiroPageSupabase() {
     </div>
 
     {/* ���─ Modal de lançamento ── */}
+    {/* ── Modal confirmação NF — envio direto ao ERP ── */}
+    {confirmNFERPDireto && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+        <div className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-sm p-6 flex flex-col gap-5">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center">
+              <AlertCircle className="w-5 h-5 text-warning" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-foreground">Atenção — Nota Fiscal (NF)</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Esta despesa foi lançada com documento <strong>Nota Fiscal (NF)</strong>. Antes de enviar ao ERP M8, verifique se esta nota fiscal ainda não foi lançada para evitar duplicidade no sistema.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmNFERPDireto(null)}
+              className="px-4 py-2 rounded-lg border border-input bg-background text-sm font-medium text-muted-foreground hover:bg-muted transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => { const id = confirmNFERPDireto; setConfirmNFERPDireto(null); handleEnviarERP(id); }}
+              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition"
+            >
+              NF verificada — Enviar ao ERP
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {confirmLancar && (() => {
       const despLancar = despesasFiltradas.find((d) => d.id === confirmLancar);
       const isFaturado = despLancar?.pagamento_tipo === "faturado";
