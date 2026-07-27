@@ -234,12 +234,28 @@ export function useTipoDespesaCentroCusto(tipoDespesaId: string | null) {
     const supabase = getSupabase();
     if (!supabase || !tipoDespesaId) return { error: "Dados insuficientes" };
 
-    const { error } = await supabase
+    // Verifica se já existe registro para esse tipo+área
+    const { data: existing } = await supabase
       .from("tipos_despesa_centro_custo")
-      .upsert(
-        { tipo_despesa_id: tipoDespesaId, area, centro_custo_erp, updated_at: new Date().toISOString() },
-        { onConflict: "tipo_despesa_id,area" }
-      );
+      .select("id")
+      .eq("tipo_despesa_id", tipoDespesaId)
+      .eq("area", area)
+      .maybeSingle();
+
+    let error;
+
+    if (existing?.id) {
+      // Atualiza registro existente
+      ({ error } = await supabase
+        .from("tipos_despesa_centro_custo")
+        .update({ centro_custo_erp, updated_at: new Date().toISOString() })
+        .eq("id", existing.id));
+    } else {
+      // Insere novo registro
+      ({ error } = await supabase
+        .from("tipos_despesa_centro_custo")
+        .insert({ tipo_despesa_id: tipoDespesaId, area, centro_custo_erp }));
+    }
 
     if (error) return { error: error.message };
     mutate();
