@@ -134,12 +134,11 @@ export async function POST(request: Request) {
 
   // ─── Etapa 1: Autenticação ────────────────────────────────────────────────
   try {
-    const companyNum = parseInt(M8_COMPANY!, 10);
     const loginBody: Record<string, unknown> = {
       tenant:   M8_TENANT,
       username: M8_USERNAME,
       password: M8_PASSWORD,
-      company:  isNaN(companyNum) ? M8_COMPANY : companyNum,
+      company:  M8_COMPANY,
       domain:   M8_DOMAIN || "",
     };
 
