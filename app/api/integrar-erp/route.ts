@@ -8,13 +8,17 @@ type JsonObject = Record<string, unknown>;
 
 type M8ErrorItem = {
   message?: string;
+  mensagem?: string;
+  error?: string;
   stackTrace?: string;
 };
 
 type M8Response<T = unknown> = {
   data?: T;
-  errors?: M8ErrorItem[];
+  errors?: M8ErrorItem[] | string[];
   message?: string;
+  mensagem?: string;
+  error?: string;
 };
 
 class IntegracaoError extends Error {
@@ -46,9 +50,7 @@ function paraNumero(valor: unknown): number | null {
 }
 
 function paraIso(valor: unknown, nomeCampo: string): string {
-  if (!valor) {
-    throw new Error(`${nomeCampo} não informado.`);
-  }
+  if (!valor) throw new Error(`${nomeCampo} não informado.`);
 
   const data = new Date(String(valor));
   if (Number.isNaN(data.getTime())) {
@@ -72,7 +74,12 @@ function formatarValorBR(valor: number): string {
   }).format(valor);
 }
 
-function montarResumoDespesa(despesa: any, tipo: any, tecnico: any, aprovador: any): string {
+function montarResumoDespesa(
+  despesa: any,
+  tipo: any,
+  tecnico: any,
+  aprovador: any
+): string {
   const dataDespesa = despesa.data_despesa
     ? new Date(despesa.data_despesa).toLocaleDateString("pt-BR", {
         timeZone: "America/Sao_Paulo",
@@ -116,15 +123,61 @@ async function salvarProgresso(
   }
 }
 
+async function obterNumeroDocumentoErp(
+  supabase: SupabaseClient,
+  despesaId: string,
+  numeroExistente: unknown
+): Promise<number> {
+  const existente = paraNumero(numeroExistente);
+  if (existente && existente >= 4) return existente;
+
+  const { data, error } = await supabase.rpc("proximo_numero_documento_erp");
+
+  if (error) {
+    throw new IntegracaoError(
+      2,
+      `Não foi possível gerar o número sequencial do documento ERP: ${error.message}`
+    );
+  }
+
+  const numero = paraNumero(data);
+  if (!numero || numero < 4) {
+    throw new IntegracaoError(
+      2,
+      `A função proximo_numero_documento_erp retornou um valor inválido: ${String(data)}`
+    );
+  }
+
+  // Salva antes de chamar o M8. Assim uma nova tentativa reutiliza o mesmo número.
+  await salvarProgresso(supabase, despesaId, {
+    numero_documento_erp: numero,
+  });
+
+  return numero;
+}
+
 function extrairMensagemM8(body: unknown, status: number): string {
+  if (!body) {
+    return `Erro HTTP ${status} retornado pelo M8 sem conteúdo na resposta.`;
+  }
+
   const resposta = body as M8Response;
+
   const mensagens = Array.isArray(resposta?.errors)
-    ? resposta.errors.map((erro) => erro?.message).filter(Boolean)
+    ? resposta.errors
+        .map((erro) => {
+          if (typeof erro === "string") return erro;
+          return erro?.message || erro?.mensagem || erro?.error || JSON.stringify(erro);
+        })
+        .filter(Boolean)
     : [];
 
   if (mensagens.length > 0) return mensagens.join(" | ");
   if (resposta?.message) return resposta.message;
-  return `Erro HTTP ${status} retornado pelo M8.`;
+  if (resposta?.mensagem) return resposta.mensagem;
+  if (resposta?.error) return resposta.error;
+
+  return `Erro HTTP ${status} retornado pelo M8. Resposta: ${JSON.stringify(body).slice(0, 1500)}`;
 }
 
 async function m8Request<T>(
@@ -143,9 +196,7 @@ async function m8Request<T>(
   };
 
   if (options.autenticado !== false) {
-    if (!token) {
-      throw new IntegracaoError(etapa, "Token M8 não disponível.");
-    }
+    if (!token) throw new IntegracaoError(etapa, "Token M8 não disponível.");
     headers.Authorization = `Bearer ${token}`;
   }
 
@@ -163,8 +214,10 @@ async function m8Request<T>(
   }
 
   const raw = await response.text();
-  let parsed: unknown = null;
+  console.log(`[M8][Etapa ${etapa}] HTTP ${response.status}`);
+  console.log(`[M8][Etapa ${etapa}] Resposta:`, raw || "<vazia>");
 
+  let parsed: unknown = null;
   if (raw) {
     try {
       parsed = JSON.parse(raw);
@@ -174,7 +227,8 @@ async function m8Request<T>(
   }
 
   const respostaM8 = parsed as M8Response<T>;
-  const possuiErros = Array.isArray(respostaM8?.errors) && respostaM8.errors.length > 0;
+  const possuiErros =
+    Array.isArray(respostaM8?.errors) && respostaM8.errors.length > 0;
 
   if (!response.ok || possuiErros) {
     throw new IntegracaoError(etapa, extrairMensagemM8(parsed, response.status), {
@@ -301,9 +355,6 @@ export async function POST(request: Request) {
   const centroCustoId = paraNumero(cc?.centro_custo_erp);
   const valorDespesa = paraNumero(despesa.valor);
 
-  // Número sequencial gerado automaticamente — único por timestamp em ms
-  const numeroDocumentoErp = Date.now();
-
   const camposFaltando: string[] = [];
   if (!despesa.tipo_despesa_id) camposFaltando.push("Tipo de despesa");
   if (!codigoProduto) camposFaltando.push("Código de Produto ERP M8");
@@ -330,23 +381,30 @@ export async function POST(request: Request) {
 
   let token: string | null = null;
   let erpId = paraNumero(despesa.erp_id);
+  let numeroDocumentoErp = paraNumero(despesa.numero_documento_erp);
 
-  // Se já existe erp_id, retoma na etapa que falhou, sem criar outra NF.
+  // Se já existe erp_id, retoma na etapa que falhou sem criar outra NF.
   const etapaInicial = erpId
     ? Math.max(3, Number(despesa.erp_etapa_erro || 3))
     : 2;
 
   const payloads: Record<string, unknown> = {
+    ...(despesa.erp_payload && typeof despesa.erp_payload === "object"
+      ? despesa.erp_payload
+      : {}),
     etapa1: {
       tenant: M8_TENANT,
       username: M8_USERNAME,
       company: Number(M8_COMPANY),
       domain: M8_DOMAIN,
-      // senha propositalmente não registrada
     },
   };
 
-  const respostas: Record<string, unknown> = {};
+  const respostas: Record<string, unknown> = {
+    ...(despesa.erp_resposta && typeof despesa.erp_resposta === "object"
+      ? despesa.erp_resposta
+      : {}),
+  };
 
   try {
     await salvarProgresso(supabase, despesaId, {
@@ -358,7 +416,7 @@ export async function POST(request: Request) {
       erp_etapa_erro: null,
     });
 
-    // ETAPA 1 — Token
+    // ETAPA 1 — Gerar token
     const loginBody = {
       tenant: M8_TENANT!,
       username: M8_USERNAME!,
@@ -384,11 +442,16 @@ export async function POST(request: Request) {
     respostas.etapa1 = {
       statusHttp: auth.status,
       sucesso: true,
-      // token propositalmente não registrado
     };
 
-    // ETAPA 2 — Criar NF de compra
+    // ETAPA 2 — Criar Nota Fiscal de Compra
     if (etapaInicial <= 2 && !erpId) {
+      numeroDocumentoErp = await obterNumeroDocumentoErp(
+        supabase,
+        despesaId,
+        numeroDocumentoErp
+      );
+
       const bodyEtapa2 = {
         empresaId: 1,
         pessoaId: 27977,
@@ -398,7 +461,7 @@ export async function POST(request: Request) {
         freteId: 9,
         condicaoPagamentoId: 9,
         sintegraId: 99,
-        documento: numeroDocumentoErp!,
+        documento: numeroDocumentoErp,
         serie: "99",
         especieDocumento: "FAT",
         especieId: 3,
@@ -408,6 +471,9 @@ export async function POST(request: Request) {
       };
 
       payloads.etapa2 = bodyEtapa2;
+
+      console.log("[M8][Etapa 2] URL:", `${baseUrl}/v1/compras/notafiscal`);
+      console.log("[M8][Etapa 2] Payload:", JSON.stringify(bodyEtapa2, null, 2));
 
       const etapa2 = await m8Request<{ id?: number }>(
         2,
@@ -427,9 +493,9 @@ export async function POST(request: Request) {
 
       respostas.etapa2 = etapa2.respostaCompleta;
 
-      // Salva imediatamente para permitir retomada sem duplicar a NF.
       await salvarProgresso(supabase, despesaId, {
         erp_id: erpId,
+        numero_documento_erp: numeroDocumentoErp,
         erp_payload: payloads,
         erp_resposta: respostas,
       });
@@ -439,7 +505,7 @@ export async function POST(request: Request) {
       throw new IntegracaoError(2, "documentoFiscalId não disponível.");
     }
 
-    // ETAPA 3 — Produto
+    // ETAPA 3 — Cadastrar produto
     if (etapaInicial <= 3) {
       const bodyEtapa3 = {
         produtoId: codigoProduto!,
@@ -466,7 +532,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // ETAPA 4 — Parcela
+    // ETAPA 4 — Cadastrar parcela
     if (etapaInicial <= 4) {
       const bodyEtapa4 = {
         vencimento: paraIso(despesa.data_vencimento, "Data de vencimento"),
@@ -490,7 +556,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // ETAPA 5 — Centro de custo
+    // ETAPA 5 — Cadastrar centro de custo
     if (etapaInicial <= 5) {
       const bodyEtapa5 = {
         centroCustoId: centroCustoId!,
@@ -515,7 +581,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // ETAPA 6 — Processar
+    // ETAPA 6 — Processar Nota Fiscal
     if (etapaInicial <= 6) {
       payloads.etapa6 = null;
 
@@ -537,6 +603,7 @@ export async function POST(request: Request) {
       lancado_erp_por: userId,
       erp_status: "integrado",
       erp_id: erpId,
+      numero_documento_erp: numeroDocumentoErp,
       erp_etapa_erro: null,
       erp_erro: null,
       erp_payload: payloads,
@@ -548,7 +615,7 @@ export async function POST(request: Request) {
       acao: "UPDATE",
       entidade: "despesa",
       entidade_id: despesaId,
-      detalhes: `Integração ERP M8 concluída — Documento Fiscal ID: ${erpId}`,
+      detalhes: `Integração ERP M8 concluída — Documento Fiscal ID: ${erpId} — Número: ${numeroDocumentoErp}`,
     });
 
     if (auditoriaError) {
@@ -559,6 +626,7 @@ export async function POST(request: Request) {
       success: true,
       erp_id: erpId,
       documentoFiscalId: erpId,
+      numeroDocumentoErp,
     });
   } catch (error: any) {
     const etapa = error instanceof IntegracaoError ? error.etapa : 0;
@@ -579,6 +647,7 @@ export async function POST(request: Request) {
         erp_etapa_erro: etapa || null,
         erp_erro: mensagem,
         erp_id: erpId,
+        numero_documento_erp: numeroDocumentoErp,
         erp_payload: payloads,
         erp_resposta: respostas,
       });
@@ -591,6 +660,7 @@ export async function POST(request: Request) {
         error: mensagem,
         etapa,
         erp_id: erpId,
+        numeroDocumentoErp,
         statusHttpM8:
           error instanceof IntegracaoError ? error.statusHttp : undefined,
         respostaM8:
