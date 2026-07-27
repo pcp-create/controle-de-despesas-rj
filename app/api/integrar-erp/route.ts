@@ -134,13 +134,14 @@ export async function POST(request: Request) {
 
   // ─── Etapa 1: Autenticação ────────────────────────────────────────────────
   try {
+    const companyNum = parseInt(M8_COMPANY!, 10);
     const loginBody: Record<string, unknown> = {
       tenant:   M8_TENANT,
       username: M8_USERNAME,
       password: M8_PASSWORD,
-      company:  parseInt(M8_COMPANY!, 10),
+      company:  isNaN(companyNum) ? M8_COMPANY : companyNum,
+      domain:   M8_DOMAIN || "",
     };
-    if (M8_DOMAIN) loginBody.domain = M8_DOMAIN;
 
     const loginUrl = `${M8_API_URL}/api/login`;
     console.log("[v0] M8 Etapa 1 — URL:", loginUrl);
@@ -166,7 +167,10 @@ export async function POST(request: Request) {
     let body: any;
     try { body = JSON.parse(rawBody); } catch { body = { message: rawBody }; }
 
-    if (!res.ok || !body.token) throw new Error(body.message || body.error || `HTTP ${res.status}`);
+    if (!res.ok || !body.token) {
+      console.log("[v0] M8 Etapa 1 — resposta completa:", JSON.stringify(body));
+      throw new Error(body.message || body.error || body.detail || body.msg || `HTTP ${res.status}`);
+    }
     token = body.token;
   } catch (err: any) {
     await salvarProgresso(supabase, despesaId, {
