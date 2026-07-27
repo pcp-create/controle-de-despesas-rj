@@ -134,15 +134,18 @@ export async function POST(request: Request) {
 
   // ─── Etapa 1: Autenticação ────────────────────────────────────────────────
   try {
+    const loginBody: Record<string, unknown> = {
+      tenant:   M8_TENANT,
+      username: M8_USERNAME,
+      password: M8_PASSWORD,
+      company:  parseInt(M8_COMPANY!, 10),
+    };
+    if (M8_DOMAIN) loginBody.domain = M8_DOMAIN;
+
     const res = await fetch(`${M8_API_URL}/api/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tenantId: M8_TENANT,
-        username: M8_USERNAME,
-        password: M8_PASSWORD,
-        domain: M8_DOMAIN || "",
-      }),
+      body: JSON.stringify(loginBody),
     });
     const body = await res.json();
     if (!res.ok || !body.token) throw new Error(body.message || `HTTP ${res.status}`);
