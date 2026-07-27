@@ -144,6 +144,7 @@ export const useAppStore = create<AppState>()(
             exigeComprovante: tipo.exige_comprovante !== false,
             documentoPadrao: tipo.documento_padrao || "",
             centroCustoErpId: tipo.centro_custo_erp_id || "",
+            codigo_produto_erp: tipo.codigo_produto_erp || null,
             ativo: tipo.ativo !== false,
           }));
 
