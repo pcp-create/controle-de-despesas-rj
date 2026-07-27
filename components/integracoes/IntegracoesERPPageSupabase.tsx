@@ -42,11 +42,21 @@ export default function IntegracoesERPPageSupabase() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [retrying, setRetrying] = useState<string | null>(null);
 
-  // Despesas que tiveram alguma interação com o ERP (lançadas no sistema ou com erp_status relevante)
+  // Status helpers:
+  // "pendente"   → lançado no sistema, ainda não enviado ao ERP
+  // "lancado"    → lançado no sistema (pendente ou com erro — aguardando reenvio)
+  // "integrado"  → enviado e confirmado no ERP M8
+
+  const isPendente   = (d: typeof despesas[0]) => d.lancado_sistema && d.erp_status === "pendente";
+  const isLancado    = (d: typeof despesas[0]) => d.lancado_sistema && (d.erp_status === "pendente" || d.erp_status === "erro" || d.erp_status === "processando");
+  const isIntegrado  = (d: typeof despesas[0]) => d.erp_status === "integrado";
+
   const despesasErp = despesas
-    .filter((d) => d.lancado_sistema || (d.erp_status && d.erp_status !== "pendente"))
+    .filter((d) => d.lancado_sistema || d.erp_status !== "pendente")
     .filter((d) => {
-      if (filterStatus !== "todos" && d.erp_status !== filterStatus) return false;
+      if (filterStatus === "pendente")  return isPendente(d);
+      if (filterStatus === "lancado")   return isLancado(d);
+      if (filterStatus === "integrado") return isIntegrado(d);
       if (search) {
         const term = search.toLowerCase();
         const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
@@ -59,11 +69,22 @@ export default function IntegracoesERPPageSupabase() {
       }
       return true;
     })
+    .filter((d) => {
+      if (!search) return true;
+      const term = search.toLowerCase();
+      const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
+      return (
+        d.cliente.toLowerCase().includes(term) ||
+        (d.numero_os || "").toLowerCase().includes(term) ||
+        (tipo?.nome || "").toLowerCase().includes(term) ||
+        (d.erp_id || "").toLowerCase().includes(term)
+      );
+    })
     .sort((a, b) => new Date(b.lancado_erp_em || b.lancado_sistema_em || b.created_at).getTime() - new Date(a.lancado_erp_em || a.lancado_sistema_em || a.created_at).getTime());
 
-  const erros     = despesas.filter((d) => d.erp_status === "erro").length;
-  const enviados  = despesas.filter((d) => d.erp_status === "processando").length;
-  const integrados = despesas.filter((d) => d.erp_status === "integrado").length;
+  const qtdPendente  = despesas.filter(isPendente).length;
+  const qtdLancado   = despesas.filter(isLancado).length;
+  const qtdIntegrado = despesas.filter(isIntegrado).length;
 
   const handleRetry = async (id: string) => {
     const userId = authUser?.id ?? currentUser?.id;
@@ -108,27 +129,39 @@ export default function IntegracoesERPPageSupabase() {
 
       {/* Cards de status */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
+        <button
+          type="button"
+          onClick={() => setFilterStatus(filterStatus === "pendente" ? "todos" : "pendente")}
+          className={`bg-white rounded-xl border shadow-sm p-4 text-left transition ${filterStatus === "pendente" ? "border-warning ring-1 ring-warning/30" : "border-border hover:border-warning/40"}`}
+        >
+          <div className="w-9 h-9 rounded-lg bg-warning/10 text-warning flex items-center justify-center mb-2">
+            <Clock className="w-5 h-5" />
+          </div>
+          <p className="text-2xl font-bold text-foreground">{qtdPendente}</p>
+          <p className="text-xs text-muted-foreground">Pendente</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilterStatus(filterStatus === "lancado" ? "todos" : "lancado")}
+          className={`bg-white rounded-xl border shadow-sm p-4 text-left transition ${filterStatus === "lancado" ? "border-primary ring-1 ring-primary/30" : "border-border hover:border-primary/40"}`}
+        >
           <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-2">
             <Send className="w-5 h-5" />
           </div>
-          <p className="text-2xl font-bold text-foreground">{enviados}</p>
-          <p className="text-xs text-muted-foreground">Enviados</p>
-        </div>
-        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
+          <p className="text-2xl font-bold text-foreground">{qtdLancado}</p>
+          <p className="text-xs text-muted-foreground">Lançado</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilterStatus(filterStatus === "integrado" ? "todos" : "integrado")}
+          className={`bg-white rounded-xl border shadow-sm p-4 text-left transition ${filterStatus === "integrado" ? "border-success ring-1 ring-success/30" : "border-border hover:border-success/40"}`}
+        >
           <div className="w-9 h-9 rounded-lg bg-success/10 text-success flex items-center justify-center mb-2">
             <CheckCircle className="w-5 h-5" />
           </div>
-          <p className="text-2xl font-bold text-foreground">{integrados}</p>
-          <p className="text-xs text-muted-foreground">Integrados</p>
-        </div>
-        <div className="bg-white rounded-xl border border-border shadow-sm p-4">
-          <div className="w-9 h-9 rounded-lg bg-destructive/10 text-destructive flex items-center justify-center mb-2">
-            <AlertTriangle className="w-5 h-5" />
-          </div>
-          <p className="text-2xl font-bold text-foreground">{erros}</p>
-          <p className="text-xs text-muted-foreground">Com Erro</p>
-        </div>
+          <p className="text-2xl font-bold text-foreground">{qtdIntegrado}</p>
+          <p className="text-xs text-muted-foreground">Enviado ERP</p>
+        </button>
       </div>
 
       {/* Filtros */}
@@ -152,9 +185,8 @@ export default function IntegracoesERPPageSupabase() {
           >
             <option value="todos">Todos</option>
             <option value="pendente">Pendente</option>
-            <option value="processando">Processando</option>
-            <option value="integrado">Integrados</option>
-            <option value="erro">Com Erro</option>
+            <option value="lancado">Lançado</option>
+            <option value="integrado">Enviado ERP</option>
           </select>
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
         </div>
