@@ -142,7 +142,7 @@ export async function POST(request: Request) {
       domain:   M8_DOMAIN || "",
     };
 
-    const loginUrl = `${M8_API_URL}/api/login`;
+    const loginUrl = `${M8_API_URL}/v1/auth/token`;
     console.log("[v0] M8 Etapa 1 — URL:", loginUrl);
     console.log("[v0] M8 Etapa 1 — body:", JSON.stringify({ ...loginBody, password: "***" }));
 
@@ -191,7 +191,7 @@ export async function POST(request: Request) {
   // ─── Etapa 2: Criar lançamento ────────────────────────────────────────────
   if (!erpId) {
     try {
-      const res = await fetch(`${M8_API_URL}/api/lancamentos`, {
+      const res = await fetch(`${M8_API_URL}/v1/compras/notafiscal`, {
         method: "POST",
         headers,
         body: JSON.stringify({
@@ -221,7 +221,7 @@ export async function POST(request: Request) {
   // ─── Etapa 3: Anexar comprovante ──────────────────────────────────────────
   if ((despesa as any).comprovante_url) {
     try {
-      const res = await fetch(`${M8_API_URL}/api/lancamentos/${erpId}/anexos`, {
+      const res = await fetch(`${M8_API_URL}/v1/compras/notafiscal/${erpId}/produto`, {
         method: "POST",
         headers,
         body: JSON.stringify({
@@ -247,7 +247,7 @@ export async function POST(request: Request) {
 
   // ─── Etapa 4: Vincular centro de custo ────────────────────────────────────
   try {
-    const res = await fetch(`${M8_API_URL}/api/lancamentos/${erpId}/centrocusto`, {
+    const res = await fetch(`${M8_API_URL}/v1/compras/notafiscal/${erpId}/parcela`, {
       method: "POST",
       headers,
       body: JSON.stringify({ centroCusto, percentual: 100 }),
@@ -269,7 +269,7 @@ export async function POST(request: Request) {
 
   // ─── Etapa 5: Confirmar lançamento ────────────────────────────────────────
   try {
-    const res = await fetch(`${M8_API_URL}/api/lancamentos/${erpId}/confirmar`, {
+    const res = await fetch(`${M8_API_URL}/v1/compras/notafiscal/${erpId}/centrocusto`, {
       method: "POST",
       headers,
     });
@@ -288,7 +288,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: err.message, etapa: 5 }, { status: 502 });
   }
 
-  // ─── Etapa 6: Auditoria interna ───────────────────────────────────────────
+  // ─── Etapa 6: Processar nota fiscal ──────────────────────────────────────
+  try {
+    const res = await fetch(`${M8_API_URL}/v1/compras/notafiscal/${erpId}/processar`, {
+      method: "POST",
+      headers,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as any).message || `HTTP ${res.status}`);
+    }
+  } catch (err: any) {
+    await salvarProgresso(supabase, despesaId, {
+      erp_status: "erro",
+      erp_etapa_erro: 6,
+      erp_erro: `Etapa 6 (Processar): ${err.message}`,
+      erp_payload: payload,
+      erp_id: erpId,
+    });
+    return NextResponse.json({ error: err.message, etapa: 6 }, { status: 502 });
+  }
+
+  // ─── Auditoria interna ────────────────────────────────────────────────────
   await supabase.from("auditoria").insert({
     user_id: userId,
     acao: "UPDATE",
