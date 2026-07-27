@@ -143,9 +143,6 @@ export async function POST(request: Request) {
     };
 
     const loginUrl = `${M8_API_URL}/v1/auth/token`;
-    console.log("[v0] M8 Etapa 1 — URL:", loginUrl);
-    console.log("[v0] M8 Etapa 1 — body:", JSON.stringify({ ...loginBody, password: "***" }));
-
     let res: Response;
     try {
       res = await fetch(loginUrl, {
@@ -155,25 +152,18 @@ export async function POST(request: Request) {
       });
     } catch (fetchErr: any) {
       const causa = fetchErr?.cause?.message || fetchErr?.cause?.code || fetchErr.message;
-      console.log("[v0] M8 Etapa 1 — fetch error:", causa);
-      throw new Error(`Não foi possível conectar ao servidor M8 (${loginUrl}). Verifique se M8_API_URL está correto e inclui o protocolo https://. Causa: ${causa}`);
+      throw new Error(`Não foi possível conectar ao servidor M8 (${loginUrl}). Verifique se M8_API_URL inclui o protocolo https://. Causa: ${causa}`);
     }
 
-    console.log("[v0] M8 Etapa 1 — status HTTP:", res.status);
     const rawBody = await res.text();
-    console.log("[v0] M8 Etapa 1 — resposta:", rawBody.slice(0, 300));
-
     let body: any;
     try { body = JSON.parse(rawBody); } catch { body = { message: rawBody }; }
 
-    // Aceita as variantes mais comuns do campo de token
-    token = body.token || body.accessToken || body.access_token || body.bearerToken || body.jwt;
+    // Resposta: { data: { token: "...", minutesExpire: 5 }, errors: [] }
+    token = body?.data?.token;
 
-    console.log("[v0] M8 Etapa 1 — campos da resposta:", Object.keys(body));
-
-    if (!res.ok || !token) {
-      const campos = Object.keys(body).join(", ");
-      throw new Error(`HTTP ${res.status} — resposta: ${rawBody.slice(0, 500)} | campos: ${campos}`);
+    if (!token) {
+      throw new Error(`HTTP ${res.status} — token não encontrado. Resposta: ${rawBody.slice(0, 300)}`);
     }
   } catch (err: any) {
     await salvarProgresso(supabase, despesaId, {
