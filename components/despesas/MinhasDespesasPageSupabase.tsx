@@ -379,7 +379,9 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                           <div>
                             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Reprovado por</p>
                             <p className="text-destructive font-medium">
-                              {profiles.find((p) => p.id === d.gestor_aprovador_id)?.nome ?? d.gestor_aprovador_id ?? "-"}
+                              {d.gestor_aprovador_id
+                                ? (profiles.find((p) => p.id === d.gestor_aprovador_id)?.nome ?? d.gestor_aprovador_id)
+                                : "Aprovado automaticamente"}
                             </p>
                           </div>
                         </>

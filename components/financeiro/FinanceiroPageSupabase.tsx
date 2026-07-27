@@ -920,14 +920,17 @@ export default function FinanceiroPageSupabase() {
                             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-success bg-success/10 px-1.5 py-0.5 rounded-full">
                               <Check className="w-2.5 h-2.5" /> Sistema
                             </span>
-                            <button
-                              type="button"
-                              title="Estornar lançamento"
-                              onClick={() => estornarLancamento(d.id)}
-                              className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
-                            >
-                              <RotateCcw className="w-2.5 h-2.5" />
-                            </button>
+                            {/* Estornar só disponível antes de integrar ao ERP M8 */}
+                            {d.erp_status !== "integrado" && (
+                              <button
+                                type="button"
+                                title="Estornar lançamento"
+                                onClick={() => estornarLancamento(d.id)}
+                                className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+                              >
+                                <RotateCcw className="w-2.5 h-2.5" />
+                              </button>
+                            )}
                           </div>
                         ) : aprovado ? (
                           <button
