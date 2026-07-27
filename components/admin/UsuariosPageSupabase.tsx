@@ -1133,11 +1133,11 @@ export default function UsuariosPageSupabase() {
           </div>
         </div>
       )}
-    </div>
 
-    {/* Modal de gestão de áreas */}
-    {showGestaoAreas && (
-      <GestaoAreasModal onClose={() => setShowGestaoAreas(false)} />
-    )}
+      {/* Modal de gestão de áreas */}
+      {showGestaoAreas && (
+        <GestaoAreasModal onClose={() => setShowGestaoAreas(false)} />
+      )}
+    </div>
   );
 }
