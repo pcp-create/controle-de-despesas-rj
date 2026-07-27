@@ -973,9 +973,7 @@ export default function FinanceiroPageSupabase() {
                             {d.lancado_sistema ? (
                               <div className="flex flex-col gap-0.5">
                                 <div className="flex items-center gap-1">
-                                  {/* dot verde */}
-                                  <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
-                                  <span className="text-[10px] font-semibold text-success leading-none">Lançado</span>
+                                  <span className="text-[10px] font-semibold text-success leading-none">✓ Lançado</span>
                                   {d.erp_status !== "integrado" && (
                                     <button
                                       type="button"
@@ -1032,8 +1030,7 @@ export default function FinanceiroPageSupabase() {
                                 return (
                                   <div className="flex flex-col gap-0.5">
                                     <div className="flex items-center gap-1">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-                                      <span className="text-[10px] font-semibold text-primary leading-none">Enviado ERP</span>
+                                      <span className="text-[10px] font-semibold text-primary leading-none">✓ Enviado ERP</span>
                                     </div>
                                     <span className="text-[10px] text-primary/70 leading-tight pl-2.5">
                                       {p ? p.nome.split(" ")[0] : "—"}
