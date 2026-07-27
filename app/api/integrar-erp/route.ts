@@ -82,7 +82,6 @@ export async function POST(request: Request) {
   if (!despesa.data_despesa)             camposFaltando.push("Data da despesa");
   if (!despesa.valor || despesa.valor <= 0) camposFaltando.push("Valor da despesa");
   if (!despesa.cliente)                  camposFaltando.push("Cliente / OS");
-  if (!despesa.numero_os)                camposFaltando.push("Número da OS");
   if (!despesa.documento)                camposFaltando.push("Documento / Nota fiscal");
 
   if (camposFaltando.length > 0) {
@@ -128,7 +127,7 @@ export async function POST(request: Request) {
     despesaId,
     valor: despesa.valor,
     data: despesa.data_despesa,
-    descricao: `${tipo?.nome || "Despesa"} — ${despesa.cliente} — OS ${despesa.numero_os}`,
+    descricao: `${tipo?.nome || "Despesa"} — ${despesa.cliente} — OS ${despesa.numero_os || "Não informado"}`,
     centroCusto,
     codigoProduto,
     tecnico: tecnico?.nome || "",
