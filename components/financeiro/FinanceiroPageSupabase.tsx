@@ -488,7 +488,7 @@ export default function FinanceiroPageSupabase() {
         if (data.section === "body" && data.column.index === 8) {
           const v = data.cell.raw as string;
           if (v === "Aprovado")              { data.cell.styles.textColor = [22, 163, 74];  data.cell.styles.fontStyle = "bold"; }
-          if (v === "Aguardando Aprovação")  { data.cell.styles.textColor = [202, 138, 4]; }
+          if (v === "Aguardando Aprova��ão")  { data.cell.styles.textColor = [202, 138, 4]; }
           if (v === "Reprovado")             { data.cell.styles.textColor = [220, 38, 38];  data.cell.styles.fontStyle = "bold"; }
           if (v === "Enviado")               { data.cell.styles.textColor = [30, 58, 138]; }
           if (v === "Não enviado")           { data.cell.styles.textColor = [120, 120, 120]; }
@@ -979,15 +979,25 @@ export default function FinanceiroPageSupabase() {
                             )}
                           </div>
                         ) : aprovado ? (
-                          <button
-                            type="button"
-                            disabled={lancando[d.id]}
-                            onClick={() => setConfirmLancar(d.id)}
-                            className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-primary/30 text-primary bg-primary/10 hover:bg-primary hover:text-white transition disabled:opacity-50"
-                          >
-                            <SendHorizonal className="w-2.5 h-2.5" />
-                            Lançar
-                          </button>
+                          d.pagamento_tipo === "faturado" ? (
+                            <span
+                              title="Despesas com pagamento Faturado não são enviadas ao ERP M8"
+                              className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-muted text-muted-foreground bg-muted/20 cursor-not-allowed opacity-60"
+                            >
+                              <SendHorizonal className="w-2.5 h-2.5" />
+                              Faturado
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={lancando[d.id]}
+                              onClick={() => setConfirmLancar(d.id)}
+                              className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-primary/30 text-primary bg-primary/10 hover:bg-primary hover:text-white transition disabled:opacity-50"
+                            >
+                              <SendHorizonal className="w-2.5 h-2.5" />
+                              Lançar
+                            </button>
+                          )
                         ) : (
                           <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded-full bg-muted/30 border border-border cursor-not-allowed opacity-50">
                             Aguardando aprovação
@@ -1034,19 +1044,22 @@ export default function FinanceiroPageSupabase() {
                                     {d.erp_erro}
                                   </span>
                                 )}
-                                <button
-                                  type="button"
-                                  disabled={enviandoERP[d.id]}
-                                  onClick={() => handleEnviarERP(d.id)}
-                                  className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-destructive/30 text-destructive hover:bg-destructive hover:text-white transition disabled:opacity-50"
-                                >
-                                  <RotateCcw className="w-2.5 h-2.5" />
-                                  Tentar novamente
-                                </button>
+                                {d.pagamento_tipo !== "faturado" && (
+                                  <button
+                                    type="button"
+                                    disabled={enviandoERP[d.id]}
+                                    onClick={() => handleEnviarERP(d.id)}
+                                    className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-destructive/30 text-destructive hover:bg-destructive hover:text-white transition disabled:opacity-50"
+                                  >
+                                    <RotateCcw className="w-2.5 h-2.5" />
+                                    Tentar novamente
+                                  </button>
+                                )}
                               </div>
                             );
                           }
                           // pendente: lancado_sistema mas ainda não enviado ao ERP
+                          if (d.pagamento_tipo === "faturado") return null;
                           return (
                             <button
                               type="button"
