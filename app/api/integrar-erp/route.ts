@@ -142,19 +142,37 @@ export async function POST(request: Request) {
     };
     if (M8_DOMAIN) loginBody.domain = M8_DOMAIN;
 
-    const res = await fetch(`${M8_API_URL}/api/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(loginBody),
-    });
-    const body = await res.json();
-    if (!res.ok || !body.token) throw new Error(body.message || `HTTP ${res.status}`);
+    const loginUrl = `${M8_API_URL}/api/login`;
+    console.log("[v0] M8 Etapa 1 — URL:", loginUrl);
+    console.log("[v0] M8 Etapa 1 — body:", JSON.stringify({ ...loginBody, password: "***" }));
+
+    let res: Response;
+    try {
+      res = await fetch(loginUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(loginBody),
+      });
+    } catch (fetchErr: any) {
+      const causa = fetchErr?.cause?.message || fetchErr?.cause?.code || fetchErr.message;
+      console.log("[v0] M8 Etapa 1 — fetch error:", causa);
+      throw new Error(`Não foi possível conectar ao servidor M8 (${loginUrl}). Verifique se M8_API_URL está correto e inclui o protocolo https://. Causa: ${causa}`);
+    }
+
+    console.log("[v0] M8 Etapa 1 — status HTTP:", res.status);
+    const rawBody = await res.text();
+    console.log("[v0] M8 Etapa 1 — resposta:", rawBody.slice(0, 300));
+
+    let body: any;
+    try { body = JSON.parse(rawBody); } catch { body = { message: rawBody }; }
+
+    if (!res.ok || !body.token) throw new Error(body.message || body.error || `HTTP ${res.status}`);
     token = body.token;
   } catch (err: any) {
     await salvarProgresso(supabase, despesaId, {
       erp_status: "erro",
       erp_etapa_erro: 1,
-      erp_erro: `Etapa 1 (Autenticação): ${err.message}`,
+      erp_erro: err.message,
       erp_payload: payload,
     });
     return NextResponse.json({ error: err.message, etapa: 1 }, { status: 502 });
