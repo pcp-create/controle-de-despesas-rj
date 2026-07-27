@@ -33,6 +33,7 @@ function CentroCustoPanel({ tipoDespesaId }: { tipoDespesaId: string }) {
   // Estado de edição local: area → valor editando
   const [editing, setEditing] = useState<Partial<Record<Area, string>>>({});
   const [saving, setSaving] = useState<Partial<Record<Area, boolean>>>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const getValor = (area: Area) => {
     const cc = centrosCusto.find((c) => c.area === area);
@@ -54,17 +55,24 @@ function CentroCustoPanel({ tipoDespesaId }: { tipoDespesaId: string }) {
   const handleSave = async (area: Area) => {
     const valor = editing[area] ?? "";
     setSaving((prev) => ({ ...prev, [area]: true }));
+    setSaveError(null);
+
+    let result: { error: string | null } | undefined;
 
     if (!valor.trim()) {
-      // Sem valor → remover o registro se existir
       const cc = centrosCusto.find((c) => c.area === area);
-      if (cc) await deleteCentroCusto(cc.id);
+      if (cc) result = await deleteCentroCusto(cc.id);
     } else {
-      await upsertCentroCusto(area, valor.trim());
+      result = await upsertCentroCusto(area, valor.trim());
     }
 
     setSaving((prev) => { const n = { ...prev }; delete n[area]; return n; });
-    handleCancel(area);
+
+    if (result?.error) {
+      setSaveError(result.error);
+    } else {
+      handleCancel(area);
+    }
   };
 
   if (isLoading) {
@@ -84,6 +92,11 @@ function CentroCustoPanel({ tipoDespesaId }: { tipoDespesaId: string }) {
           Centro de Custo ERP (M8) por Área / Setor
         </span>
       </div>
+      {saveError && (
+        <div className="px-3 py-2 bg-destructive/5 border-b border-destructive/20 text-xs text-destructive">
+          Erro ao salvar: {saveError}
+        </div>
+      )}
       <div className="divide-y divide-border">
         {AREAS.map((area) => {
           const valor = getValor(area);
