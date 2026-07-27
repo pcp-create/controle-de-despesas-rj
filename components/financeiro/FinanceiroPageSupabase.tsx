@@ -957,139 +957,150 @@ export default function FinanceiroPageSupabase() {
 
                 return (
                   <tr key={d.id} className="border-t border-border hover:bg-muted/20 transition">
-                    {/* Coluna Lançar — primeira */}
+                    {/* Coluna Lançar */}
                     <td className="px-3 py-2">
-                      <div className="flex flex-col gap-1 min-w-[130px]">
-                        {/* Badge Sistema */}
-                        {d.lancado_sistema ? (
-                          <div className="flex flex-col gap-0.5">
-                            <div className="flex items-center gap-1">
-                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-success bg-success/10 px-1.5 py-0.5 rounded-full">
-                                <Check className="w-2.5 h-2.5" /> Sistema
-                              </span>
-                              {/* Estornar só disponível antes de integrar ao ERP M8 */}
-                              {d.erp_status !== "integrado" && (
-                                <button
-                                  type="button"
-                                  title="Estornar lançamento"
-                                  onClick={() => estornarLancamento(d.id)}
-                                  className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
-                                >
-                                  <RotateCcw className="w-2.5 h-2.5" />
-                                </button>
-                              )}
-                            </div>
-                            {d.lancado_sistema_por && (() => {
-                              const p = profiles.find((x) => x.id === d.lancado_sistema_por);
-                              return (
-                                <span className="text-[10px] text-muted-foreground leading-tight pl-0.5">
-                                  {p ? p.nome.split(" ")[0] : "—"}
-                                  {d.lancado_sistema_em && (
-                                    <> · {new Date(d.lancado_sistema_em).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}</>
-                                  )}
-                                </span>
-                              );
-                            })()}
-                          </div>
-                        ) : aprovado ? (
-                          d.pagamento_tipo === "faturado" ? (
-                            <span
-                              title="Despesas com pagamento Faturado não são enviadas ao ERP M8"
-                              className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-muted text-muted-foreground bg-muted/20 cursor-not-allowed opacity-60"
-                            >
-                              <SendHorizonal className="w-2.5 h-2.5" />
-                              Faturado
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled={lancando[d.id]}
-                              onClick={() => setConfirmLancar(d.id)}
-                              className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-primary/30 text-primary bg-primary/10 hover:bg-primary hover:text-white transition disabled:opacity-50"
-                            >
-                              <SendHorizonal className="w-2.5 h-2.5" />
-                              Lançar
-                            </button>
-                          )
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded-full bg-muted/30 border border-border cursor-not-allowed opacity-50">
-                            Aguardando aprovação
-                          </span>
-                        )}
+                      {(() => {
+                        const fmtDtHr = (iso: string) => {
+                          const dt = new Date(iso);
+                          return dt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+                            + " " + dt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+                        };
 
-                        {/* Badge ERP M8 */}
-                        {d.lancado_sistema && (() => {
-                          const erpStatus = d.erp_status || "pendente";
-                          if (erpStatus === "integrado") {
-                            const integradoPorProfile = profiles.find((p) => p.id === d.lancado_erp_por);
-                            return (
-                              <div className="flex flex-col gap-0.5">
-                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
-                                  <Check className="w-2.5 h-2.5" /> ERP M8
-                                </span>
-                                {integradoPorProfile && (
-                                  <span className="text-[10px] text-muted-foreground leading-tight pl-0.5">
-                                    {integradoPorProfile.nome.split(" ")[0]}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          }
-                          if (erpStatus === "processando") {
-                            return (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-warning font-medium px-1.5 py-0.5 rounded-full bg-warning/10">
-                                <span className="w-2 h-2 border border-warning border-t-transparent rounded-full animate-spin" />
-                                Processando
-                              </span>
-                            );
-                          }
-                          if (erpStatus === "erro") {
-                            return (
+                        return (
+                          <div className="flex flex-col gap-1.5 min-w-[130px]">
+
+                            {/* ── Linha 1: Lançamento no sistema ── */}
+                            {d.lancado_sistema ? (
                               <div className="flex flex-col gap-0.5">
                                 <div className="flex items-center gap-1">
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-full">
-                                    <AlertCircle className="w-2.5 h-2.5" /> Erro ERP
-                                    {d.erp_etapa_erro ? ` (E${d.erp_etapa_erro})` : ""}
-                                  </span>
+                                  {/* dot verde */}
+                                  <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
+                                  <span className="text-[10px] font-semibold text-success leading-none">Lançado</span>
+                                  {d.erp_status !== "integrado" && (
+                                    <button
+                                      type="button"
+                                      title="Estornar lançamento"
+                                      onClick={() => estornarLancamento(d.id)}
+                                      className="ml-0.5 p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+                                    >
+                                      <RotateCcw className="w-2.5 h-2.5" />
+                                    </button>
+                                  )}
                                 </div>
-                                {d.erp_erro && (
-                                  <span className="text-[9px] text-destructive/70 leading-tight max-w-[128px] truncate" title={d.erp_erro}>
-                                    {d.erp_erro}
-                                  </span>
-                                )}
-                                {d.pagamento_tipo !== "faturado" && (
-                                  <button
-                                    type="button"
-                                    disabled={enviandoERP[d.id]}
-                                    onClick={() => handleEnviarERP(d.id)}
-                                    className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-destructive/30 text-destructive hover:bg-destructive hover:text-white transition disabled:opacity-50"
-                                  >
-                                    <RotateCcw className="w-2.5 h-2.5" />
-                                    Tentar novamente
-                                  </button>
-                                )}
+                                {d.lancado_sistema_por && (() => {
+                                  const p = profiles.find((x) => x.id === d.lancado_sistema_por);
+                                  return (
+                                    <span className="text-[10px] text-success/70 leading-tight pl-2.5">
+                                      {p ? p.nome.split(" ")[0] : "—"}
+                                      {d.lancado_sistema_em && <> · {fmtDtHr(d.lancado_sistema_em)}</>}
+                                    </span>
+                                  );
+                                })()}
                               </div>
-                            );
-                          }
-                          // pendente: lancado_sistema mas ainda não enviado ao ERP
-                          if (d.pagamento_tipo === "faturado") return null;
-                          return (
-                            <button
-                              type="button"
-                              disabled={enviandoERP[d.id]}
-                              onClick={() => handleEnviarERP(d.id)}
-                              className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-muted text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/10 transition disabled:opacity-50"
-                            >
-                              {enviandoERP[d.id] ? (
-                                <span className="w-2 h-2 border border-primary border-t-transparent rounded-full animate-spin" />
+                            ) : aprovado ? (
+                              d.pagamento_tipo === "faturado" ? (
+                                <span
+                                  title="Despesas com pagamento Faturado não são enviadas ao ERP M8"
+                                  className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-muted text-muted-foreground bg-muted/20 cursor-not-allowed opacity-60"
+                                >
+                                  <SendHorizonal className="w-2.5 h-2.5" />
+                                  Faturado
+                                </span>
                               ) : (
-                                <SendHorizonal className="w-2.5 h-2.5" />
-                              )}
-                              Enviar ao ERP
-                            </button>
-                          );
-                        })()}
-                      </div>
+                                <button
+                                  type="button"
+                                  disabled={lancando[d.id]}
+                                  onClick={() => setConfirmLancar(d.id)}
+                                  className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-primary/30 text-primary bg-primary/10 hover:bg-primary hover:text-white transition disabled:opacity-50"
+                                >
+                                  <SendHorizonal className="w-2.5 h-2.5" />
+                                  Lançar
+                                </button>
+                              )
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded-full bg-muted/30 border border-border cursor-not-allowed opacity-50">
+                                Aguardando aprovação
+                              </span>
+                            )}
+
+                            {/* ── Linha 2: ERP M8 ── */}
+                            {d.lancado_sistema && (() => {
+                              const erpStatus = d.erp_status || "pendente";
+
+                              if (erpStatus === "integrado") {
+                                const p = profiles.find((x) => x.id === d.lancado_erp_por);
+                                return (
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                                      <span className="text-[10px] font-semibold text-primary leading-none">Enviado ERP</span>
+                                    </div>
+                                    <span className="text-[10px] text-primary/70 leading-tight pl-2.5">
+                                      {p ? p.nome.split(" ")[0] : "—"}
+                                      {d.lancado_erp_em && <> · {fmtDtHr(d.lancado_erp_em)}</>}
+                                    </span>
+                                  </div>
+                                );
+                              }
+
+                              if (erpStatus === "processando") {
+                                return (
+                                  <div className="flex items-center gap-1">
+                                    <span className="w-2 h-2 border border-warning border-t-transparent rounded-full animate-spin" />
+                                    <span className="text-[10px] text-warning font-medium">Processando...</span>
+                                  </div>
+                                );
+                              }
+
+                              if (erpStatus === "erro") {
+                                return (
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-1">
+                                      <AlertCircle className="w-2.5 h-2.5 text-destructive shrink-0" />
+                                      <span className="text-[10px] font-semibold text-destructive leading-none">
+                                        Erro ERP{d.erp_etapa_erro ? ` (E${d.erp_etapa_erro})` : ""}
+                                      </span>
+                                    </div>
+                                    {d.erp_erro && (
+                                      <span className="text-[9px] text-destructive/70 leading-tight max-w-[128px] truncate pl-3.5" title={d.erp_erro}>
+                                        {d.erp_erro}
+                                      </span>
+                                    )}
+                                    {d.pagamento_tipo !== "faturado" && (
+                                      <button
+                                        type="button"
+                                        disabled={enviandoERP[d.id]}
+                                        onClick={() => handleEnviarERP(d.id)}
+                                        className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full border border-destructive/30 text-destructive hover:bg-destructive hover:text-white transition disabled:opacity-50 mt-0.5"
+                                      >
+                                        <RotateCcw className="w-2.5 h-2.5" />
+                                        Tentar novamente
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              }
+
+                              // pendente: aguardando envio ao ERP
+                              if (d.pagamento_tipo === "faturado") return null;
+                              return (
+                                <button
+                                  type="button"
+                                  disabled={enviandoERP[d.id]}
+                                  onClick={() => handleEnviarERP(d.id)}
+                                  className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-muted text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/10 transition disabled:opacity-50"
+                                >
+                                  {enviandoERP[d.id]
+                                    ? <span className="w-2 h-2 border border-primary border-t-transparent rounded-full animate-spin" />
+                                    : <SendHorizonal className="w-2.5 h-2.5" />}
+                                  Enviar ao ERP
+                                </button>
+                              );
+                            })()}
+
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">{formatDate(d.data_despesa)}</td>
                     {/* Vencimento editável */}
