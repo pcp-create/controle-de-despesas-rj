@@ -172,7 +172,8 @@ export async function POST(request: Request) {
     console.log("[v0] M8 Etapa 1 — campos da resposta:", Object.keys(body));
 
     if (!res.ok || !token) {
-      throw new Error(body.message || body.error || body.detail || body.msg || `HTTP ${res.status} sem token`);
+      const campos = Object.keys(body).join(", ");
+      throw new Error(`HTTP ${res.status} — resposta: ${rawBody.slice(0, 500)} | campos: ${campos}`);
     }
   } catch (err: any) {
     await salvarProgresso(supabase, despesaId, {
