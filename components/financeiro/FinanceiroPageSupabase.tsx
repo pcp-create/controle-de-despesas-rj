@@ -25,6 +25,7 @@ export default function FinanceiroPageSupabase() {
   // Lançamento ERP
   const [filtroLancamento, setFiltroLancamento] = useState<"todos" | "pendente" | "lancado" | "integrado">("todos");
   const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
+  const [confirmNFERP, setConfirmNFERP] = useState(false); // alerta NF antes de enviar ao ERP
   const [lancando, setLancando] = useState<Record<string, boolean>>({});
   const [erroLancar, setErroLancar] = useState<string | null>(null);
   const [enviandoERP, setEnviandoERP] = useState<Record<string, boolean>>({});
@@ -112,6 +113,7 @@ export default function FinanceiroPageSupabase() {
     setLancando((prev) => ({ ...prev, [id]: false }));
     setEnviandoERP((prev) => ({ ...prev, [id]: false }));
     setConfirmLancar(null);
+    setConfirmNFERP(false);
   };
 
   // Reenvio ao ERP quando já lançado no sistema mas com erro
@@ -1216,80 +1218,130 @@ export default function FinanceiroPageSupabase() {
     </div>
 
     {/* ���─ Modal de lançamento ── */}
-    {confirmLancar && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-        <div ref={modalRef} className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md p-6 flex flex-col gap-5">
+    {confirmLancar && (() => {
+      const despLancar = despesasFiltradas.find((d) => d.id === confirmLancar);
+      const isFaturado = despLancar?.pagamento_tipo === "faturado";
+      const isNF = /^nf$/i.test((despLancar?.documento || "").trim()) ||
+                   /nota\s*fiscal/i.test((despLancar?.documento || "").trim());
 
-          {/* Cabeçalho */}
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <AlertCircle className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-foreground">Lançar despesa</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Escolha como deseja registrar esta despesa. O status será atualizado para <strong>Lançado</strong> e o responsável e data/hora do lançamento serão registrados.
-              </p>
-            </div>
-          </div>
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div ref={modalRef} className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md p-6 flex flex-col gap-5">
 
-          {/* Opções */}
-          <div className="flex flex-col gap-3">
-            {/* Lançar apenas no sistema */}
-            <button
-              type="button"
-              disabled={!!lancando[confirmLancar as string]}
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (confirmLancar) handleLancarSistema(confirmLancar); }}
-              className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition text-left disabled:opacity-50"
-            >
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center mt-0.5">
-                <Check className="w-4 h-4 text-primary" />
+            {/* Cabeçalho */}
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <AlertCircle className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-foreground">
-                  {lancando[confirmLancar as string] ? "Lançando..." : "Lançar no sistema"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Registra o lançamento internamente. Você poderá enviar ao ERP M8 separadamente depois.
+                <h3 className="text-base font-semibold text-foreground">Lançar despesa</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Escolha como deseja registrar esta despesa. O status será atualizado para <strong>Lançado</strong> e o responsável e data/hora do lançamento serão registrados.
                 </p>
               </div>
-            </button>
+            </div>
 
-            {/* Lançar e enviar ao ERP */}
-            <button
-              type="button"
-              disabled={!!lancando[confirmLancar as string]}
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (confirmLancar) handleLancarEnviarERP(confirmLancar); }}
-              className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-accent/30 bg-accent/5 hover:bg-accent/10 transition text-left disabled:opacity-50"
-            >
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center mt-0.5">
-                <SendHorizonal className="w-4 h-4 text-accent" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">
-                  {lancando[confirmLancar as string] ? "Processando..." : "Lançar e Enviar ao ERP (M8)"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Lança no sistema e integra imediatamente ao ERP M8. As 6 etapas de integração são executadas automaticamente.
+            {/* Alerta NF */}
+            {isNF && !confirmNFERP && (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-warning/40 bg-warning/8">
+                <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+                <p className="text-xs text-warning leading-relaxed">
+                  Esta despesa foi lançada com documento <strong>Nota Fiscal (NF)</strong>. Antes de enviar ao ERP M8, verifique se esta nota fiscal ainda não foi lançada para evitar duplicidade no sistema.
                 </p>
               </div>
-            </button>
+            )}
+
+            {/* Opções */}
+            <div className="flex flex-col gap-3">
+              {/* Lançar apenas no sistema */}
+              <button
+                type="button"
+                disabled={!!lancando[confirmLancar as string]}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (confirmLancar) handleLancarSistema(confirmLancar); }}
+                className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition text-left disabled:opacity-50"
+              >
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center mt-0.5">
+                  <Check className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {lancando[confirmLancar as string] ? "Lançando..." : "Lançar no sistema"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Registra o lançamento internamente. Você poderá enviar ao ERP M8 separadamente depois.
+                  </p>
+                </div>
+              </button>
+
+              {/* Lançar e enviar ao ERP */}
+              {isFaturado ? (
+                <div className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-muted bg-muted/20 opacity-60 cursor-not-allowed">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center mt-0.5">
+                    <SendHorizonal className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-muted-foreground">Lançar e Enviar ao ERP (M8)</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Indisponivel para despesas com pagamento <strong>Faturado</strong>. O envio ao ERP M8 nao se aplica a este tipo de pagamento.
+                    </p>
+                  </div>
+                </div>
+              ) : isNF && !confirmNFERP ? (
+                <button
+                  type="button"
+                  disabled={!!lancando[confirmLancar as string]}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmNFERP(true); }}
+                  className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-warning/40 bg-warning/5 hover:bg-warning/10 transition text-left disabled:opacity-50"
+                >
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-warning/15 flex items-center justify-center mt-0.5">
+                    <SendHorizonal className="w-4 h-4 text-warning" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Lançar e Enviar ao ERP (M8)</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Clique para confirmar que verificou a nota fiscal e prosseguir com o envio.
+                    </p>
+                  </div>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!!lancando[confirmLancar as string]}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (confirmLancar) { setConfirmNFERP(false); handleLancarEnviarERP(confirmLancar); } }}
+                  className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-accent/30 bg-accent/5 hover:bg-accent/10 transition text-left disabled:opacity-50"
+                >
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center mt-0.5">
+                    <SendHorizonal className="w-4 h-4 text-accent" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {lancando[confirmLancar as string] ? "Processando..." : isNF ? "Confirmar — Enviar ao ERP (NF verificada)" : "Lançar e Enviar ao ERP (M8)"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {isNF
+                        ? "Nota fiscal verificada. Lanca no sistema e integra ao ERP M8."
+                        : "Lanca no sistema e integra imediatamente ao ERP M8. As 6 etapas de integração são executadas automaticamente."}
+                    </p>
+                  </div>
+                </button>
+              )}
+            </div>
+
+            {/* Cancelar */}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => { setConfirmLancar(null); setConfirmNFERP(false); }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-input bg-background text-sm font-medium text-muted-foreground hover:bg-muted transition"
+              >
+                <X className="w-4 h-4" /> Cancelar
+              </button>
+            </div>
+
           </div>
-
-          {/* Cancelar */}
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => setConfirmLancar(null)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-input bg-background text-sm font-medium text-muted-foreground hover:bg-muted transition"
-            >
-              <X className="w-4 h-4" /> Cancelar
-            </button>
-          </div>
-
         </div>
-      </div>
-    )}
+      );
+    })()}
     </>
   );
 }
