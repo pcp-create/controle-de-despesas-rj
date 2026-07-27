@@ -857,7 +857,7 @@ export function useDespesas(userId?: string, perfil?: string) {
     const body = await res.json();
     mutate();
     if (!res.ok) return { error: body.error || `HTTP ${res.status}`, etapa: body.etapa };
-    return { error: null, erp_id: body.erp_id };
+    return { error: null, erp_id: body.erp_id, simulado: body.simulado ?? false };
   };
 
   const estornarLancamento = async (id: string) => {

@@ -29,6 +29,7 @@ export default function FinanceiroPageSupabase() {
   const [erroLancar, setErroLancar] = useState<string | null>(null);
   const [enviandoERP, setEnviandoERP] = useState<Record<string, boolean>>({});
   const [erroERP, setErroERP] = useState<Record<string, string>>({});
+  const [feedbackERP, setFeedbackERP] = useState<{ type: "success" | "warning" | "error"; msg: string } | null>(null);
   const { currentUser } = useAppStore();
   const { user: authUser } = useAuth();
 
@@ -68,17 +69,28 @@ export default function FinanceiroPageSupabase() {
     setConfirmLancar(null);
   };
 
+  const mostrarFeedbackERP = (result: { error?: string | null; erp_id?: string; simulado?: boolean }) => {
+    if (result.error) {
+      setFeedbackERP({ type: "error", msg: `Erro ao integrar com ERP M8: ${result.error}` });
+    } else if (result.simulado) {
+      setFeedbackERP({ type: "warning", msg: "Modo simulado: variáveis M8_API_URL, M8_USERNAME, M8_PASSWORD e M8_COMPANY não estão configuradas. Configure-as em Vars para ativar a integração real." });
+    } else {
+      setFeedbackERP({ type: "success", msg: `Integração com ERP M8 concluída! ID: ${result.erp_id || "—"}` });
+    }
+    setTimeout(() => setFeedbackERP(null), 8000);
+  };
+
   // Lança no sistema + envia para integração ERP M8
   const handleLancarEnviarERP = async (id: string) => {
     const userId = authUser?.id ?? currentUser?.id;
     if (!userId) return;
     setErroLancar(null);
+    setFeedbackERP(null);
     setLancando((prev) => ({ ...prev, [id]: true }));
-    // 1. Lança no sistema
     await lancarSistema(id, userId);
-    // 2. Envia ao ERP
     setEnviandoERP((prev) => ({ ...prev, [id]: true }));
     const result = await tentarNovamenteERP(id, userId);
+    mostrarFeedbackERP(result as any);
     if (result?.error) {
       setErroERP((prev) => ({ ...prev, [id]: result.error! }));
     } else {
@@ -93,8 +105,10 @@ export default function FinanceiroPageSupabase() {
   const handleEnviarERP = async (id: string) => {
     const userId = authUser?.id ?? currentUser?.id;
     if (!userId) return;
+    setFeedbackERP(null);
     setEnviandoERP((prev) => ({ ...prev, [id]: true }));
     const result = await tentarNovamenteERP(id, userId);
+    mostrarFeedbackERP(result as any);
     if (result?.error) {
       setErroERP((prev) => ({ ...prev, [id]: result.error! }));
     } else {
@@ -507,6 +521,20 @@ export default function FinanceiroPageSupabase() {
         <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
           <span>{erroLancar}</span>
           <button onClick={() => setErroLancar(null)} className="shrink-0 font-bold hover:opacity-70">&times;</button>
+        </div>
+      )}
+
+      {/* ── Feedback ERP M8 ── */}
+      {feedbackERP && (
+        <div className={`flex items-start justify-between gap-3 px-4 py-3 rounded-lg border text-sm ${
+          feedbackERP.type === "success"
+            ? "bg-success/10 border-success/30 text-success"
+            : feedbackERP.type === "warning"
+            ? "bg-warning/10 border-warning/30 text-warning"
+            : "bg-destructive/10 border-destructive/30 text-destructive"
+        }`}>
+          <span>{feedbackERP.msg}</span>
+          <button onClick={() => setFeedbackERP(null)} className="shrink-0 font-bold hover:opacity-70 mt-0.5">&times;</button>
         </div>
       )}
 
