@@ -74,35 +74,81 @@ function formatarValorBR(valor: number): string {
   }).format(valor);
 }
 
+function formatarDataBR(
+  valor: unknown,
+  incluirHora = false
+): string {
+  if (!valor) return "Não informado";
+
+  const data = new Date(String(valor));
+  if (Number.isNaN(data.getTime())) return valorTexto(valor);
+
+  if (incluirHora) {
+    return data.toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  return data.toLocaleDateString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function formatarCartao(cartao: any): string {
+  if (!cartao) return "Não informado";
+
+  const identificacao =
+    cartao.nome ||
+    cartao.apelido ||
+    cartao.descricao ||
+    cartao.bandeira ||
+    null;
+
+  const ultimosDigitos =
+    cartao.ultimos_digitos ||
+    cartao.ultimosDigitos ||
+    cartao.final ||
+    null;
+
+  if (identificacao && ultimosDigitos) {
+    return `${identificacao} - final ${ultimosDigitos}`;
+  }
+
+  if (ultimosDigitos) return `Final ${ultimosDigitos}`;
+  if (identificacao) return String(identificacao);
+
+  return "Não informado";
+}
+
 function montarResumoDespesa(
   despesa: any,
   tipo: any,
   tecnico: any,
-  aprovador: any
+  aprovador: any,
+  cartao: any
 ): string {
-  const dataDespesa = despesa.data_despesa
-    ? new Date(despesa.data_despesa).toLocaleDateString("pt-BR", {
-        timeZone: "America/Sao_Paulo",
-      })
-    : "Não informado";
-
-  const dataAprovacao = despesa.aprovado_em
-    ? new Date(despesa.aprovado_em).toLocaleString("pt-BR", {
-        timeZone: "America/Sao_Paulo",
-      })
-    : "Não informado";
+  const dataDespesa = formatarDataBR(despesa.data_despesa);
+  const dataAprovacao = formatarDataBR(despesa.data_aprovacao, true);
 
   return [
     `Funcionário: ${valorTexto(tecnico?.nome || tecnico?.full_name)}`,
     `Data da despesa: ${dataDespesa}`,
     `Tipo: ${valorTexto(tipo?.nome)}`,
-    `Pagamento: ${valorTexto(despesa.forma_pagamento || despesa.pagamento)}`,
+    `Pagamento: ${valorTexto(despesa.pagamento_tipo)}`,
     `Cliente: ${valorTexto(despesa.cliente)}`,
     `OS: ${valorTexto(despesa.numero_os)}`,
     `Valor: ${formatarValorBR(Number(despesa.valor || 0))}`,
     `Observação: ${valorTexto(despesa.observacao)}`,
     `Documento: ${valorTexto(despesa.documento)}`,
-    `Cartão: ${valorTexto(despesa.cartao || despesa.cartao_nome)}`,
+    `Cartão: ${formatarCartao(cartao)}`,
     `Data aprovação: ${dataAprovacao}`,
     `Aprovado por: ${valorTexto(aprovador?.nome || aprovador?.full_name)}`,
   ].join(" | ");
@@ -337,6 +383,30 @@ export async function POST(request: Request) {
   const tecnico = despesa.tecnico as any;
   const aprovador = despesa.aprovador as any;
 
+  // Busca os dados do cartão vinculado à despesa.
+  // O select("*") evita dependência de outros nomes de campos além de ultimos_digitos.
+  let cartao: any = null;
+
+  if (despesa.cartao_id) {
+    const { data: cartaoEncontrado, error: cartaoError } = await supabase
+      .from("cartoes")
+      .select("*")
+      .eq("id", despesa.cartao_id)
+      .maybeSingle();
+
+    if (cartaoError) {
+      return NextResponse.json(
+        {
+          error: `Erro ao consultar o cartão da despesa: ${cartaoError.message}`,
+          etapa: 0,
+        },
+        { status: 500 }
+      );
+    }
+
+    cartao = cartaoEncontrado;
+  }
+
   const { data: cc, error: ccError } = await supabase
     .from("tipos_despesa_centro_custo")
     .select("centro_custo_erp")
@@ -376,7 +446,7 @@ export async function POST(request: Request) {
   }
 
   const baseUrl = normalizarBaseUrl(M8_API_URL!);
-  const resumo = montarResumoDespesa(despesa, tipo, tecnico, aprovador);
+  const resumo = montarResumoDespesa(despesa, tipo, tecnico, aprovador, cartao);
   const agora = new Date().toISOString();
 
   let token: string | null = null;
