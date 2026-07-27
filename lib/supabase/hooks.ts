@@ -856,8 +856,8 @@ export function useDespesas(userId?: string, perfil?: string) {
     });
     const body = await res.json();
     mutate();
-    if (!res.ok) return { error: body.error || `HTTP ${res.status}`, etapa: body.etapa };
-    return { error: null, erp_id: body.erp_id, simulado: body.simulado ?? false };
+    if (!res.ok) return { error: body.error || `HTTP ${res.status}`, etapa: body.etapa ?? null, campos: (body.campos as string[]) ?? null };
+    return { error: null, erp_id: body.erp_id, simulado: body.simulado ?? false, campos: null };
   };
 
   const estornarLancamento = async (id: string) => {
@@ -1038,7 +1038,7 @@ export function useProfiles() {
 
 // ─────────────────────────────────────────────
 // Controle de KM
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────���───────
 
 export interface ControleKm {
   id: string;

@@ -69,15 +69,21 @@ export default function FinanceiroPageSupabase() {
     setConfirmLancar(null);
   };
 
-  const mostrarFeedbackERP = (result: { error?: string | null; erp_id?: string; simulado?: boolean }) => {
-    if (result.error) {
-      setFeedbackERP({ type: "error", msg: `Erro ao integrar com ERP M8: ${result.error}` });
+  const mostrarFeedbackERP = (result: { error?: string | null; erp_id?: string; simulado?: boolean; etapa?: number | null; campos?: string[] | null }) => {
+    if (result.campos && result.campos.length > 0) {
+      // Erro de validação (etapa 0): campos obrigatórios faltando
+      setFeedbackERP({
+        type: "error",
+        msg: `__campos__${JSON.stringify(result.campos)}`,
+      });
+    } else if (result.error) {
+      setFeedbackERP({ type: "error", msg: `Erro ao integrar com ERP M8 (Etapa ${result.etapa ?? "?"}): ${result.error}` });
     } else if (result.simulado) {
-      setFeedbackERP({ type: "warning", msg: "Modo simulado: variáveis M8_API_URL, M8_USERNAME, M8_PASSWORD e M8_COMPANY não estão configuradas. Configure-as em Vars para ativar a integração real." });
+      setFeedbackERP({ type: "warning", msg: "Modo simulado: as variáveis M8_API_URL, M8_USERNAME, M8_PASSWORD e M8_COMPANY não estão configuradas. Configure-as em Vars para ativar a integração real." });
     } else {
-      setFeedbackERP({ type: "success", msg: `Integração com ERP M8 concluída! ID: ${result.erp_id || "—"}` });
+      setFeedbackERP({ type: "success", msg: `Integração com ERP M8 concluída com sucesso! ID do documento: ${result.erp_id || "—"}` });
     }
-    setTimeout(() => setFeedbackERP(null), 8000);
+    setTimeout(() => setFeedbackERP(null), 12000);
   };
 
   // Lança no sistema + envia para integração ERP M8
@@ -525,18 +531,34 @@ export default function FinanceiroPageSupabase() {
       )}
 
       {/* ── Feedback ERP M8 ── */}
-      {feedbackERP && (
-        <div className={`flex items-start justify-between gap-3 px-4 py-3 rounded-lg border text-sm ${
-          feedbackERP.type === "success"
-            ? "bg-success/10 border-success/30 text-success"
-            : feedbackERP.type === "warning"
-            ? "bg-warning/10 border-warning/30 text-warning"
-            : "bg-destructive/10 border-destructive/30 text-destructive"
-        }`}>
-          <span>{feedbackERP.msg}</span>
-          <button onClick={() => setFeedbackERP(null)} className="shrink-0 font-bold hover:opacity-70 mt-0.5">&times;</button>
-        </div>
-      )}
+      {feedbackERP && (() => {
+        const isCampos = feedbackERP.msg.startsWith("__campos__");
+        const camposFaltando: string[] = isCampos ? JSON.parse(feedbackERP.msg.replace("__campos__", "")) : [];
+        const colorCls = feedbackERP.type === "success"
+          ? "bg-success/10 border-success/30 text-success"
+          : feedbackERP.type === "warning"
+          ? "bg-warning/10 border-warning/30 text-warning"
+          : "bg-destructive/10 border-destructive/30 text-destructive";
+        return (
+          <div className={`flex items-start justify-between gap-3 px-4 py-3 rounded-lg border text-sm ${colorCls}`}>
+            <div className="flex flex-col gap-1.5">
+              {isCampos ? (
+                <>
+                  <p className="font-semibold">Campos obrigatórios incompletos para integração com o ERP M8:</p>
+                  <ul className="list-disc list-inside space-y-0.5 text-xs">
+                    {camposFaltando.map((campo, i) => (
+                      <li key={i}>{campo}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <span>{feedbackERP.msg}</span>
+              )}
+            </div>
+            <button onClick={() => setFeedbackERP(null)} className="shrink-0 font-bold hover:opacity-70 mt-0.5">&times;</button>
+          </div>
+        );
+      })()}
 
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-start gap-4">

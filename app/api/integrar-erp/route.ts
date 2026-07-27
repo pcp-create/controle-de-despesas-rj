@@ -61,6 +61,41 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Despesa já integrada ao ERP" }, { status: 409 });
   }
 
+  // ─── Validação dos campos obrigatórios para integração ────────────────────
+  const tipo = (despesa as any).tipo;
+  const tecnico = (despesa as any).tecnico;
+
+  // Busca centro de custo ERP da área do técnico
+  const { data: cc } = await supabase
+    .from("tipos_despesa_centro_custo")
+    .select("centro_custo_erp")
+    .eq("tipo_despesa_id", despesa.tipo_despesa_id)
+    .eq("area", tecnico?.area || "")
+    .maybeSingle();
+
+  const camposFaltando: string[] = [];
+
+  if (!despesa.tipo_despesa_id)          camposFaltando.push("Tipo de despesa");
+  if (!tipo?.codigo_produto_erp)         camposFaltando.push(`Código de Produto ERP M8 no tipo "${tipo?.nome || "—"}"`);
+  if (!tecnico?.area)                    camposFaltando.push("Área / Setor do técnico responsável");
+  if (!cc?.centro_custo_erp)             camposFaltando.push(`Centro de Custo ERP M8 para a área "${tecnico?.area || "—"}" no tipo "${tipo?.nome || "—"}"`);
+  if (!despesa.data_despesa)             camposFaltando.push("Data da despesa");
+  if (!despesa.valor || despesa.valor <= 0) camposFaltando.push("Valor da despesa");
+  if (!despesa.cliente)                  camposFaltando.push("Cliente / OS");
+  if (!despesa.numero_os)                camposFaltando.push("Número da OS");
+  if (!despesa.documento)                camposFaltando.push("Documento / Nota fiscal");
+
+  if (camposFaltando.length > 0) {
+    return NextResponse.json(
+      {
+        error: "Campos obrigatórios incompletos para integração com o ERP M8",
+        campos: camposFaltando,
+        etapa: 0,
+      },
+      { status: 422 }
+    );
+  }
+
   // Verifica variáveis de ambiente M8
   if (!M8_API_URL || !M8_USERNAME || !M8_PASSWORD || !M8_COMPANY || !M8_TENANT) {
     // Modo simulado: grava como integrado para ambientes sem M8 configurado
@@ -83,18 +118,7 @@ export async function POST(request: Request) {
   await salvarProgresso(supabase, despesaId, { erp_status: "processando", erp_erro: null, erp_etapa_erro: null });
 
   // ─── Monta payload ────────────────────────────────────────────────────────
-  const tipo = (despesa as any).tipo;
-  const tecnico = (despesa as any).tecnico;
-
-  // Busca centro de custo ERP da área do técnico
-  const { data: cc } = await supabase
-    .from("tipos_despesa_centro_custo")
-    .select("centro_custo_erp")
-    .eq("tipo_despesa_id", despesa.tipo_despesa_id)
-    .eq("area", tecnico?.area || "")
-    .maybeSingle();
-
-  const centroCusto = cc?.centro_custo_erp || M8_COMPANY || "";
+  const centroCusto = cc!.centro_custo_erp!;
   const codigoProduto = tipo?.codigo_produto_erp || "";
 
   let token: string | null = null;
