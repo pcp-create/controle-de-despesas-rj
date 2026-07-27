@@ -4,24 +4,31 @@ import { NextResponse } from "next/server";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-const M8_API_URL  = process.env.M8_API_URL;
-const M8_TENANT   = process.env.M8_TENANT;
-const M8_USERNAME = process.env.M8_USERNAME;
-const M8_PASSWORD = process.env.M8_PASSWORD;
-const M8_COMPANY  = process.env.M8_COMPANY;
-const M8_DOMAIN   = process.env.M8_DOMAIN;
+  const M8_API_URL  = process.env.M8_API_URL;
+  const M8_TENANT   = process.env.M8_TENANT;
+  const M8_USERNAME = process.env.M8_USERNAME;
+  const M8_PASSWORD = process.env.M8_PASSWORD;
+  const M8_COMPANY  = process.env.M8_COMPANY;
+  const M8_DOMAIN   = process.env.M8_DOMAIN;
 
-/** Atualiza despesa no banco com dados de erro ou sucesso */
-async function salvarProgresso(
-  supabase: ReturnType<typeof createClient>,
-  despesaId: string,
-  dados: Record<string, unknown>
-) {
-  await supabase
-    .from("despesas")
-    .update({ ...dados, updated_at: new Date().toISOString() })
-    .eq("id", despesaId);
-}
+  const varsFaltando: string[] = [];
+  if (!M8_API_URL)  varsFaltando.push("M8_API_URL");
+  if (!M8_TENANT)   varsFaltando.push("M8_TENANT");
+  if (!M8_USERNAME) varsFaltando.push("M8_USERNAME");
+  if (!M8_PASSWORD) varsFaltando.push("M8_PASSWORD");
+  if (!M8_COMPANY)  varsFaltando.push("M8_COMPANY");
+
+  if (varsFaltando.length > 0) {
+    // Não altera nada no banco — apenas informa quais variáveis estão faltando
+    return NextResponse.json(
+      {
+        error: `Variáveis de ambiente não configuradas: ${varsFaltando.join(", ")}. Configure-as em Settings → Vars no painel do projeto.`,
+        simulado: true,
+        etapa: null,
+      },
+      { status: 503 }
+    );
+  }
 
 export async function POST(request: Request) {
   if (!supabaseServiceKey) {

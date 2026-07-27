@@ -71,17 +71,16 @@ export default function FinanceiroPageSupabase() {
 
   const mostrarFeedbackERP = (result: { error?: string | null; erp_id?: string; simulado?: boolean; etapa?: number | null; campos?: string[] | null }) => {
     if (result.campos && result.campos.length > 0) {
-      // Erro de validação (etapa 0): campos obrigatórios faltando
-      setFeedbackERP({
-        type: "error",
-        msg: `__campos__${JSON.stringify(result.campos)}`,
-      });
+      // Validação: campos obrigatórios faltando
+      setFeedbackERP({ type: "error", msg: `__campos__${JSON.stringify(result.campos)}` });
+    } else if (result.simulado && result.error) {
+      // Variáveis de ambiente M8 não configuradas — não altera banco
+      setFeedbackERP({ type: "warning", msg: result.error });
     } else if (result.error) {
-      setFeedbackERP({ type: "error", msg: `Erro ao integrar com ERP M8 (Etapa ${result.etapa ?? "?"}): ${result.error}` });
-    } else if (result.simulado) {
-      setFeedbackERP({ type: "warning", msg: "Modo simulado: as variáveis M8_API_URL, M8_USERNAME, M8_PASSWORD e M8_COMPANY não estão configuradas. Configure-as em Vars para ativar a integração real." });
+      const etapa = result.etapa != null ? ` (Etapa ${result.etapa})` : "";
+      setFeedbackERP({ type: "error", msg: `Erro ao integrar com ERP M8${etapa}: ${result.error}` });
     } else {
-      setFeedbackERP({ type: "success", msg: `Integração com ERP M8 concluída com sucesso! ID do documento: ${result.erp_id || "—"}` });
+      setFeedbackERP({ type: "success", msg: `Integração com ERP M8 concluída! ID do documento: ${result.erp_id || "—"}` });
     }
     setTimeout(() => setFeedbackERP(null), 12000);
   };
@@ -93,15 +92,23 @@ export default function FinanceiroPageSupabase() {
     setErroLancar(null);
     setFeedbackERP(null);
     setLancando((prev) => ({ ...prev, [id]: true }));
-    await lancarSistema(id, userId);
     setEnviandoERP((prev) => ({ ...prev, [id]: true }));
     const result = await tentarNovamenteERP(id, userId);
     mostrarFeedbackERP(result as any);
-    if (result?.error) {
+
+    if (!result?.error && !result?.simulado) {
+      // Integração real bem sucedida: lança no sistema também
+      await lancarSistema(id, userId);
+      setErroERP((prev) => { const n = { ...prev }; delete n[id]; return n; });
+    } else if (result?.error && !result?.simulado && !result?.campos?.length) {
+      // Erro real de integração (não é validação nem vars): lança no sistema e registra erro
+      await lancarSistema(id, userId);
       setErroERP((prev) => ({ ...prev, [id]: result.error! }));
     } else {
+      // Vars faltando ou campos incompletos: não lança no sistema
       setErroERP((prev) => { const n = { ...prev }; delete n[id]; return n; });
     }
+
     setLancando((prev) => ({ ...prev, [id]: false }));
     setEnviandoERP((prev) => ({ ...prev, [id]: false }));
     setConfirmLancar(null);
