@@ -177,6 +177,7 @@ export default function TiposDespesaPageSupabase() {
     calcula_diarias: false,
     exige_comprovante: true,
     documento_padrao: "",
+    codigo_produto_erp: "",
     ativo: true,
   };
   const [form, setForm] = useState(emptyForm);
@@ -245,6 +246,7 @@ export default function TiposDespesaPageSupabase() {
         calcula_diarias: form.calcula_diarias,
         exige_comprovante: form.exige_comprovante,
         documento_padrao: form.documento_padrao || null,
+        codigo_produto_erp: form.codigo_produto_erp || null,
         ativo: form.ativo,
       };
 
@@ -292,6 +294,7 @@ export default function TiposDespesaPageSupabase() {
       calcula_diarias: (tipo as any).calculaDiarias === true,
       exige_comprovante: tipo.exigeComprovante,
       documento_padrao: tipo.documentoPadrao || "",
+      codigo_produto_erp: tipo.codigo_produto_erp || "",
       ativo: tipo.ativo,
     });
     setEditingId(tipo.id);
@@ -393,6 +396,20 @@ export default function TiposDespesaPageSupabase() {
                 placeholder="Ex: Cupom Fiscal"
                 disabled={loading}
               />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Código de Produto ERP M8</label>
+              <input
+                type="text"
+                value={form.codigo_produto_erp}
+                onChange={(e) => setForm({ ...form, codigo_produto_erp: e.target.value })}
+                className="px-3 py-2 rounded-lg border border-input bg-background text-sm font-mono"
+                placeholder="Ex: PROD-0042"
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">
+                Código do item correspondente no sistema ERP M8.
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <input

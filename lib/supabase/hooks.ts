@@ -19,6 +19,7 @@ export interface TipoDespesa {
   exige_comprovante: boolean;
   documento_padrao: string | null;
   centro_custo_erp_id: string | null;
+  codigo_produto_erp: string | null;
   ativo: boolean;
 }
 
