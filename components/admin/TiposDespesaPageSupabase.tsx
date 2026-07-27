@@ -268,11 +268,11 @@ export default function TiposDespesaPageSupabase() {
         if (error) {
           setFeedback({ type: "error", msg: `Erro: ${error.message}` });
         } else {
-          setFeedback({ type: "success", msg: "Tipo atualizado! Agora configure os Centros de Custo por área abaixo." });
-          setSavedId(editingId);
+          setFeedback({ type: "success", msg: "Tipo de despesa atualizado com sucesso!" });
           setEditingId(null);
           setShowNew(false);
           setForm(emptyForm);
+          setSavedId(null);
           await loadSupabaseData();
           setTimeout(() => setFeedback(null), 4000);
         }
@@ -322,6 +322,7 @@ export default function TiposDespesaPageSupabase() {
     setEditingId(null);
     setShowNew(false);
     setForm(emptyForm);
+    setSavedId(null);
   };
 
   return (
