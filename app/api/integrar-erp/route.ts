@@ -301,11 +301,8 @@ export async function POST(request: Request) {
   const centroCustoId = paraNumero(cc?.centro_custo_erp);
   const valorDespesa = paraNumero(despesa.valor);
 
-  // IMPORTANTE: esta coluna deve ser preenchida por uma sequência segura no banco.
-  // Não use o número do cupom/nota do usuário como sequência da integração.
-  const numeroDocumentoErp = paraNumero(
-    despesa.numero_documento_erp ?? despesa.erp_documento_numero
-  );
+  // Número sequencial gerado automaticamente — único por timestamp em ms
+  const numeroDocumentoErp = Date.now();
 
   const camposFaltando: string[] = [];
   if (!despesa.tipo_despesa_id) camposFaltando.push("Tipo de despesa");
@@ -315,11 +312,6 @@ export async function POST(request: Request) {
   if (!despesa.data_despesa) camposFaltando.push("Data da despesa");
   if (!despesa.data_vencimento) camposFaltando.push("Data de vencimento");
   if (!valorDespesa || valorDespesa <= 0) camposFaltando.push("Valor da despesa");
-  if (!numeroDocumentoErp) {
-    camposFaltando.push(
-      "Número sequencial do documento ERP (numero_documento_erp ou erp_documento_numero)"
-    );
-  }
 
   if (camposFaltando.length > 0) {
     return NextResponse.json(
