@@ -232,29 +232,34 @@ export function useTipoDespesaCentroCusto(tipoDespesaId: string | null) {
 
   const upsertCentroCusto = async (area: string, centro_custo_erp: string) => {
     const supabase = getSupabase();
+    console.log("[v0] upsertCentroCusto chamado", { tipoDespesaId, area, centro_custo_erp, supabase: !!supabase });
     if (!supabase || !tipoDespesaId) return { error: "Dados insuficientes" };
 
     // Verifica se já existe registro para esse tipo+área
-    const { data: existing } = await supabase
+    const { data: existing, error: selectError } = await supabase
       .from("tipos_despesa_centro_custo")
       .select("id")
       .eq("tipo_despesa_id", tipoDespesaId)
       .eq("area", area)
       .maybeSingle();
 
+    console.log("[v0] select existing:", { existing, selectError });
+
     let error;
 
     if (existing?.id) {
-      // Atualiza registro existente
-      ({ error } = await supabase
+      const res = await supabase
         .from("tipos_despesa_centro_custo")
         .update({ centro_custo_erp, updated_at: new Date().toISOString() })
-        .eq("id", existing.id));
+        .eq("id", existing.id);
+      error = res.error;
+      console.log("[v0] update result:", res);
     } else {
-      // Insere novo registro
-      ({ error } = await supabase
+      const res = await supabase
         .from("tipos_despesa_centro_custo")
-        .insert({ tipo_despesa_id: tipoDespesaId, area, centro_custo_erp }));
+        .insert({ tipo_despesa_id: tipoDespesaId, area, centro_custo_erp });
+      error = res.error;
+      console.log("[v0] insert result:", res);
     }
 
     if (error) return { error: error.message };
