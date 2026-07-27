@@ -317,7 +317,7 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
                                 <strong className="text-foreground">{d.numero_diarias}</strong> diária{d.numero_diarias > 1 ? "s" : ""}
                               </span>
                               <span className="text-muted-foreground">
-                                <strong className="text-foreground">{formatCurrency(Number(d.valor) / d.numero_diarias)}</strong> / diária
+                                <strong className="text-foreground">{formatCurrency(Number(d.valor) / d.numero_diarias)}</strong> / di��ria
                               </span>
                             </div>
                           )}
@@ -357,7 +357,9 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
                           <div>
                             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Reprovado por</p>
                             <p className="text-destructive font-medium">
-                              {profiles.find((p) => p.id === d.gestor_aprovador_id)?.nome ?? d.gestor_aprovador_id ?? "-"}
+                              {d.gestor_aprovador_id
+                                ? (profiles.find((p) => p.id === d.gestor_aprovador_id)?.nome ?? d.gestor_aprovador_id)
+                                : "Aprovado automaticamente"}
                             </p>
                           </div>
                         </>

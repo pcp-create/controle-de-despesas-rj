@@ -75,10 +75,18 @@ export interface Despesa {
   aprovado_financeiro: boolean;
   aprovado_financeiro_em: string | null;
   aprovado_financeiro_por: string | null;
-  // Lançamento ERP
+  // Lançamento no sistema interno
+  lancado_sistema: boolean;
+  lancado_sistema_em: string | null;
+  lancado_sistema_por: string | null;
+  // Lançamento ERP M8
   lancado_erp: boolean;
   lancado_erp_em: string | null;
   lancado_erp_por: string | null;
+  // Status integração ERP: pendente | processando | integrado | erro
+  erp_status: string;
+  erp_etapa_erro: number | null;
+  erp_erro: string | null;
   created_at: string;
   updated_at: string;
   // Joins
@@ -777,6 +785,36 @@ export function useDespesas(userId?: string, perfil?: string) {
     return { error: null };
   };
 
+  // Apenas lançamento no sistema interno (sem chamar API M8)
+  const lancarSistema = async (id: string, lancadoPor: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        lancado_sistema: true,
+        lancado_sistema_em: new Date().toISOString(),
+        lancado_sistema_por: lancadoPor,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    if (error) return { error: error.message };
+
+    await registrarAuditoria({
+      acao: "UPDATE",
+      entidade: "despesa",
+      entidadeId: id,
+      usuarioId: lancadoPor,
+      detalhes: "Despesa lançada no sistema",
+    });
+
+    mutate();
+    return { error: null };
+  };
+
+  // Lançamento legado (mantido para compatibilidade) — marca lancado_erp = true localmente
   const lancarERP = async (id: string, lancadoPor: string) => {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
@@ -787,7 +825,10 @@ export function useDespesas(userId?: string, perfil?: string) {
         lancado_erp: true,
         lancado_erp_em: new Date().toISOString(),
         lancado_erp_por: lancadoPor,
-        status_erp: "AprovadoGestorERPAtualizado",
+        lancado_sistema: true,
+        lancado_sistema_em: new Date().toISOString(),
+        lancado_sistema_por: lancadoPor,
+        erp_status: "integrado",
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -806,6 +847,19 @@ export function useDespesas(userId?: string, perfil?: string) {
     return { error: null };
   };
 
+  // Envia para integração real com o ERP M8 via API route
+  const tentarNovamenteERP = async (id: string, userId: string) => {
+    const res = await fetch("/api/integrar-erp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ despesaId: id, userId }),
+    });
+    const body = await res.json();
+    mutate();
+    if (!res.ok) return { error: body.error || `HTTP ${res.status}`, etapa: body.etapa ?? null, campos: (body.campos as string[]) ?? null };
+    return { error: null, erp_id: body.erp_id, simulado: body.simulado ?? false, campos: null };
+  };
+
   const estornarLancamento = async (id: string) => {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
@@ -816,6 +870,12 @@ export function useDespesas(userId?: string, perfil?: string) {
         lancado_erp: false,
         lancado_erp_em: null,
         lancado_erp_por: null,
+        lancado_sistema: false,
+        lancado_sistema_em: null,
+        lancado_sistema_por: null,
+        erp_status: "pendente",
+        erp_etapa_erro: null,
+        erp_erro: null,
         status_erp: "Rascunho",
         updated_at: new Date().toISOString(),
       })
@@ -841,7 +901,9 @@ export function useDespesas(userId?: string, perfil?: string) {
     aprovarFinanceiro,
     processarReembolso,
     estornarReembolso,
+    lancarSistema,
     lancarERP,
+    tentarNovamenteERP,
     estornarLancamento,
   };
 }
@@ -976,7 +1038,7 @@ export function useProfiles() {
 
 // ─────────────────────────────────────────────
 // Controle de KM
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────���───────
 
 export interface ControleKm {
   id: string;
