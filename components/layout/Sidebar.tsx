@@ -43,7 +43,7 @@ const NAV: NavItem[] = [
   { key: "relatorios",      label: "Relatórios",        icon: <BarChart3       className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador","gestor","funcionario"] },
   { key: "usuarios",        label: "Usuários",          icon: <Users           className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
   { key: "tipos-despesa",   label: "Tipos de Despesa",  icon: <Tag             className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
-  { key: "frotas",          label: "Frotas",            icon: <Car             className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
+  { key: "frotas",          label: "Frotas",            icon: <Car             className="w-5 h-5 shrink-0" />, profiles: ["administrador", "gestor"] },
   { key: "controle-km",    label: "Controle de KM",    icon: <Gauge           className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro","funcionario"] },
   { key: "auditoria",       label: "Auditoria",         icon: <ClipboardList   className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
 ];
