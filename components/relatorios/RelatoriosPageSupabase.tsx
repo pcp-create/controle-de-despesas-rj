@@ -34,11 +34,7 @@ function formatKmRel(val: number): string {
   return val.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + " km";
 }
 
-function formatDuracaoRel(minutos: number): string {
-  const h = Math.floor(minutos / 60);
-  const m = minutos % 60;
-  return h > 0 ? `${h}h ${m}min` : `${m}min`;
-}
+
 
 // Paleta para tipos de despesa — do mais forte ao mais suave
 const TIPO_COLORS = [
@@ -395,7 +391,7 @@ export default function RelatoriosPageSupabase() {
       pdf.setTextColor(17, 24, 39);
       y += cardH + 8;
 
-      // ═══���═════════════��══════════════════════
+      // ═══���������═════════════��══════════════════════
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
       // ══���═══����══════════��══════════════════���══��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
@@ -859,7 +855,26 @@ export default function RelatoriosPageSupabase() {
   const totalKmPeriodo = useMemo(() => registrosKmFiltrados.reduce((s, r) => s + kmPercorrido(r), 0), [registrosKmFiltrados]);
   const totalViagens = registrosKmFiltrados.length;
   const mediaKmViagem = totalViagens > 0 ? totalKmPeriodo / totalViagens : 0;
-  const totalMinutos = registrosKmFiltrados.reduce((s, r) => s + (r.duracao_minutos ?? 0), 0);
+  const totalSegundosKm = useMemo(
+    () =>
+      registrosKmFiltrados
+        .filter((r) => r.data_fim)
+        .reduce((s, r) => {
+          const secs = Math.floor(
+            (new Date(r.data_fim!).getTime() - new Date(r.data_inicio).getTime()) / 1000
+          );
+          return s + (secs > 0 ? secs : 0);
+        }, 0),
+    [registrosKmFiltrados]
+  );
+
+  const formatTempoKm = (secs: number) => {
+    if (secs === 0) return "—";
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    if (h > 0) return `${h}h ${String(m).padStart(2, "0")}min`;
+    return `${m}min`;
+  };
 
   // registros do ano todo respeitando filtro de funcionário
   const registrosKmAno = useMemo(() => {
@@ -1467,7 +1482,7 @@ export default function RelatoriosPageSupabase() {
           { icon: <Route className="w-5 h-5" />, value: formatKmRel(totalKmPeriodo), label: "KM Total Percorrido", bg: "bg-accent/10", color: "text-accent" },
           { icon: <Car className="w-5 h-5" />, value: totalViagens, label: "Viagens Finalizadas", bg: "bg-primary/10", color: "text-primary" },
           { icon: <Gauge className="w-5 h-5" />, value: formatKmRel(mediaKmViagem), label: "Média por Viagem", bg: "bg-success/10", color: "text-success" },
-          { icon: <Clock className="w-5 h-5" />, value: totalMinutos > 0 ? formatDuracaoRel(totalMinutos) : "—", label: "Tempo Total em Rota", bg: "bg-warning/10", color: "text-warning" },
+          { icon: <Clock className="w-5 h-5" />, value: formatTempoKm(totalSegundosKm), label: "Tempo Total em Rota", bg: "bg-warning/10", color: "text-warning" },
         ].map(({ icon, value, label, bg, color }) => (
           <div key={label} className="bg-white rounded-xl border border-border shadow-sm p-4">
             <div className={`w-9 h-9 rounded-lg ${bg} ${color} flex items-center justify-center mb-3`}>{icon}</div>
@@ -1608,41 +1623,50 @@ export default function RelatoriosPageSupabase() {
                   : "sem estimativa";
 
               return (
-                <div key={item.id} className="py-3 first:pt-0 last:pb-0 flex flex-col gap-2">
-                  {/* Linha principal: nome + barra + % */}
-                  <div className="grid grid-cols-[140px_1fr_auto] items-center gap-3">
-                    <span className="text-xs font-semibold text-foreground truncate" title={item.nome}>
+                <div key={item.id} className="py-4 first:pt-0 last:pb-0 flex flex-col gap-2">
+
+                  {/* Cabeçalho: nome à esquerda, % à direita */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-foreground" title={item.nome}>
                       {item.nome}
                     </span>
-
-                    {/* Barra */}
-                    <div className="relative h-6 rounded-md overflow-hidden bg-muted/30">
-                      {/* Fundo estimado */}
-                      <div
-                        className="absolute inset-y-0 left-0 rounded-md bg-muted-foreground/20 transition-all"
-                        style={{ width: `${barEstPct}%` }}
-                      />
-                      {/* Frente apontado */}
-                      <div
-                        className={`absolute inset-y-0 left-0 rounded-md opacity-80 transition-all ${barColor}`}
-                        style={{ width: `${barAptPct}%` }}
-                      />
-                      {/* KM apontado dentro da barra (branco, sempre legível) */}
-                      <div className="absolute inset-0 flex items-center px-2">
-                        <span className="text-[10px] font-bold text-white drop-shadow leading-none">
-                          {item.kmApontado > 0 ? `${item.kmApontado.toLocaleString("pt-BR")} km` : ""}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* % */}
-                    <span className={`text-[11px] font-semibold whitespace-nowrap min-w-[130px] text-right ${pctColor}`}>
+                    <span className={`text-[11px] font-semibold whitespace-nowrap ${pctColor}`}>
                       {pctLabel}
                     </span>
                   </div>
 
-                  {/* Subtexto: estimativa e memorial de cálculo */}
-                  <div className="pl-[152px] flex flex-col gap-1">
+                  {/* Barra — largura total */}
+                  <div className="relative h-7 rounded-md overflow-hidden bg-muted/30">
+                    {/* Fundo estimado */}
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-md bg-muted-foreground/20 transition-all"
+                      style={{ width: `${barEstPct}%` }}
+                    />
+                    {/* Frente apontado */}
+                    <div
+                      className={`absolute inset-y-0 left-0 rounded-md opacity-80 transition-all ${barColor}`}
+                      style={{ width: `${barAptPct}%` }}
+                    />
+                    {/* KM apontado dentro da barra */}
+                    <div className="absolute inset-0 flex items-center px-2.5">
+                      <span className="text-[11px] font-bold text-white drop-shadow leading-none">
+                        {item.kmApontado > 0 ? `${item.kmApontado.toLocaleString("pt-BR")} km apontado` : ""}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Linha de referência: KM estimado */}
+                  {item.kmEstimado > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-1.5 rounded-sm bg-muted-foreground/30 shrink-0" />
+                      <span className="text-[10px] text-muted-foreground">
+                        Estimativa: <span className="font-semibold text-foreground">{item.kmEstimado.toLocaleString("pt-BR")} km</span>
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Subtexto: memorial de cálculo */}
+                  <div className="flex flex-col gap-1">
                     {item.kmEstimado > 0 ? (
                       <>
                         {/* Linha resumo estimativa */}
