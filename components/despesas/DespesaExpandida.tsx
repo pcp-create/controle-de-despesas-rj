@@ -24,7 +24,141 @@ import {
   User,
   Hash,
   Eye,
+  X,
+  Download,
+  Paperclip,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
 } from "lucide-react";
+import { useState as useViewerState } from "react";
+
+// ─── Viewer de anexo (imagem ou PDF) ──────────────────────────────────────────
+function AnexoViewer({ url, nome }: { url: string; nome?: string | null }) {
+  const [open, setOpen] = useViewerState(false);
+  const [zoom, setZoom] = useViewerState(1);
+  const [rotate, setRotate] = useViewerState(0);
+
+  const isPdf = url.toLowerCase().includes(".pdf") || (nome?.toLowerCase().endsWith(".pdf") ?? false);
+  const isImage = !isPdf && /\.(jpe?g|png|gif|webp|bmp|svg)(\?|$)/i.test(url);
+
+  const label = nome ?? "Evidência financeiro";
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => { setOpen(true); setZoom(1); setRotate(0); }}
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 text-xs font-medium transition"
+      >
+        <Paperclip className="w-3 h-3" />
+        {label}
+        <Eye className="w-3 h-3 ml-0.5 opacity-60" />
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="relative bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+            style={{ maxWidth: "90vw", maxHeight: "90vh", width: isPdf ? 800 : "auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <Paperclip className="w-4 h-4 text-muted-foreground shrink-0" />
+                <span className="text-sm font-medium text-foreground truncate">{label}</span>
+              </div>
+              <div className="flex items-center gap-1 ml-3 shrink-0">
+                {isImage && (
+                  <>
+                    <button
+                      onClick={() => setZoom((z) => Math.max(0.25, z - 0.25))}
+                      className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
+                      title="Diminuir zoom"
+                    >
+                      <ZoomOut className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs text-muted-foreground w-10 text-center">{Math.round(zoom * 100)}%</span>
+                    <button
+                      onClick={() => setZoom((z) => Math.min(4, z + 0.25))}
+                      className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
+                      title="Aumentar zoom"
+                    >
+                      <ZoomIn className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setRotate((r) => (r + 90) % 360)}
+                      className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
+                      title="Girar"
+                    >
+                      <RotateCw className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+                <a
+                  href={url}
+                  download={nome ?? "evidencia-financeiro"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
+                  title="Baixar arquivo"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Download className="w-4 h-4" />
+                </a>
+                <button
+                  onClick={() => setOpen(false)}
+                  className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Conteúdo */}
+            <div className="overflow-auto flex items-center justify-center bg-muted/30" style={{ minHeight: 300, maxHeight: "calc(90vh - 60px)" }}>
+              {isImage ? (
+                <div className="p-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt={label}
+                    style={{ transform: `scale(${zoom}) rotate(${rotate}deg)`, transformOrigin: "center", transition: "transform 0.2s" }}
+                    className="max-w-none"
+                  />
+                </div>
+              ) : isPdf ? (
+                <iframe
+                  src={url}
+                  title={label}
+                  className="w-full"
+                  style={{ height: "calc(90vh - 80px)", minHeight: 400 }}
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-3 p-8 text-muted-foreground text-sm">
+                  <Paperclip className="w-8 h-8 opacity-40" />
+                  <p>Pré-visualização não disponível</p>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline text-xs"
+                  >
+                    Abrir arquivo
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 // ─── helpers locais ────────────────────────────────────────────────────────────
 function fmt(dt: string | null | undefined) {
@@ -229,21 +363,10 @@ export default function DespesaExpandida({
       )}
 
       {/* ── SEÇÃO 6: COMPROVANTE ──────────────────────────────────── */}
-      {d.comprovante_nome && (
+      {d.comprovante_url && (
         <div>
           <SectionTitle icon={<FileText className="w-3.5 h-3.5" />} label="Comprovante" />
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-foreground truncate flex-1">{d.comprovante_nome}</span>
-            {d.comprovante_url && (
-              <button
-                onClick={() => window.open(d.comprovante_url!, "_blank")}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition shrink-0"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                Ver
-              </button>
-            )}
-          </div>
+          <AnexoViewer url={d.comprovante_url} nome={d.comprovante_nome} />
         </div>
       )}
 
@@ -318,17 +441,7 @@ export default function DespesaExpandida({
               </div>
             )}
             {d.anexo_financeiro_url && (
-              <a
-                href={d.anexo_financeiro_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-              >
-                <span>Evidência financeiro</span>
-                {d.anexo_financeiro_nome && (
-                  <span className="text-muted-foreground">({d.anexo_financeiro_nome})</span>
-                )}
-              </a>
+              <AnexoViewer url={d.anexo_financeiro_url} nome={d.anexo_financeiro_nome} />
             )}
           </div>
         )}
