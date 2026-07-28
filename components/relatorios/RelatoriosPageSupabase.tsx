@@ -107,7 +107,10 @@ export default function RelatoriosPageSupabase() {
   const isFuncionario = currentUser?.perfil === "funcionario";
   const isGestorOuAdmin = currentUser?.perfil === "administrador" || currentUser?.perfil === "gestor";
 
-  const { despesas, isLoading } = useDespesas(isFuncionario ? currentUser?.id : undefined);
+  const { despesas, isLoading } = useDespesas(
+    isFuncionario ? currentUser?.id : undefined,
+    currentUser?.perfil
+  );
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
   const { registros: registrosKm } = useControleKm(isFuncionario ? currentUser?.id : undefined);

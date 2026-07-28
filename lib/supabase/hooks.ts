@@ -447,12 +447,13 @@ export function useDespesas(userId?: string, perfil?: string) {
   // Só busca quando a sessão está confirmada (profile preenchido pelo AuthContext)
   // Isso evita a race condition onde o SWR busca antes do cookie de sessão ser gravado
   const sessionReady = !!profile?.id;
-  const effectiveUserId = userId || profile?.id;
-  const swrKey = sessionReady ? `despesas_${effectiveUserId || "all"}_${perfil || profile?.perfil || ""}` : null;
+  const effectivePerfil = perfil || profile?.perfil || "funcionario";
+  const effectiveUserId = userId || (effectivePerfil === "funcionario" ? profile?.id : undefined);
+  const swrKey = sessionReady ? `despesas_${effectiveUserId || "all"}_${effectivePerfil}` : null;
 
   const { data, error, isLoading, mutate } = useSWR(
     swrKey,
-    effectiveUserId ? () => fetchDespesas(effectiveUserId, perfil || profile?.perfil || "funcionario") : () => fetchDespesas("", perfil || profile?.perfil || "gestor"),
+    () => fetchDespesas(effectiveUserId, effectivePerfil),
     { revalidateOnFocus: false }
   );
 
