@@ -738,7 +738,8 @@ export function useDespesas(userId?: string, perfil?: string) {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
-    const { error } = await supabase
+    // Tenta com os campos extras de observação/anexo
+    let { error } = await supabase
       .from("despesas")
       .update({
         aprovado_financeiro: true,
@@ -750,6 +751,20 @@ export function useDespesas(userId?: string, perfil?: string) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
+
+    // Se a coluna ainda não existe no banco, aprova sem os campos extras
+    if (error && error.message.includes("column")) {
+      const fallback = await supabase
+        .from("despesas")
+        .update({
+          aprovado_financeiro: true,
+          aprovado_financeiro_em: new Date().toISOString(),
+          aprovado_financeiro_por: aprovadoPor,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+      error = fallback.error;
+    }
 
     if (error) return { error: error.message };
 

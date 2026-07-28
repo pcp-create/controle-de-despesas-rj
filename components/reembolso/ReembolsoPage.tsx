@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { formatCurrency, formatDate } from "@/lib/helpers";
@@ -205,6 +205,17 @@ export default function ReembolsoPage() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [modalAprovacaoId, setModalAprovacaoId] = useState<string | null>(null);
+  const [needsMigration, setNeedsMigration] = useState<string | null>(null);
+
+  // Garante que as colunas de observação/anexo existam no banco
+  useEffect(() => {
+    fetch("/api/setup-financeiro-cols")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.needsMigration) setNeedsMigration(data.sql);
+      })
+      .catch(() => null);
+  }, []);
 
   // ── Despesas filtradas ──────────────────────────────────────────────────────
   const despesasReembolso = useMemo(() => {
@@ -303,6 +314,19 @@ export default function ReembolsoPage() {
 
   return (
     <>
+      {/* Banner de migration: colunas de observação/anexo ainda não criadas */}
+      {needsMigration && (
+        <div className="mb-4 p-4 rounded-xl bg-warning/10 border border-warning/30 text-sm text-warning-foreground">
+          <p className="font-semibold mb-1">Ação necessária no banco de dados</p>
+          <p className="text-xs text-muted-foreground mb-2">
+            Execute o SQL abaixo no Supabase (SQL Editor) para habilitar observação e anexo na aprovação financeira:
+          </p>
+          <pre className="bg-muted rounded-lg p-3 text-xs font-mono text-foreground whitespace-pre-wrap break-all">
+            {needsMigration}
+          </pre>
+        </div>
+      )}
+
       {/* Modal de aprovação financeiro */}
       {modalAprovacaoId && (
         <ModalAprovacaoFinanceiro
