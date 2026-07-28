@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosRelatorio } from "@/lib/supabase/use-filtros-persistidos";
-import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas, ControleKm } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { formatCurrency } from "@/lib/helpers";
 import {
@@ -395,7 +395,7 @@ export default function RelatoriosPageSupabase() {
 
       // ════════════════════════════════════════
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
-      // ══════���══════════��═════════════════════��
+      // ══════����══════════��═════════════════════��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
 
       const yStart2col = y;
@@ -843,7 +843,9 @@ export default function RelatoriosPageSupabase() {
     });
   }, [registrosKm, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, isGestorOuAdmin, currentUser]);
 
-  const totalKmPeriodo = useMemo(() => registrosKmFiltrados.reduce((s, r) => s + (r.km_percorrido ?? 0), 0), [registrosKmFiltrados]);
+  const kmPercorrido = (r: ControleKm) => r.km_percorrido ?? (r.km_final != null ? Math.max(0, r.km_final - r.km_inicial) : 0);
+
+  const totalKmPeriodo = useMemo(() => registrosKmFiltrados.reduce((s, r) => s + kmPercorrido(r), 0), [registrosKmFiltrados]);
   const totalViagens = registrosKmFiltrados.length;
   const mediaKmViagem = totalViagens > 0 ? totalKmPeriodo / totalViagens : 0;
   const totalMinutos = registrosKmFiltrados.reduce((s, r) => s + (r.duracao_minutos ?? 0), 0);
@@ -858,7 +860,7 @@ export default function RelatoriosPageSupabase() {
           const dt = new Date(r.data_inicio);
           return dt.getMonth() === i && dt.getFullYear() === anoSelecionado;
         })
-        .reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
+        .reduce((s, r) => s + kmPercorrido(r), 0),
     }));
   }, [registrosKm, isGestorOuAdmin, currentUser, anoSelecionado]);
 
@@ -866,7 +868,7 @@ export default function RelatoriosPageSupabase() {
     return frotas
       .map((f) => ({
         nome: f.placa,
-        km: registrosKmFiltrados.filter((r) => r.frota_id === f.id).reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
+        km: registrosKmFiltrados.filter((r) => r.frota_id === f.id).reduce((s, r) => s + kmPercorrido(r), 0),
       }))
       .filter((f) => f.km > 0)
       .sort((a, b) => b.km - a.km)
@@ -878,7 +880,7 @@ export default function RelatoriosPageSupabase() {
     return profiles
       .map((p) => ({
         nome: p.nome.split(" ").slice(0, 2).join(" "),
-        km: registrosKmFiltrados.filter((r) => r.usuario_id === p.id).reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
+        km: registrosKmFiltrados.filter((r) => r.usuario_id === p.id).reduce((s, r) => s + kmPercorrido(r), 0),
       }))
       .filter((p) => p.km > 0)
       .sort((a, b) => b.km - a.km)
@@ -894,7 +896,7 @@ export default function RelatoriosPageSupabase() {
       .map((p) => {
         const kmApontado = registrosKmFiltrados
           .filter((r) => r.usuario_id === p.id)
-          .reduce((s, r) => s + (r.km_percorrido ?? 0), 0);
+          .reduce((s, r) => s + kmPercorrido(r), 0);
 
         // Só inclui funcionários que tiveram KM apontado no período
         if (kmApontado === 0) return null;

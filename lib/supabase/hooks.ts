@@ -1134,10 +1134,20 @@ export function useControleKm() {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
+    // Busca km_inicial para calcular km_percorrido
+    const { data: registro } = await supabase
+      .from("controle_km")
+      .select("km_inicial")
+      .eq("id", id)
+      .single();
+
+    const km_percorrido = registro?.km_inicial != null ? Math.max(0, km_final - registro.km_inicial) : null;
+
     const { error } = await supabase
       .from("controle_km")
       .update({
         km_final,
+        km_percorrido,
         data_fim: new Date().toISOString(),
         status: "finalizado",
         observacao: observacao || null,
