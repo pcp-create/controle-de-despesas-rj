@@ -184,7 +184,18 @@ export default function FrotasPageSupabase() {
               {migrationSqlKm}
             </code>
             <button
-              onClick={() => navigator.clipboard.writeText(migrationSqlKm)}
+              onClick={() => {
+                try {
+                  const el = document.createElement("textarea");
+                  el.value = migrationSqlKm;
+                  el.style.position = "fixed";
+                  el.style.opacity = "0";
+                  document.body.appendChild(el);
+                  el.select();
+                  document.execCommand("copy");
+                  document.body.removeChild(el);
+                } catch {}
+              }}
               className="shrink-0 text-xs px-3 py-2 rounded-lg border border-input bg-background hover:bg-muted transition font-medium"
             >
               Copiar SQL
