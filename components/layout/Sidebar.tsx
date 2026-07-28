@@ -18,7 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  Server,
+
   Car,
   Banknote,
   Gauge,
@@ -31,21 +31,52 @@ interface NavItem {
   profiles: string[];
 }
 
-const NAV: NavItem[] = [
-  { key: "dashboard",       label: "Dashboard",        icon: <LayoutDashboard className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro","funcionario"] },
-  { key: "nova-despesa",    label: "Nova Despesa",      icon: <PlusCircle      className="w-5 h-5 shrink-0" />, profiles: ["funcionario","gestor","administrador","financeiro"] },
-  { key: "minhas-despesas",  label: "Minhas Despesas",    icon: <FileText className="w-5 h-5 shrink-0" />, profiles: ["funcionario","gestor","administrador","financeiro"] },
-  { key: "todas-despesas",   label: "Todas as Despesas",  icon: <Files    className="w-5 h-5 shrink-0" />, profiles: ["gestor","financeiro","administrador"] },
-  { key: "aprovacao",       label: "Aprovações",        icon: <CheckSquare     className="w-5 h-5 shrink-0" />, profiles: ["gestor","administrador"] },
-  { key: "financeiro",      label: "Financeiro / ERP",  icon: <TrendingUp      className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador","gestor"] },
-  { key: "reembolso",       label: "Reembolso",         icon: <Banknote        className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador","gestor"] },
-  { key: "integracoes-erp", label: "Integrações ERP",   icon: <Server          className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador"] },
-  { key: "relatorios",      label: "Relatórios",        icon: <BarChart3       className="w-5 h-5 shrink-0" />, profiles: ["financeiro","administrador","gestor","funcionario"] },
-  { key: "usuarios",        label: "Usuários",          icon: <Users           className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
-  { key: "tipos-despesa",   label: "Tipos de Despesa",  icon: <Tag             className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
-  { key: "frotas",          label: "Frotas",            icon: <Car             className="w-5 h-5 shrink-0" />, profiles: ["administrador", "gestor"] },
-  { key: "controle-km",    label: "Controle de KM",    icon: <Gauge           className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro","funcionario"] },
-  { key: "auditoria",       label: "Auditoria",         icon: <ClipboardList   className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
+interface NavGroup {
+  label: string;
+  /** Perfis que verão esse grupo (label do separador) — se vazio, sem label */
+  visibleFor: string[];
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: "",
+    visibleFor: ["administrador","gestor","financeiro","funcionario"],
+    items: [
+      { key: "dashboard",      label: "Dashboard",      icon: <LayoutDashboard className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro","funcionario"] },
+      { key: "nova-despesa",   label: "Nova Despesa",   icon: <PlusCircle      className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro","funcionario"] },
+      { key: "minhas-despesas",label: "Minhas Despesas",icon: <FileText        className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro","funcionario"] },
+      { key: "controle-km",   label: "Controle de KM", icon: <Gauge           className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro","funcionario"] },
+      { key: "relatorios",     label: "Relatórios",     icon: <BarChart3       className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro","funcionario"] },
+    ],
+  },
+  {
+    label: "Financeiro",
+    visibleFor: ["administrador","gestor","financeiro"],
+    items: [
+      { key: "todas-despesas",  label: "Todas as Despesas", icon: <Files      className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro"] },
+      { key: "financeiro",      label: "Financeiro / ERP",  icon: <TrendingUp className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro"] },
+      { key: "reembolso",       label: "Reembolso",         icon: <Banknote   className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro"] },
+
+    ],
+  },
+  {
+    label: "Gestão",
+    visibleFor: ["administrador","gestor"],
+    items: [
+      { key: "aprovacao",    label: "Aprovações",      icon: <CheckSquare className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
+      { key: "frotas",       label: "Frotas",          icon: <Car         className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
+      { key: "tipos-despesa",label: "Tipos de Despesa",icon: <Tag         className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
+      { key: "auditoria",    label: "Auditoria",       icon: <ClipboardList className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
+    ],
+  },
+  {
+    label: "Administração",
+    visibleFor: ["administrador"],
+    items: [
+      { key: "usuarios", label: "Usuários", icon: <Users className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
+    ],
+  },
 ];
 
 interface Props {
@@ -69,7 +100,15 @@ export default function Sidebar({
 }: Props) {
   const { currentUser } = useAppStore();
   const { signOut } = useAuth();
-  const visible = NAV.filter((n) => n.profiles.includes(currentUser?.perfil ?? ""));
+  const perfil = currentUser?.perfil ?? "";
+
+  const visibleGroups = NAV_GROUPS
+    .filter((g) => g.visibleFor.includes(perfil))
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((n) => n.profiles.includes(perfil)),
+    }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <aside
@@ -119,30 +158,48 @@ export default function Sidebar({
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 flex flex-col gap-0.5">
-        {visible.map((item) => {
-          const active = currentPage === item.key;
-          return (
-            <button
-              key={item.key}
-              onClick={() => onNavigate(item.key)}
-              title={collapsed && !mobile ? item.label : undefined}
-              className={`flex items-center gap-3 w-full rounded-lg text-sm font-medium transition-all text-left ${
-                collapsed && !mobile ? "justify-center px-0 py-2.5" : "px-3 py-2.5"
-              } ${
-                active
-                  ? "bg-sidebar-primary text-white shadow-sm"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent"
-              }`}
-            >
-              <span className={active ? "text-white" : "text-sidebar-foreground/70"}>
-                {item.icon}
-              </span>
-              {(!collapsed || mobile) && (
-                <span className="truncate">{item.label}</span>
-              )}
-            </button>
-          );
-        })}
+        {visibleGroups.map((group, gi) => (
+          <div key={gi} className={gi > 0 ? "mt-3" : ""}>
+            {/* Separador + label do grupo (só quando expandido e há label) */}
+            {group.label && (
+              <div className={`flex items-center gap-2 mb-1 ${collapsed && !mobile ? "justify-center px-0" : "px-1"}`}>
+                {(!collapsed || mobile) ? (
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/35 truncate">
+                    {group.label}
+                  </span>
+                ) : (
+                  <div className="w-4 h-px bg-sidebar-foreground/20" />
+                )}
+                {(!collapsed || mobile) && <div className="flex-1 h-px bg-sidebar-foreground/10" />}
+              </div>
+            )}
+
+            {group.items.map((item) => {
+              const active = currentPage === item.key;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => onNavigate(item.key)}
+                  title={collapsed && !mobile ? item.label : undefined}
+                  className={`flex items-center gap-3 w-full rounded-lg text-sm font-medium transition-all text-left ${
+                    collapsed && !mobile ? "justify-center px-0 py-2.5" : "px-3 py-2.5"
+                  } ${
+                    active
+                      ? "bg-sidebar-primary text-white shadow-sm"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent"
+                  }`}
+                >
+                  <span className={active ? "text-white" : "text-sidebar-foreground/70"}>
+                    {item.icon}
+                  </span>
+                  {(!collapsed || mobile) && (
+                    <span className="truncate">{item.label}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       {/* Footer */}
