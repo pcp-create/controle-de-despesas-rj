@@ -174,25 +174,22 @@ export default function UsuariosPageSupabase() {
 
       if (editingUser) {
         // Atualizar usuário
-        const updatePayload = {
-          nome: form.nome,
-          email: form.email,
-          usuario: form.usuario,
-          perfil: form.perfil,
-          area: form.area || null,
-          telefone: form.telefone || null,
-          gestor_id: form.gestor_id || null,
-          frota_padrao_id: form.frota_padrao_id || null,
-          pessoa_id: form.pessoaId ? Number(form.pessoaId) : null,
-        };
-        console.log("[v0] update payload:", updatePayload);
         const { error } = await supabase
           .from("profiles")
-          .update(updatePayload)
+          .update({
+            nome: form.nome,
+            email: form.email,
+            usuario: form.usuario,
+            perfil: form.perfil,
+            area: form.area || null,
+            telefone: form.telefone || null,
+            gestor_id: form.gestor_id || null,
+            frota_padrao_id: form.frota_padrao_id || null,
+            pessoa_id: form.pessoaId ? Number(form.pessoaId) : null,
+          })
           .eq("id", editingUser.id);
 
         if (error) {
-          console.log("[v0] update error:", error.message);
           setFormError("Erro ao atualizar usuário: " + error.message);
           setFormLoading(false);
           return;

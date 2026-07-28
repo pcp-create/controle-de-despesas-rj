@@ -117,12 +117,7 @@ export const useAppStore = create<AppState>()(
             primeiro_acesso: profile.primeiro_acesso,
             senha: profile.senha,
             telefone: profile.telefone || "",
-            empresaId: profile.empresa_id || "",
-            fornecedorId: profile.fornecedor_id || "",
-            condicaoPagamentoId: profile.condicao_pagamento_id || "",
-            operacaoFinanceiraId: profile.operacao_financeira_id || "",
-            moedaId: profile.moeda_id || "",
-            centroCustoId: profile.centro_custo_id || "",
+            pessoa_id: profile.pessoa_id || null,
           }));
 
           // Carregar Tipos de Despesa
