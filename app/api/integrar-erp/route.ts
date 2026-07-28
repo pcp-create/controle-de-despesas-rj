@@ -429,6 +429,7 @@ export async function POST(request: Request) {
   if (!despesa.tipo_despesa_id) camposFaltando.push("Tipo de despesa");
   if (!codigoProduto) camposFaltando.push("Código de Produto ERP M8");
   if (!tecnico?.area) camposFaltando.push("Área / Setor do funcionário");
+  if (!tecnico?.pessoa_id) camposFaltando.push("Pessoa ID do funcionário (configure em Administração → Usuários → Configurações ERP)");
   if (!centroCustoId) camposFaltando.push("Centro de Custo ERP M8");
   if (!despesa.data_despesa) camposFaltando.push("Data da despesa");
   if (!despesa.data_vencimento) camposFaltando.push("Data de vencimento");
