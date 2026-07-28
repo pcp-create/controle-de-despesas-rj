@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import useSWR from "swr";
 import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosRelatorio } from "@/lib/supabase/use-filtros-persistidos";
 import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas, ControleKm } from "@/lib/supabase/hooks";
@@ -22,7 +23,7 @@ import {
   LabelList,
   CartesianGrid,
 } from "recharts";
-import { Calendar, Download, TrendingUp, DollarSign, Users, FileText, CalendarDays, Gauge, Route, Clock, Car, X, ChevronDown, ChevronUp, Table2 } from "lucide-react";
+import { Calendar, Download, TrendingUp, DollarSign, Users, FileText, CalendarDays, Gauge, Route, Clock, Car, X, ChevronDown, ChevronUp, Table2, AlertTriangle } from "lucide-react";
 import { formatDate } from "@/lib/helpers";
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -107,7 +108,19 @@ export default function RelatoriosPageSupabase() {
   const isFuncionario = currentUser?.perfil === "funcionario";
   const isGestorOuAdmin = currentUser?.perfil === "administrador" || currentUser?.perfil === "gestor";
 
-  const { despesas, isLoading } = useDespesas(isFuncionario ? currentUser?.id : undefined);
+  // Funcionário: busca só as próprias via hook (respeita RLS)
+  // Gestor/Admin: busca via API route server-side com service key (ignora RLS, vê tudo)
+  const { despesas: despesasFuncionario, isLoading: loadingFunc } = useDespesas(
+    isFuncionario ? currentUser?.id : undefined,
+    currentUser?.perfil
+  );
+  const { data: despesasAdminData, isLoading: loadingAdmin } = useSWR(
+    isGestorOuAdmin ? "/api/despesas-relatorio" : null,
+    (url: string) => fetch(url).then((r) => r.json()).then((d) => d.data ?? []),
+    { revalidateOnFocus: false }
+  );
+  const despesas = isGestorOuAdmin ? (despesasAdminData ?? []) : despesasFuncionario;
+  const isLoading = isGestorOuAdmin ? loadingAdmin : loadingFunc;
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
   const { registros: registrosKm } = useControleKm(isFuncionario ? currentUser?.id : undefined);
@@ -391,7 +404,7 @@ export default function RelatoriosPageSupabase() {
       pdf.setTextColor(17, 24, 39);
       y += cardH + 8;
 
-      // ═══���������═════════════��══════════════════════
+      // ═══���������═════════════��═══════════════�����════���═
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
       // ══���═══����══════════��══════════════════���══��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
@@ -932,9 +945,6 @@ export default function RelatoriosPageSupabase() {
           .filter((r) => r.usuario_id === p.id)
           .reduce((s, r) => s + kmPercorrido(r), 0);
 
-        // Só inclui funcionários que tiveram KM apontado no período
-        if (kmApontado === 0) return null;
-
         // Despesas de combustível do funcionário no período filtrado com litros e km/L preenchidos
         const despesasCombustivel = despesas.filter((d) => {
           if (d.tecnico_id !== p.id) return false;
@@ -982,7 +992,7 @@ export default function RelatoriosPageSupabase() {
           memorial: memorialItens,
         };
       })
-      .filter(Boolean)
+      .filter((item) => item !== null && (item.kmApontado > 0 || item.totalLitros > 0))
       .sort((a, b) => b!.kmApontado - a!.kmApontado) as {
         id: string; nome: string; kmApontado: number; kmEstimado: number;
         totalLitros: number; pct: number | null;
