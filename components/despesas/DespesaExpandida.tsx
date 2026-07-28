@@ -34,7 +34,7 @@ import {
 import { useState as useViewerState } from "react";
 
 // ─── Viewer de anexo (imagem ou PDF) ──────────────────────────────────────────
-function AnexoViewer({ url, nome }: { url: string; nome?: string | null }) {
+function AnexoViewer({ url, nome, compact = false }: { url: string; nome?: string | null; compact?: boolean }) {
   const [open, setOpen] = useViewerState(false);
   const [zoom, setZoom] = useViewerState(1);
   const [rotate, setRotate] = useViewerState(0);
@@ -49,11 +49,11 @@ function AnexoViewer({ url, nome }: { url: string; nome?: string | null }) {
       <button
         type="button"
         onClick={() => { setOpen(true); setZoom(1); setRotate(0); }}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 text-xs font-medium transition"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-input text-foreground bg-background hover:bg-muted text-xs font-medium transition shrink-0"
       >
-        <Paperclip className="w-3 h-3" />
-        {label}
-        <Eye className="w-3 h-3 ml-0.5 opacity-60" />
+        <Eye className="w-3 h-3" />
+        Ver
+        {!compact && nome && <span className="text-muted-foreground ml-0.5">({nome})</span>}
       </button>
 
       {open && (
@@ -363,14 +363,25 @@ export default function DespesaExpandida({
       )}
 
       {/* ── SEÇÃO 6: COMPROVANTE ──────────────────────────────────── */}
-      {d.comprovante_url && (
+      {d.comprovante_nome && (
         <div>
           <SectionTitle icon={<FileText className="w-3.5 h-3.5" />} label="Comprovante" />
-          <AnexoViewer url={d.comprovante_url} nome={d.comprovante_nome} />
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-foreground truncate flex-1">{d.comprovante_nome}</span>
+            {d.comprovante_url && (
+              <button
+                onClick={() => window.open(d.comprovante_url!, "_blank")}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition shrink-0"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                Ver
+              </button>
+            )}
+          </div>
         </div>
       )}
 
-      {/* ── SEÇÃO 7: APROVAÇÃO ────────────────────────────────────── */}
+      {/* ── SEÇÃO 7: APROVAÇÃO ─��──────────────────────────────────── */}
       <div>
         <SectionTitle icon={<User className="w-3.5 h-3.5" />} label="Aprovação" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -396,11 +407,16 @@ export default function DespesaExpandida({
             </div>
           )}
           {d.aprovado_financeiro && (
-            <StatusChip
-              ok
-              label={`Financeiro aprovado${financeiro?.nome ? ` por ${financeiro.nome}` : ""}`}
-              sub={fmt(d.aprovado_financeiro_em)}
-            />
+            <div className="flex items-center gap-2">
+              <StatusChip
+                ok
+                label={`Financeiro aprovado${financeiro?.nome ? ` por ${financeiro.nome}` : ""}`}
+                sub={fmt(d.aprovado_financeiro_em)}
+              />
+              {d.anexo_financeiro_url && (
+                <AnexoViewer url={d.anexo_financeiro_url} nome={d.anexo_financeiro_nome} compact />
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -432,17 +448,10 @@ export default function DespesaExpandida({
           />
         </div>
 
-        {/* Observação e anexo do financeiro */}
-        {(d.observacao_financeiro || d.anexo_financeiro_url) && (
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {d.observacao_financeiro && (
-              <div className="sm:col-span-2">
-                <InfoRow label="Obs. Financeiro" value={d.observacao_financeiro} />
-              </div>
-            )}
-            {d.anexo_financeiro_url && (
-              <AnexoViewer url={d.anexo_financeiro_url} nome={d.anexo_financeiro_nome} />
-            )}
+        {/* Observação do financeiro */}
+        {d.observacao_financeiro && (
+          <div className="mt-2">
+            <InfoRow label="Obs. Financeiro" value={d.observacao_financeiro} />
           </div>
         )}
 
