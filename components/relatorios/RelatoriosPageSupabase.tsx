@@ -395,7 +395,7 @@ export default function RelatoriosPageSupabase() {
 
       // ════════════════════════════════════════
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
-      // ══════����══════════��═════════════════════��
+      // ══��═══����══════════��═════════════════════��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
 
       const yStart2col = y;
@@ -916,10 +916,16 @@ export default function RelatoriosPageSupabase() {
           return true;
         });
 
-        const kmEstimado = despesasCombustivel.reduce((s, d) => {
-          return s + ((d.litros_abastecidos ?? 0) * (d.frota?.km_media_litro ?? 0));
-        }, 0);
+        const memorialItens = despesasCombustivel.map((d) => ({
+          data: d.data_despesa,
+          litros: d.litros_abastecidos ?? 0,
+          kmMedia: d.frota?.km_media_litro ?? 0,
+          kmEstimadoParcial: (d.litros_abastecidos ?? 0) * (d.frota?.km_media_litro ?? 0),
+          placa: (d.frota as any)?.placa ?? "",
+        }));
 
+        const kmEstimado = memorialItens.reduce((s, i) => s + i.kmEstimadoParcial, 0);
+        const totalLitros = memorialItens.reduce((s, i) => s + i.litros, 0);
         const pct = kmEstimado > 0 ? Math.round((kmApontado / kmEstimado) * 100) : null;
 
         return {
@@ -927,12 +933,16 @@ export default function RelatoriosPageSupabase() {
           nome: p.nome.split(" ").slice(0, 2).join(" "),
           kmApontado: Math.round(kmApontado),
           kmEstimado: Math.round(kmEstimado),
+          totalLitros: Math.round(totalLitros * 100) / 100,
           pct,
+          memorial: memorialItens,
         };
       })
       .filter(Boolean)
       .sort((a, b) => b!.kmApontado - a!.kmApontado) as {
-        id: string; nome: string; kmApontado: number; kmEstimado: number; pct: number | null;
+        id: string; nome: string; kmApontado: number; kmEstimado: number;
+        totalLitros: number; pct: number | null;
+        memorial: { data: string; litros: number; kmMedia: number; kmEstimadoParcial: number; placa: string }[];
       }[];
   }, [profiles, registrosKmFiltrados, despesas, isGestorOuAdmin, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
 
@@ -1499,13 +1509,12 @@ export default function RelatoriosPageSupabase() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col divide-y divide-border">
             {estimativaKmFuncionario.map((item) => {
               const max = Math.max(item.kmEstimado, item.kmApontado, 1);
               const barEstPct = (item.kmEstimado / max) * 100;
               const barAptPct = (item.kmApontado / max) * 100;
 
-              // Cor da barra apontada: verde (85-115%), laranja (>115%), vermelho (<70%), azul (sem estimativa)
               const barColor =
                 item.pct === null
                   ? "bg-primary"
@@ -1515,6 +1524,12 @@ export default function RelatoriosPageSupabase() {
                   ? "bg-warning"
                   : "bg-destructive";
 
+              const pctColor =
+                item.pct === null ? "text-muted-foreground"
+                : item.pct >= 85 && item.pct <= 115 ? "text-success"
+                : item.pct > 115 ? "text-warning"
+                : "text-destructive";
+
               const pctLabel =
                 item.pct !== null
                   ? item.pct >= 85 && item.pct <= 115
@@ -1522,56 +1537,74 @@ export default function RelatoriosPageSupabase() {
                     : item.pct > 115
                     ? `${item.pct}% — acima do estimado`
                     : `${item.pct}% — abaixo do estimado`
-                  : null;
+                  : "sem estimativa";
 
               return (
-                <div key={item.id} className="grid grid-cols-[140px_1fr_auto] items-center gap-3">
-                  {/* Nome */}
-                  <span className="text-xs font-medium text-foreground truncate" title={item.nome}>
-                    {item.nome}
-                  </span>
+                <div key={item.id} className="py-3 first:pt-0 last:pb-0 flex flex-col gap-2">
+                  {/* Linha principal: nome + barra + % */}
+                  <div className="grid grid-cols-[140px_1fr_auto] items-center gap-3">
+                    <span className="text-xs font-semibold text-foreground truncate" title={item.nome}>
+                      {item.nome}
+                    </span>
 
-                  {/* Barras sobrepostas */}
-                  <div className="relative h-5 rounded-md overflow-hidden bg-muted/20">
-                    {/* Barra de fundo: estimada (cinza) */}
-                    <div
-                      className="absolute inset-y-0 left-0 rounded-md bg-muted-foreground/15 transition-all"
-                      style={{ width: `${barEstPct}%` }}
-                    />
-                    {/* Barra de frente: apontado (colorida) */}
-                    <div
-                      className={`absolute inset-y-0 left-0 rounded-md opacity-80 transition-all ${barColor}`}
-                      style={{ width: `${barAptPct}%` }}
-                    />
-                    {/* Valores inline */}
-                    <div className="absolute inset-0 flex items-center justify-between px-2">
-                      <span className="text-[10px] font-semibold text-white drop-shadow-sm leading-none">
-                        {item.kmApontado > 0 ? `${item.kmApontado.toLocaleString("pt-BR")} km` : ""}
-                      </span>
-                      {item.kmEstimado > 0 && (
-                        <span className="text-[10px] text-muted-foreground leading-none">
-                          /{item.kmEstimado.toLocaleString("pt-BR")} km est.
+                    {/* Barra */}
+                    <div className="relative h-6 rounded-md overflow-hidden bg-muted/30">
+                      {/* Fundo estimado */}
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-md bg-muted-foreground/20 transition-all"
+                        style={{ width: `${barEstPct}%` }}
+                      />
+                      {/* Frente apontado */}
+                      <div
+                        className={`absolute inset-y-0 left-0 rounded-md opacity-80 transition-all ${barColor}`}
+                        style={{ width: `${barAptPct}%` }}
+                      />
+                      {/* KM apontado dentro da barra (branco, sempre legível) */}
+                      <div className="absolute inset-0 flex items-center px-2">
+                        <span className="text-[10px] font-bold text-white drop-shadow leading-none">
+                          {item.kmApontado > 0 ? `${item.kmApontado.toLocaleString("pt-BR")} km` : ""}
                         </span>
-                      )}
+                      </div>
                     </div>
+
+                    {/* % */}
+                    <span className={`text-[11px] font-semibold whitespace-nowrap min-w-[130px] text-right ${pctColor}`}>
+                      {pctLabel}
+                    </span>
                   </div>
 
-                  {/* % */}
-                  <div className="flex flex-col items-end min-w-[90px]">
-                    {pctLabel ? (
-                      <span
-                        className={`text-[10px] font-semibold leading-none ${
-                          item.pct! >= 85 && item.pct! <= 115
-                            ? "text-success"
-                            : item.pct! > 115
-                            ? "text-warning"
-                            : "text-destructive"
-                        }`}
-                      >
-                        {pctLabel}
-                      </span>
+                  {/* Subtexto: estimativa e memorial de cálculo */}
+                  <div className="pl-[152px] flex flex-col gap-1">
+                    {item.kmEstimado > 0 ? (
+                      <>
+                        {/* Linha resumo estimativa */}
+                        <p className="text-[10px] text-muted-foreground">
+                          Estimativa: <span className="font-medium text-foreground">{item.kmEstimado.toLocaleString("pt-BR")} km</span>
+                          {" "}·{" "}
+                          Total abastecido: <span className="font-medium text-foreground">{item.totalLitros.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span>
+                        </p>
+                        {/* Memorial detalhado por abastecimento */}
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                          {item.memorial.map((m, i) => (
+                            <span key={i} className="text-[10px] text-muted-foreground">
+                              {new Date(m.data + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                              {m.placa ? ` (${m.placa})` : ""}
+                              {": "}
+                              <span className="font-medium text-foreground">
+                                {m.litros.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L
+                                {" × "}
+                                {m.kmMedia} km/L
+                                {" = "}
+                                {Math.round(m.kmEstimadoParcial).toLocaleString("pt-BR")} km
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      </>
                     ) : (
-                      <span className="text-[10px] text-muted-foreground leading-none">sem estimativa</span>
+                      <p className="text-[10px] text-muted-foreground italic">
+                        Sem abastecimentos com litros e média KM/L cadastrados no período.
+                      </p>
                     )}
                   </div>
                 </div>
@@ -1581,10 +1614,11 @@ export default function RelatoriosPageSupabase() {
 
           {/* Legenda de cores */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 pt-3 border-t border-border">
-            <span className="text-[10px] text-muted-foreground">Interpretação:</span>
+            <span className="text-[10px] text-muted-foreground font-medium">Interpretação:</span>
             <span className="flex items-center gap-1 text-[10px] text-success"><span className="w-2 h-2 rounded-full bg-success inline-block" />85–115% — dentro do esperado</span>
             <span className="flex items-center gap-1 text-[10px] text-warning"><span className="w-2 h-2 rounded-full bg-warning inline-block" />{">"}115% — acima do estimado</span>
             <span className="flex items-center gap-1 text-[10px] text-destructive"><span className="w-2 h-2 rounded-full bg-destructive inline-block" />{"<"}85% — abaixo do estimado</span>
+            <span className="flex items-center gap-1 text-[10px] text-muted-foreground ml-auto italic">Fórmula: litros abastecidos × média KM/L do veículo</span>
           </div>
         </div>
       )}
