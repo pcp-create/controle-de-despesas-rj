@@ -32,6 +32,7 @@ export interface Cartao {
   apelido: string | null;
   is_padrao: boolean;
   ativo: boolean;
+  empresa_id_m8: number | null;
 }
 
 export interface Despesa {
@@ -79,6 +80,9 @@ export interface Despesa {
   aprovado_financeiro: boolean;
   aprovado_financeiro_em: string | null;
   aprovado_financeiro_por: string | null;
+  observacao_financeiro: string | null;
+  anexo_financeiro_url: string | null;
+  anexo_financeiro_nome: string | null;
   // Lançamento no sistema interno
   lancado_sistema: boolean;
   lancado_sistema_em: string | null;
@@ -726,19 +730,41 @@ export function useDespesas(userId?: string, perfil?: string) {
     return { error: null };
   };
 
-  const aprovarFinanceiro = async (id: string, aprovadoPor: string) => {
+  const aprovarFinanceiro = async (
+    id: string,
+    aprovadoPor: string,
+    opts?: { observacao?: string; anexoUrl?: string; anexoNome?: string }
+  ) => {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
-    const { error } = await supabase
+    // Tenta com os campos extras de observação/anexo
+    let { error } = await supabase
       .from("despesas")
       .update({
         aprovado_financeiro: true,
         aprovado_financeiro_em: new Date().toISOString(),
         aprovado_financeiro_por: aprovadoPor,
+        observacao_financeiro: opts?.observacao || null,
+        anexo_financeiro_url: opts?.anexoUrl || null,
+        anexo_financeiro_nome: opts?.anexoNome || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
+
+    // Se a coluna ainda não existe no banco, aprova sem os campos extras
+    if (error && error.message.includes("column")) {
+      const fallback = await supabase
+        .from("despesas")
+        .update({
+          aprovado_financeiro: true,
+          aprovado_financeiro_em: new Date().toISOString(),
+          aprovado_financeiro_por: aprovadoPor,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+      error = fallback.error;
+    }
 
     if (error) return { error: error.message };
 

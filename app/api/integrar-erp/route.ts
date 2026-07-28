@@ -327,7 +327,6 @@ export async function POST(request: Request) {
   const M8_TENANT = process.env.M8_TENANT;
   const M8_USERNAME = process.env.M8_USERNAME;
   const M8_PASSWORD = process.env.M8_PASSWORD;
-  const M8_COMPANY = process.env.M8_COMPANY;
   const M8_DOMAIN = process.env.M8_DOMAIN;
 
   const variaveis = {
@@ -335,7 +334,6 @@ export async function POST(request: Request) {
     M8_TENANT,
     M8_USERNAME,
     M8_PASSWORD,
-    M8_COMPANY,
     M8_DOMAIN,
   };
 
@@ -450,6 +448,8 @@ export async function POST(request: Request) {
   const centroCustoId = paraNumero(cc?.centro_custo_erp);
   const valorDespesa = paraNumero(despesa.valor);
 
+  const empresaIdM8 = cartao?.empresa_id_m8 ? Number(cartao.empresa_id_m8) : null;
+
   const camposFaltando: string[] = [];
   if (!despesa.tipo_despesa_id) camposFaltando.push("Tipo de despesa");
   if (!codigoProduto) camposFaltando.push("Código de Produto ERP M8");
@@ -459,6 +459,7 @@ export async function POST(request: Request) {
   if (!despesa.data_despesa) camposFaltando.push("Data da despesa");
   if (!despesa.data_vencimento) camposFaltando.push("Data de vencimento");
   if (!valorDespesa || valorDespesa <= 0) camposFaltando.push("Valor da despesa");
+  if (!empresaIdM8) camposFaltando.push("Empresa ID M8 do cartão (configure em Administração → Usuários → Cartões)");
 
   if (camposFaltando.length > 0) {
     return NextResponse.json(
@@ -491,7 +492,7 @@ export async function POST(request: Request) {
     etapa1: {
       tenant: M8_TENANT,
       username: M8_USERNAME,
-      company: Number(M8_COMPANY),
+      company: empresaIdM8,
       domain: M8_DOMAIN,
     },
   };
@@ -517,7 +518,7 @@ export async function POST(request: Request) {
       tenant: M8_TENANT!,
       username: M8_USERNAME!,
       password: M8_PASSWORD!,
-      company: Number(M8_COMPANY),
+      company: empresaIdM8!,
       domain: M8_DOMAIN!,
     };
 
@@ -554,7 +555,7 @@ export async function POST(request: Request) {
       }
 
       const bodyEtapa2 = {
-        empresaId: 1,
+        empresaId: empresaIdM8!,
         pessoaId,
         tipoCompraId: 8,
         emissao: paraIso(despesa.data_despesa, "Data da despesa"),
@@ -603,14 +604,14 @@ export async function POST(request: Request) {
 
       // O M8 pode retornar a NF antes de concluir toda a persistência interna.
       // Aguarda brevemente antes de cadastrar o primeiro produto.
-      await aguardar(1200);
+      await aguardar(400);
     }
 
     if (!erpId) {
       throw new IntegracaoError(2, "documentoFiscalId não disponível.");
     }
 
-    // ETAPA 3 — Cadastrar produto
+    // ETAPA 3 — Cadastrar produto (com retry de backoff progressivo)
     if (etapaInicial <= 3) {
       const bodyEtapa3 = {
         produtoId: codigoProduto!,
@@ -625,39 +626,38 @@ export async function POST(request: Request) {
 
       let etapa3: Awaited<ReturnType<typeof m8Request>>;
 
-      try {
-        etapa3 = await m8Request(
-          3,
-          `${baseUrl}/v1/compras/notafiscal/${erpId}/produto`,
-          token,
-          { method: "POST", body: bodyEtapa3 }
-        );
-      } catch (erroEtapa3: any) {
-        const mensagemEtapa3 = String(erroEtapa3?.message || "");
+      const tentativasEtapa3 = 3;
+      let ultimoErroEtapa3: unknown;
 
-        const erroPersistenciaM8 =
-          mensagemEtapa3.includes(
-            "Object reference not set to an instance of an object"
-          ) ||
-          mensagemEtapa3.includes("VerificarStatusDocumento");
+      for (let tentativa = 1; tentativa <= tentativasEtapa3; tentativa++) {
+        try {
+          etapa3 = await m8Request(
+            3,
+            `${baseUrl}/v1/compras/notafiscal/${erpId}/produto`,
+            token,
+            { method: "POST", body: bodyEtapa3 }
+          );
+          ultimoErroEtapa3 = null;
+          break;
+        } catch (erroEtapa3: any) {
+          const mensagemEtapa3 = String(erroEtapa3?.message || "");
+          const erroPersistenciaM8 =
+            mensagemEtapa3.includes("Object reference not set to an instance of an object") ||
+            mensagemEtapa3.includes("VerificarStatusDocumento");
 
-        if (!erroPersistenciaM8) {
-          throw erroEtapa3;
+          if (!erroPersistenciaM8) throw erroEtapa3;
+
+          ultimoErroEtapa3 = erroEtapa3;
+
+          if (tentativa < tentativasEtapa3) {
+            const espera = 400 * Math.pow(2, tentativa - 1); // 400ms, 800ms
+            console.warn(`[M8][Etapa 3] NF ainda sendo persistida. Tentativa ${tentativa}/${tentativasEtapa3}. Aguardando ${espera}ms.`);
+            await aguardar(espera);
+          }
         }
-
-        console.warn(
-          "[M8][Etapa 3] A NF ainda pode estar sendo persistida. Nova tentativa em 2 segundos."
-        );
-
-        await aguardar(2000);
-
-        etapa3 = await m8Request(
-          3,
-          `${baseUrl}/v1/compras/notafiscal/${erpId}/produto`,
-          token,
-          { method: "POST", body: bodyEtapa3 }
-        );
       }
+
+      if (ultimoErroEtapa3) throw ultimoErroEtapa3;
 
       respostas.etapa3 = etapa3.respostaCompleta;
       await salvarProgresso(supabase, despesaId, {

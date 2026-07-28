@@ -18,11 +18,11 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-
   Car,
   Banknote,
   Gauge,
 } from "lucide-react";
+import type { PendenciasCount } from "@/hooks/usePendenciasCount";
 
 interface NavItem {
   key: PageKey;
@@ -67,17 +67,37 @@ const NAV_GROUPS: NavGroup[] = [
       { key: "aprovacao",    label: "Aprovações",      icon: <CheckSquare className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
       { key: "frotas",       label: "Frotas",          icon: <Car         className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
       { key: "tipos-despesa",label: "Tipos de Despesa",icon: <Tag         className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
-      { key: "auditoria",    label: "Auditoria",       icon: <ClipboardList className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
     ],
   },
   {
     label: "Administração",
     visibleFor: ["administrador"],
     items: [
-      { key: "usuarios", label: "Usuários", icon: <Users className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
+      { key: "usuarios",  label: "Usuários",  icon: <Users         className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
+      { key: "auditoria", label: "Auditoria", icon: <ClipboardList className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
     ],
   },
 ];
+
+// Mapeamento de qual chave de pendências corresponde a cada aba
+const BADGE_MAP: Record<string, keyof Omit<PendenciasCount, "total">> = {
+  financeiro: "financeiro",
+  reembolso:  "reembolso",
+  aprovacao:  "aprovacao",
+};
+
+function NavBadge({ count, collapsed }: { count: number; collapsed: boolean }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className={`inline-flex items-center justify-center rounded-full bg-destructive text-white font-bold leading-none shrink-0 ${
+        collapsed ? "w-4 h-4 text-[9px] absolute -top-1 -right-1" : "w-5 h-5 text-[10px] ml-auto"
+      }`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
+  );
+}
 
 interface Props {
   currentPage: PageKey;
@@ -88,6 +108,7 @@ interface Props {
   /** Modo drawer mobile */
   mobile?: boolean;
   onClose?: () => void;
+  pendencias?: PendenciasCount;
 }
 
 export default function Sidebar({
@@ -97,6 +118,7 @@ export default function Sidebar({
   onToggleCollapse,
   mobile,
   onClose,
+  pendencias,
 }: Props) {
   const { currentUser } = useAppStore();
   const { signOut } = useAuth();
@@ -176,12 +198,14 @@ export default function Sidebar({
 
             {group.items.map((item) => {
               const active = currentPage === item.key;
+              const badgeKey = BADGE_MAP[item.key];
+              const badgeCount = badgeKey && pendencias ? pendencias[badgeKey] : 0;
               return (
                 <button
                   key={item.key}
                   onClick={() => onNavigate(item.key)}
                   title={collapsed && !mobile ? item.label : undefined}
-                  className={`flex items-center gap-3 w-full rounded-lg text-sm font-medium transition-all text-left ${
+                  className={`relative flex items-center gap-3 w-full rounded-lg text-sm font-medium transition-all text-left ${
                     collapsed && !mobile ? "justify-center px-0 py-2.5" : "px-3 py-2.5"
                   } ${
                     active
@@ -189,11 +213,19 @@ export default function Sidebar({
                       : "text-sidebar-foreground hover:bg-sidebar-accent"
                   }`}
                 >
-                  <span className={active ? "text-white" : "text-sidebar-foreground/70"}>
+                  {/* Ícone com badge quando colapsado */}
+                  <span className={`relative ${active ? "text-white" : "text-sidebar-foreground/70"}`}>
                     {item.icon}
+                    {(collapsed && !mobile) && (
+                      <NavBadge count={badgeCount} collapsed={true} />
+                    )}
                   </span>
+
                   {(!collapsed || mobile) && (
-                    <span className="truncate">{item.label}</span>
+                    <>
+                      <span className="truncate">{item.label}</span>
+                      <NavBadge count={badgeCount} collapsed={false} />
+                    </>
                   )}
                 </button>
               );

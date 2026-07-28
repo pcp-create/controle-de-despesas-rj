@@ -23,6 +23,7 @@ import AuditoriaPageSupabase from "@/components/admin/AuditoriaPageSupabase";
 import ReembolsoPage from "@/components/reembolso/ReembolsoPage";
 import ControleKmPage from "@/components/km/ControleKmPage";
 import { useAppStore } from "@/lib/store";
+import { usePendenciasCount } from "@/hooks/usePendenciasCount";
 
 export type PageKey =
   | "dashboard"
@@ -45,6 +46,7 @@ export type NavigateFn = (page: PageKey, statusFilter?: string) => void;
 export default function AppShellSupabase() {
   const { currentUser } = useAppStore();
   useLoadSupabaseData();
+  const pendencias = usePendenciasCount();
   
   const [page, setPage] = useState<PageKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -109,6 +111,7 @@ export default function AppShellSupabase() {
           onNavigate={navigate}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+          pendencias={pendencias}
         />
       </div>
 
@@ -131,6 +134,7 @@ export default function AppShellSupabase() {
             onToggleCollapse={() => {}}
             mobile
             onClose={() => setSidebarOpen(false)}
+            pendencias={pendencias}
           />
       </div>
 
@@ -139,6 +143,9 @@ export default function AppShellSupabase() {
         <HeaderSupabase
           onMenuClick={() => setSidebarOpen(true)}
           onAlterarSenha={() => setShowAlterarSenha(true)}
+          totalPendencias={pendencias.total}
+          pendencias={pendencias}
+          onNavigate={navigate}
         />
         <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 lg:pb-6">
           {renderPage()}

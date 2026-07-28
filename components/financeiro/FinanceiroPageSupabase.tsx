@@ -702,14 +702,14 @@ export default function FinanceiroPageSupabase() {
           </div>
         </div>
 
-        {/* Total Lançado */}
+        {/* Total Enviado ERP */}
         <div className="bg-white rounded-xl border border-border shadow-sm p-4">
           <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-3">
             <SendHorizonal className="w-5 h-5" />
           </div>
           <p className="text-2xl font-bold text-foreground">{formatCurrency(totalLancadoValor)}</p>
           <div className="flex items-center justify-between mt-1">
-            <p className="text-xs text-muted-foreground">Total Lançado</p>
+            <p className="text-xs text-muted-foreground">Total Enviado ERP</p>
             <span className="text-xs font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
               {totalLancadoQtd} {totalLancadoQtd === 1 ? "despesa" : "despesas"}
             </span>
@@ -748,10 +748,10 @@ export default function FinanceiroPageSupabase() {
             <button
               type="button"
               onClick={() => setFiltroLancamento(filtroLancamento === "lancado" ? "todos" : "lancado")}
-              className={`rounded-xl border p-3 text-left transition ${filtroLancamento === "lancado" ? "border-primary ring-1 ring-primary/30 bg-primary/5" : "border-border bg-white hover:border-primary/40"}`}
+              className={`rounded-xl border p-3 text-left transition ${filtroLancamento === "lancado" ? "border-success ring-1 ring-success/30 bg-success/5" : "border-border bg-white hover:border-success/40"}`}
             >
-              <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-1.5">
-                <Send className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-lg bg-success/10 text-success flex items-center justify-center mb-1.5">
+                <CheckCircle className="w-4 h-4" />
               </div>
               <p className="text-xl font-bold text-foreground">{qtdErpLancado}</p>
               <p className="text-xs text-muted-foreground">Lançado</p>
@@ -759,10 +759,10 @@ export default function FinanceiroPageSupabase() {
             <button
               type="button"
               onClick={() => setFiltroLancamento(filtroLancamento === "integrado" ? "todos" : "integrado")}
-              className={`rounded-xl border p-3 text-left transition ${filtroLancamento === "integrado" ? "border-success ring-1 ring-success/30 bg-success/5" : "border-border bg-white hover:border-success/40"}`}
+              className={`rounded-xl border p-3 text-left transition ${filtroLancamento === "integrado" ? "border-primary ring-1 ring-primary/30 bg-primary/5" : "border-border bg-white hover:border-primary/40"}`}
             >
-              <div className="w-7 h-7 rounded-lg bg-success/10 text-success flex items-center justify-center mb-1.5">
-                <CheckCircle className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-1.5">
+                <Send className="w-4 h-4" />
               </div>
               <p className="text-xl font-bold text-foreground">{qtdErpIntegrado}</p>
               <p className="text-xs text-muted-foreground">Enviado ERP</p>
@@ -1017,25 +1017,15 @@ export default function FinanceiroPageSupabase() {
                                 })()}
                               </div>
                             ) : aprovado ? (
-                              d.pagamento_tipo === "faturado" ? (
-                                <span
-                                  title="Despesas com pagamento Faturado não são enviadas ao ERP M8"
-                                  className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-muted text-muted-foreground bg-muted/20 cursor-not-allowed opacity-60"
-                                >
-                                  <SendHorizonal className="w-2.5 h-2.5" />
-                                  Faturado
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled={lancando[d.id]}
-                                  onClick={() => setConfirmLancar(d.id)}
-                                  className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-primary/30 text-primary bg-primary/10 hover:bg-primary hover:text-white transition disabled:opacity-50"
-                                >
-                                  <SendHorizonal className="w-2.5 h-2.5" />
-                                  Lançar
-                                </button>
-                              )
+                              <button
+                                type="button"
+                                disabled={lancando[d.id]}
+                                onClick={() => setConfirmLancar(d.id)}
+                                className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-primary/30 text-primary bg-primary/10 hover:bg-primary hover:text-white transition disabled:opacity-50"
+                              >
+                                <SendHorizonal className="w-2.5 h-2.5" />
+                                Lançar
+                              </button>
                             ) : (
                               <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded-full bg-muted/30 border border-border cursor-not-allowed opacity-50">
                                 Aguardando aprovação
@@ -1099,8 +1089,15 @@ export default function FinanceiroPageSupabase() {
                                 );
                               }
 
-                              // pendente: aguardando envio ao ERP
-                              if (d.pagamento_tipo === "faturado") return null;
+                              // pendente: faturado não vai ao ERP M8 — exibe aviso informativo
+                              if (d.pagamento_tipo === "faturado") return (
+                                <span
+                                  title="Pagamento Faturado não é enviado ao ERP M8"
+                                  className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/60 px-1.5 py-0.5 italic"
+                                >
+                                  ERP N/A (Faturado)
+                                </span>
+                              );
                               const isNFDireto = /^nf$/i.test((d.documento || "").trim()) || /nota\s*fiscal/i.test((d.documento || "").trim());
                               return (
                                 <button
@@ -1195,7 +1192,7 @@ export default function FinanceiroPageSupabase() {
                           <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${pc.color}`}>
                             {pc.label}
                           </span>
-                        ) : <span className="text-muted-foreground">—</span>;
+                        ) : <span className="text-muted-foreground">����</span>;
                       })()}
                     </td>
                     <td className="px-3 py-2 max-w-32 truncate">{d.cliente}</td>
