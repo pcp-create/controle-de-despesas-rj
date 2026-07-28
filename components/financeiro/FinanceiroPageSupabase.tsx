@@ -454,9 +454,9 @@ export default function FinanceiroPageSupabase() {
         d.numero_os || "-",
         formatCurrency(Number(d.valor)),
         d.documento || "-",
+        d.comprovante_url ? "Sim" : "Não",
         cartaoLabel,
         statusLabel,
-        d.comprovante_url ? "Sim" : "Não",
         d.status_erp || "-",
         d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "-",
         d.erp_id || "-",
@@ -465,7 +465,7 @@ export default function FinanceiroPageSupabase() {
 
     autoTable(doc, {
       startY: 36,
-      head: [["Data", "Vencimento", "Parcela", "Funcionário", "Tipo", "Cliente", "OS", "Valor", "Doc.", "Cartão", "Status", "Comprovante", "Status ERP", "Envio", "ERP ID"]],
+      head: [["Data", "Vencimento", "Parcela", "Funcionário", "Tipo", "Cliente", "OS", "Valor", "Doc.", "Comprovante", "Cartão", "Status", "Status ERP", "Envio", "ERP ID"]],
       body: rows,
       styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
       headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: "bold", fontSize: 7.5 },
@@ -816,9 +816,9 @@ export default function FinanceiroPageSupabase() {
                     { key: "os",          label: "OS",          align: "left"  },
                     { key: "valor",       label: "Valor",       align: "right" },
                     { key: "documento",    label: "Documento",   align: "left"  },
+                    { key: null,          label: "Comprovante", align: "left"  },
                     { key: "cartao",      label: "Cartão",      align: "left"  },
                     { key: "status",      label: "Status",      align: "left"  },
-                    { key: null,          label: "Comprovante", align: "left"  },
                     { key: null,          label: "Status ERP",  align: "left"  },
                     { key: null,          label: "Envio",       align: "left"  },
                     { key: null,          label: "ERP ID",      align: "left"  },
@@ -1189,6 +1189,17 @@ export default function FinanceiroPageSupabase() {
                       )}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
+                      {d.comprovante_url ? (
+                        <a href={d.comprovante_url} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary hover:text-primary/80">
+                          <Eye className="w-3.5 h-3.5" />
+                          Ver
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
                       {cartaoLabel ? (
                         <span className="text-xs text-foreground font-mono">{cartaoLabel}</span>
                       ) : (
@@ -1200,17 +1211,6 @@ export default function FinanceiroPageSupabase() {
                         <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />
                         {statusCfg.label}
                       </span>
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      {d.comprovante_url ? (
-                        <a href={d.comprovante_url} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-primary hover:text-primary/80">
-                          <Eye className="w-3.5 h-3.5" />
-                          Ver
-                        </a>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
                     </td>
                     {/* Status ERP */}
                     <td className="px-3 py-2 whitespace-nowrap">
