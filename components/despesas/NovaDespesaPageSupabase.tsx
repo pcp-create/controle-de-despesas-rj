@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
@@ -66,6 +66,14 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [migrationSql, setMigrationSql] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/setup-km-metricas")
+      .then((r) => r.json())
+      .then((d) => { if (d.needsMigration) setMigrationSql(d.sql); })
+      .catch(() => {});
+  }, []);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -296,6 +304,36 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
   return (
     <div className="max-w-2xl mx-auto">
+
+      {/* Banner: migration pendente para campos de abastecimento */}
+      {migrationSql && (
+        <div className="flex flex-col gap-2 p-4 mb-4 rounded-xl border border-warning/40 bg-warning/5">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-warning">Atualização de banco necessária</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Execute o SQL abaixo no <strong>Supabase SQL Editor</strong> (Dashboard → SQL Editor) para habilitar os campos de abastecimento. Após executar, recarregue a página.
+              </p>
+            </div>
+            <button onClick={() => setMigrationSql(null)} className="text-muted-foreground hover:text-foreground transition shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-xs font-mono bg-muted px-3 py-2 rounded-lg text-foreground break-all select-all">
+              {migrationSql}
+            </code>
+            <button
+              onClick={() => navigator.clipboard.writeText(migrationSql)}
+              className="shrink-0 text-xs px-3 py-2 rounded-lg border border-input bg-background hover:bg-muted transition font-medium"
+            >
+              Copiar SQL
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="p-2 rounded-lg hover:bg-muted transition text-muted-foreground">
