@@ -174,22 +174,25 @@ export default function UsuariosPageSupabase() {
 
       if (editingUser) {
         // Atualizar usuário
+        const updatePayload = {
+          nome: form.nome,
+          email: form.email,
+          usuario: form.usuario,
+          perfil: form.perfil,
+          area: form.area || null,
+          telefone: form.telefone || null,
+          gestor_id: form.gestor_id || null,
+          frota_padrao_id: form.frota_padrao_id || null,
+          pessoa_id: form.pessoaId ? Number(form.pessoaId) : null,
+        };
+        console.log("[v0] update payload:", updatePayload);
         const { error } = await supabase
           .from("profiles")
-          .update({
-            nome: form.nome,
-            email: form.email,
-            usuario: form.usuario,
-            perfil: form.perfil,
-            area: form.area || null,
-            telefone: form.telefone || null,
-            gestor_id: form.gestor_id || null,
-            frota_padrao_id: form.frota_padrao_id || null,
-            pessoa_id: form.pessoaId ? Number(form.pessoaId) : null,
-          })
+          .update(updatePayload)
           .eq("id", editingUser.id);
 
         if (error) {
+          console.log("[v0] update error:", error.message);
           setFormError("Erro ao atualizar usuário: " + error.message);
           setFormLoading(false);
           return;
@@ -987,19 +990,39 @@ export default function UsuariosPageSupabase() {
                 </div>
               )}
               {activeTab === "erp" && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-foreground">Pessoa ID</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={form.pessoaId || ""}
-                    onChange={(e) => setForm({ ...form, pessoaId: e.target.value.replace(/[^0-9]/g, "") })}
-                    placeholder="Ex: 27977"
-                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Identificador da pessoa no ERP M8. Usado na integração de despesas.
-                  </p>
+                <div className="flex flex-col gap-3">
+                  {migrationNeeded && (
+                    <div className="flex flex-col gap-2 px-3 py-3 rounded-lg border border-warning/40 bg-warning/8">
+                      <p className="text-xs font-medium text-warning">
+                        A coluna <code>pessoa_id</code> ainda nao existe no banco. Execute o SQL abaixo no Supabase SQL Editor para habilitar este campo:
+                      </p>
+                      <code className="text-[11px] bg-muted px-2 py-1.5 rounded font-mono text-foreground break-all select-all">
+                        {migrationNeeded}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => fetch("/api/setup-pessoa-id").then((r) => r.json()).then((d) => { if (d.success) setMigrationNeeded(null); })}
+                        className="self-start text-xs px-3 py-1 rounded-md bg-warning/10 border border-warning/30 text-warning hover:bg-warning/20 transition"
+                      >
+                        Tentar aplicar automaticamente
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground">Pessoa ID</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      disabled={!!migrationNeeded}
+                      value={form.pessoaId || ""}
+                      onChange={(e) => setForm({ ...form, pessoaId: e.target.value.replace(/[^0-9]/g, "") })}
+                      placeholder="Ex: 27977"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Identificador da pessoa no ERP M8. Usado na integração de despesas.
+                    </p>
+                  </div>
                 </div>
               )}
 

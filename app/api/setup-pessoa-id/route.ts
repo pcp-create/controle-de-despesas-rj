@@ -23,6 +23,16 @@ export async function GET() {
     return NextResponse.json({ success: true, message: "Coluna pessoa_id já existe." });
   }
 
+  // Tenta criar a coluna automaticamente via rpc exec_sql
+  const { error: rpcError } = await supabase.rpc("exec_sql", {
+    sql: "ALTER TABLE profiles ADD COLUMN IF NOT EXISTS pessoa_id INTEGER;",
+  });
+
+  if (!rpcError) {
+    return NextResponse.json({ success: true, message: "Coluna pessoa_id criada com sucesso." });
+  }
+
+  // Fallback: retorna SQL para execução manual
   return NextResponse.json({
     needsMigration: true,
     message: "Execute o SQL abaixo no Supabase SQL Editor (Dashboard > SQL Editor):",
