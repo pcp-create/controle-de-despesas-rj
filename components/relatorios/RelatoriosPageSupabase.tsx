@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import useSWR from "swr";
 import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosRelatorio } from "@/lib/supabase/use-filtros-persistidos";
 import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas, ControleKm } from "@/lib/supabase/hooks";
@@ -107,10 +108,19 @@ export default function RelatoriosPageSupabase() {
   const isFuncionario = currentUser?.perfil === "funcionario";
   const isGestorOuAdmin = currentUser?.perfil === "administrador" || currentUser?.perfil === "gestor";
 
-  const { despesas, isLoading } = useDespesas(
+  // Funcionário: busca só as próprias via hook (respeita RLS)
+  // Gestor/Admin: busca via API route server-side com service key (ignora RLS, vê tudo)
+  const { despesas: despesasFuncionario, isLoading: loadingFunc } = useDespesas(
     isFuncionario ? currentUser?.id : undefined,
     currentUser?.perfil
   );
+  const { data: despesasAdminData, isLoading: loadingAdmin } = useSWR(
+    isGestorOuAdmin ? "/api/despesas-relatorio" : null,
+    (url: string) => fetch(url).then((r) => r.json()).then((d) => d.data ?? []),
+    { revalidateOnFocus: false }
+  );
+  const despesas = isGestorOuAdmin ? (despesasAdminData ?? []) : despesasFuncionario;
+  const isLoading = isGestorOuAdmin ? loadingAdmin : loadingFunc;
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
   const { registros: registrosKm } = useControleKm(isFuncionario ? currentUser?.id : undefined);
@@ -394,7 +404,7 @@ export default function RelatoriosPageSupabase() {
       pdf.setTextColor(17, 24, 39);
       y += cardH + 8;
 
-      // ═══���������═════════════��═══════════════���════���═
+      // ═══���������═════════════��═══════════════�����════���═
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
       // ══���═══����══════════��══════════════════���══��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
