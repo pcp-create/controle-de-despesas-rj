@@ -1,7 +1,6 @@
 "use client";
 
 import useSWR from "swr";
-import { createClient } from "@/lib/supabase/client";
 import { useProfiles } from "@/lib/supabase/hooks";
 import { formatDateTime } from "@/lib/helpers";
 
@@ -16,14 +15,10 @@ interface AuditoriaRow {
 }
 
 const fetchAuditoria = async (): Promise<AuditoriaRow[]> => {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("auditoria")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(500);
-  if (error) throw error;
-  return data || [];
+  const res = await fetch("/api/auditoria");
+  if (!res.ok) throw new Error("Erro ao buscar auditoria");
+  const json = await res.json();
+  return json.data ?? [];
 };
 
 const ACAO_BADGE: Record<string, string> = {
