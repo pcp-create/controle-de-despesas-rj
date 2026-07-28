@@ -531,7 +531,7 @@ export async function POST(request: Request) {
       const bodyEtapa2 = {
         empresaId: 1,
         pessoaId,
-        tipoCompraId: 1,
+        tipoCompraId: 8,
         emissao: paraIso(despesa.data_despesa, "Data da despesa"),
         lancamento: agora,
         freteId: 9,
