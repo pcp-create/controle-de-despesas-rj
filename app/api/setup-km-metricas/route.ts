@@ -13,9 +13,10 @@ export async function GET() {
     auth: { persistSession: false },
   });
 
-  const { error: checkFrota }       = await supabase.from("frotas").select("km_media_litro").limit(1);
-  const { error: checkLitros }      = await supabase.from("despesas").select("litros_abastecidos").limit(1);
-  const { error: checkValorLitro }  = await supabase.from("despesas").select("valor_litro").limit(1);
+  const { error: checkFrota }         = await supabase.from("frotas").select("km_media_litro").limit(1);
+  const { error: checkLitros }        = await supabase.from("despesas").select("litros_abastecidos").limit(1);
+  const { error: checkValorLitro }    = await supabase.from("despesas").select("valor_litro").limit(1);
+  const { error: checkTipoCombust }   = await supabase.from("despesas").select("tipo_combustivel").limit(1);
 
   const missing: { col: string; sql: string }[] = [];
 
@@ -33,6 +34,11 @@ export async function GET() {
     missing.push({
       col: "despesas.valor_litro",
       sql: "ALTER TABLE despesas ADD COLUMN IF NOT EXISTS valor_litro NUMERIC(8,3);",
+    });
+  if (checkTipoCombust)
+    missing.push({
+      col: "despesas.tipo_combustivel",
+      sql: "ALTER TABLE despesas ADD COLUMN IF NOT EXISTS tipo_combustivel TEXT;",
     });
 
   if (missing.length === 0) {

@@ -63,6 +63,7 @@ export interface Despesa {
   km_atual: number | null;
   litros_abastecidos: number | null;
   valor_litro: number | null;
+  tipo_combustivel: string | null;
   frota?: { id: string; placa: string; modelo: string; km_media_litro: number | null } | null;
   // Parcelamento
   parcelado: boolean;

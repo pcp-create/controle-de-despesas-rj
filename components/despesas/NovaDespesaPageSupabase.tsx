@@ -49,6 +49,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     kmAtual: editDespesa?.km_atual?.toString() || "",
     litrosAbastecidos: editDespesa?.litros_abastecidos?.toString() || "",
     valorLitro: editDespesa?.valor_litro?.toString() || "",
+    tipoCombustivel: (editDespesa as any)?.tipo_combustivel || "",
   });
 
   // ─── Tipo de pagamento ───────────────────────────────────────────────────────
@@ -149,8 +150,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     }
     if (isCombustivel) {
       if (!form.frotaId) errs.frotaId = "Selecione o veículo";
+      if (!form.tipoCombustivel) errs.tipoCombustivel = "Selecione o tipo de combustível";
       if (!form.kmAtual || isNaN(Number(form.kmAtual)) || Number(form.kmAtual) < 0)
         errs.kmAtual = "Informe o KM atual";
+      if (!form.litrosAbastecidos || isNaN(Number(form.litrosAbastecidos)) || Number(form.litrosAbastecidos) <= 0)
+        errs.litrosAbastecidos = "Informe os litros abastecidos";
     }
     return errs;
   };
@@ -183,6 +187,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       km_atual: isCombustivel && form.kmAtual ? Number(form.kmAtual) : null,
       litros_abastecidos: isCombustivel && form.litrosAbastecidos ? Number(form.litrosAbastecidos) : null,
       valor_litro: isCombustivel && form.valorLitro ? Number(form.valorLitro) : null,
+      tipo_combustivel: isCombustivel && form.tipoCombustivel ? form.tipoCombustivel : null,
       comprovante_nome: comprovante?.nome || null,
       comprovante_url: comprovante?.url || null,
       status_aprovacao: "AguardandoGestor" as const,
@@ -840,6 +845,28 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 {errors.frotaId && <span className="text-xs text-destructive">{errors.frotaId}</span>}
               </div>
 
+              {/* Tipo de combustível */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Tipo de combustível *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["Gasolina", "Gasolina Aditivada", "Etanol", "Diesel"] as const).map((tipo) => (
+                    <button
+                      key={tipo}
+                      type="button"
+                      onClick={() => setForm({ ...form, tipoCombustivel: tipo })}
+                      className={`px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                        form.tipoCombustivel === tipo
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-input bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                      }`}
+                    >
+                      {tipo}
+                    </button>
+                  ))}
+                </div>
+                {errors.tipoCombustivel && <span className="text-xs text-destructive">{errors.tipoCombustivel}</span>}
+              </div>
+
               {/* KM */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-foreground">KM Atual *</label>
@@ -856,7 +883,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
               {/* Litros abastecidos */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">Litros abastecidos</label>
+                <label className="text-sm font-medium text-foreground">Litros abastecidos *</label>
                 <input
                   type="number"
                   value={form.litrosAbastecidos}
@@ -866,6 +893,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                   step={0.001}
                   className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
+                {errors.litrosAbastecidos && <span className="text-xs text-destructive">{errors.litrosAbastecidos}</span>}
               </div>
 
               {/* Valor por litro */}
