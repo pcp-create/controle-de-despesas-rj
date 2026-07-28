@@ -395,7 +395,7 @@ export default function RelatoriosPageSupabase() {
       pdf.setTextColor(17, 24, 39);
       y += cardH + 8;
 
-      // ═════════════════��══════════════════════
+      // ═══���═════════════��══════════════════════
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
       // ══���═══����══════════��══════════════════���══��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
@@ -947,6 +947,13 @@ export default function RelatoriosPageSupabase() {
         const totalLitros = memorialItens.reduce((s, i) => s + i.litros, 0);
         const pct = kmEstimado > 0 ? Math.round((kmApontado / kmEstimado) * 100) : null;
 
+        // KM/L real = km rodados apontados / litros abastecidos no período
+        const kmLReal = totalLitros > 0 ? Math.round((kmApontado / totalLitros) * 100) / 100 : null;
+
+        // Inconsistências detectadas
+        const semAbastecimento = kmApontado > 0 && totalLitros === 0;
+        const semViagem = kmApontado === 0 && totalLitros > 0;
+
         return {
           id: p.id,
           nome: p.nome.split(" ").slice(0, 2).join(" "),
@@ -954,6 +961,9 @@ export default function RelatoriosPageSupabase() {
           kmEstimado: Math.round(kmEstimado),
           totalLitros: Math.round(totalLitros * 100) / 100,
           pct,
+          kmLReal,
+          semAbastecimento,
+          semViagem,
           memorial: memorialItens,
         };
       })
@@ -961,6 +971,7 @@ export default function RelatoriosPageSupabase() {
       .sort((a, b) => b!.kmApontado - a!.kmApontado) as {
         id: string; nome: string; kmApontado: number; kmEstimado: number;
         totalLitros: number; pct: number | null;
+        kmLReal: number | null; semAbastecimento: boolean; semViagem: boolean;
         memorial: { data: string; litros: number; kmMedia: number; kmEstimadoParcial: number; placa: string }[];
       }[];
   }, [profiles, registrosKmFiltrados, despesas, isGestorOuAdmin, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
@@ -1663,6 +1674,42 @@ export default function RelatoriosPageSupabase() {
                         Sem abastecimentos com litros e média KM/L cadastrados no período.
                       </p>
                     )}
+
+                    {/* KM/L real calculado + alertas de inconsistência */}
+                    <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                      {/* KM/L real apontado */}
+                      {item.kmLReal !== null && (
+                        <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border ${
+                          item.kmLReal >= (item.memorial[0]?.kmMedia ?? 0) * 0.85
+                            ? "bg-success/8 border-success/20 text-success"
+                            : "bg-warning/8 border-warning/20 text-warning"
+                        }`}>
+                          <span className="font-mono font-bold">{item.kmLReal.toFixed(2)} km/L</span>
+                          <span className="text-[9px] opacity-70">real apontado</span>
+                          {item.memorial[0]?.kmMedia > 0 && (
+                            <span className="text-[9px] opacity-70">
+                              · ref. veículo: {item.memorial[0].kmMedia} km/L
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Alerta: km apontado sem abastecimento cadastrado */}
+                      {item.semAbastecimento && (
+                        <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-warning/8 border border-warning/20 text-warning">
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          <span>KM apontado sem abastecimento no período — verifique lançamentos de combustível</span>
+                        </div>
+                      )}
+
+                      {/* Alerta: abastecimento sem km apontado */}
+                      {item.semViagem && (
+                        <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-destructive/8 border border-destructive/20 text-destructive">
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          <span>Abastecimento registrado sem viagens apontadas no período — verifique o controle de KM</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -1675,7 +1722,11 @@ export default function RelatoriosPageSupabase() {
             <span className="flex items-center gap-1 text-[10px] text-success"><span className="w-2 h-2 rounded-full bg-success inline-block" />85–115% — dentro do esperado</span>
             <span className="flex items-center gap-1 text-[10px] text-warning"><span className="w-2 h-2 rounded-full bg-warning inline-block" />{">"}115% — acima do estimado</span>
             <span className="flex items-center gap-1 text-[10px] text-destructive"><span className="w-2 h-2 rounded-full bg-destructive inline-block" />{"<"}85% — abaixo do estimado</span>
-            <span className="flex items-center gap-1 text-[10px] text-muted-foreground ml-auto italic">Fórmula: litros abastecidos × média KM/L do veículo</span>
+            <span className="flex items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground ml-auto italic">
+              <span>Estimativa: litros × média KM/L do veículo</span>
+              <span>·</span>
+              <span>KM/L real: km apontados ÷ litros abastecidos</span>
+            </span>
           </div>
         </div>
       )}
