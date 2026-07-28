@@ -95,7 +95,18 @@ function formatarDataBR(
 ): string {
   if (!valor) return "Não informado";
 
-  const data = new Date(String(valor));
+  const str = String(valor).trim();
+
+  // String apenas com data (YYYY-MM-DD): constrói com horário fixo UTC para evitar
+  // que o fuso UTC-3 "vire" o dia anterior ao converter para America/Sao_Paulo
+  let data: Date;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const [ano, mes, dia] = str.split("-").map(Number);
+    data = new Date(Date.UTC(ano, mes - 1, dia, 12, 0, 0));
+  } else {
+    data = new Date(str);
+  }
+
   if (Number.isNaN(data.getTime())) return valorTexto(valor);
 
   if (incluirHora) {
