@@ -41,15 +41,9 @@ export async function GET() {
 
   const sql = missing.map((m) => m.sql).join("\n");
 
-  // Tenta aplicar via rpc exec_sql
-  const { error: rpcError } = await supabase.rpc("exec_sql", { sql });
-  if (!rpcError) {
-    return NextResponse.json({ success: true, message: "Colunas criadas com sucesso.", applied: missing.map((m) => m.col) });
-  }
-
   return NextResponse.json({
     needsMigration: true,
-    message: "Execute o SQL abaixo no Supabase SQL Editor:",
+    message: "Execute o SQL abaixo no Supabase SQL Editor (Dashboard > SQL Editor):",
     sql,
   });
 }

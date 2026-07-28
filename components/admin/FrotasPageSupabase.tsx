@@ -45,9 +45,15 @@ export default function FrotasPageSupabase() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [migrationSqlKm, setMigrationSqlKm] = useState<string | null>(null);
 
-  // Garante que as colunas novas existam no banco
-  useEffect(() => { fetch("/api/setup-km-metricas").catch(() => {}); }, []);
+  // Verifica se as colunas de métricas KM existem no banco
+  useEffect(() => {
+    fetch("/api/setup-km-metricas")
+      .then((r) => r.json())
+      .then((d) => { if (d.needsMigration) setMigrationSqlKm(d.sql); })
+      .catch(() => {});
+  }, []);
 
   const frostasFiltradas = frotas.filter((f) => {
     const matchAtivo = showAtivos ? f.ativo : !f.ativo;
@@ -156,6 +162,37 @@ export default function FrotasPageSupabase() {
 
   return (
     <div className="flex flex-col gap-6">
+
+      {/* Banner: migration pendente para métricas KM */}
+      {migrationSqlKm && (
+        <div className="flex flex-col gap-2 p-4 rounded-xl border border-warning/40 bg-warning/5">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-warning">Atualização de banco necessária</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Execute o SQL abaixo no <strong>Supabase SQL Editor</strong> (Dashboard → SQL Editor) para habilitar as métricas de KM/L.
+                Após executar, recarregue a página.
+              </p>
+            </div>
+            <button onClick={() => setMigrationSqlKm(null)} className="text-muted-foreground hover:text-foreground transition shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-xs font-mono bg-muted px-3 py-2 rounded-lg text-foreground break-all select-all">
+              {migrationSqlKm}
+            </code>
+            <button
+              onClick={() => navigator.clipboard.writeText(migrationSqlKm)}
+              className="shrink-0 text-xs px-3 py-2 rounded-lg border border-input bg-background hover:bg-muted transition font-medium"
+            >
+              Copiar SQL
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex-1">
