@@ -125,9 +125,6 @@ export default function DespesaExpandida({
               <InfoRow label="Observação" value={d.observacao} />
             </div>
           )}
-          <div className="col-span-2 sm:col-span-3">
-            <InfoRow label="ID Interno" value={<span className="font-mono text-xs text-muted-foreground">{d.id}</span>} />
-          </div>
         </div>
       </div>
 
