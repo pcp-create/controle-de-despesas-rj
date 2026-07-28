@@ -471,7 +471,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           {/* Valor total */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-foreground">
-              {calculaDiarias ? "Valor total da nota (R$) *" : "Valor (R$) *"}
+              {calculaDiarias ? "Valor total da nota (R$)" : "Valor (R$)"} <span className="text-destructive">*</span>
             </label>
             <input
               type="number"
@@ -934,7 +934,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         {/* Documento */}
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-foreground">
-            Documento *
+            Documento <span className="text-destructive">*</span>
             {tipoSelecionado?.documento_padrao && (
               <span className="ml-2 text-xs text-muted-foreground">Sugestão: {tipoSelecionado.documento_padrao}</span>
             )}
