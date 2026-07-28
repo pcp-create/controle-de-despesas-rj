@@ -324,7 +324,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
         {/* -------- Forma de Pagamento -------- */}
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-foreground">Forma de Pagamento *</label>
+          <label className="text-sm font-medium text-foreground">Forma de Pagamento <span className="text-destructive">*</span></label>
           <div className="grid grid-cols-2 sm:grid-cols-4 rounded-lg border border-input overflow-hidden">
             <button
               type="button"
@@ -407,7 +407,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
           {/* Tipo */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-foreground">Tipo de Despesa *</label>
+            <label className="text-sm font-medium text-foreground">Tipo de Despesa <span className="text-destructive">*</span></label>
             <select
               value={form.tipoDespesaId}
               onChange={(e) => setForm({ ...form, tipoDespesaId: e.target.value, dataCheckin: "", dataCheckout: "" })}
@@ -424,7 +424,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           {/* Cartão — só exibido quando pagamento for cartão */}
           {pagamentoTipo === "cartao" && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-foreground">Cartão *</label>
+              <label className="text-sm font-medium text-foreground">Cartão <span className="text-destructive">*</span></label>
               <select
                 value={form.cartaoId}
                 onChange={(e) => setForm({ ...form, cartaoId: e.target.value })}
@@ -486,7 +486,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
           {/* Data da despesa — sempre visível, seja hospedagem ou não */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-foreground">Data da Despesa *</label>
+            <label className="text-sm font-medium text-foreground">Data da Despesa <span className="text-destructive">*</span></label>
             <input
               type="date"
               value={form.dataDespesa}
@@ -529,7 +529,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Número de parcelas */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-foreground">Número de Parcelas *</label>
+                  <label className="text-sm font-medium text-foreground">Número de Parcelas <span className="text-destructive">*</span></label>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -628,7 +628,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Check-in */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">Check-in *</label>
+                <label className="text-sm font-medium text-foreground">Check-in <span className="text-destructive">*</span></label>
                 <input
                   type="date"
                   value={form.dataCheckin}
@@ -643,7 +643,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
               {/* Check-out */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">Check-out *</label>
+                <label className="text-sm font-medium text-foreground">Check-out <span className="text-destructive">*</span></label>
                 <input
                   type="date"
                   value={form.dataCheckout}
