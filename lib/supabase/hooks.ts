@@ -503,6 +503,18 @@ export function useDespesas(userId?: string, perfil?: string) {
     return { error: null };
   };
 
+  const updateDespesaDocumento = async (id: string, documento: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { error } = await supabase
+      .from("despesas")
+      .update({ documento, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return { error: error.message };
+    mutate();
+    return { error: null };
+  };
+
   const updateDespesaVencimento = async (id: string, data_vencimento: string) => {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
@@ -893,6 +905,7 @@ export function useDespesas(userId?: string, perfil?: string) {
     mutate,
     addDespesa,
     updateDespesa,
+    updateDespesaDocumento,
     updateDespesaVencimento,
     deleteDespesa,
     enviarDespesa,
@@ -1038,7 +1051,7 @@ export function useProfiles() {
 
 // ─────────────────────────────────────────────
 // Controle de KM
-// ─────────────────────────────────────���───────
+// ───────────────��─────────────────────���───────
 
 export interface ControleKm {
   id: string;

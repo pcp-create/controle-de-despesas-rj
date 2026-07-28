@@ -17,7 +17,7 @@ const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
 type ModoFiltro = "mes" | "periodo";
 
 export default function FinanceiroPageSupabase() {
-  const { despesas, isLoading, updateDespesaVencimento, lancarSistema, lancarERP, tentarNovamenteERP, estornarLancamento } = useDespesas();
+  const { despesas, isLoading, updateDespesaDocumento, updateDespesaVencimento, lancarSistema, lancarERP, tentarNovamenteERP, estornarLancamento } = useDespesas();
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
 
@@ -148,6 +148,26 @@ export default function FinanceiroPageSupabase() {
   // Estado para edição inline de vencimento: { [despesaId]: string }
   const [editandoVencimento, setEditandoVencimento] = useState<Record<string, string>>({});
   const [salvandoVencimento, setSalvandoVencimento] = useState<Record<string, boolean>>({});
+
+  // Estado para edição inline de documento: { [despesaId]: string }
+  const [editandoDocumento, setEditandoDocumento] = useState<Record<string, string>>({});
+  const [salvandoDocumento, setSalvandoDocumento] = useState<Record<string, boolean>>({});
+
+  const OPCOES_DOCUMENTO = ["Nota Fiscal (NF)", "Cupom"];
+
+  const handleEditarDocumento = (id: string, valorAtual: string | null) => {
+    setEditandoDocumento((prev) => ({ ...prev, [id]: valorAtual || "" }));
+  };
+  const handleCancelarDocumento = (id: string) => {
+    setEditandoDocumento((prev) => { const next = { ...prev }; delete next[id]; return next; });
+  };
+  const handleSalvarDocumento = async (id: string) => {
+    const novoDoc = editandoDocumento[id];
+    setSalvandoDocumento((prev) => ({ ...prev, [id]: true }));
+    await updateDespesaDocumento(id, novoDoc);
+    setSalvandoDocumento((prev) => { const next = { ...prev }; delete next[id]; return next; });
+    handleCancelarDocumento(id);
+  };
   const now = new Date();
   const { filtrosSalvos: filtrosFin, carregado: carregadoFin, salvar: salvarFin } = useFiltrosPersistidos<FiltrosFinanceiro>(currentUser?.id, "financeiro");
   const aplicadoFin = useRef(false);
@@ -1137,13 +1157,15 @@ export default function FinanceiroPageSupabase() {
                               ? new Date(d.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR")
                               : "—"}
                           </span>
-                          <button
-                            onClick={() => handleEditarVencimento(d.id, d.data_vencimento)}
-                            title="Editar vencimento"
-                            className="p-0.5 rounded opacity-0 group-hover:opacity-100 transition hover:bg-muted text-muted-foreground"
-                          >
-                            <Pencil className="w-3 h-3" />
-                          </button>
+                          {!d.lancado_sistema && (
+                            <button
+                              onClick={() => handleEditarVencimento(d.id, d.data_vencimento)}
+                              title="Editar vencimento"
+                              className="p-0.5 rounded opacity-0 group-hover:opacity-100 transition hover:bg-muted text-muted-foreground"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>
@@ -1180,12 +1202,53 @@ export default function FinanceiroPageSupabase() {
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{d.numero_os || "-"}</td>
                     <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{formatCurrency(Number(d.valor))}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      {d.documento ? (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-muted/60 text-foreground font-medium">
-                          {d.documento}
-                        </span>
+                      {editandoDocumento[d.id] !== undefined ? (
+                        <div className="flex items-center gap-1">
+                          <select
+                            value={editandoDocumento[d.id]}
+                            onChange={(e) => setEditandoDocumento((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                            className="px-2 py-1 rounded border border-input bg-background text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                          >
+                            <option value="">Selecione...</option>
+                            {OPCOES_DOCUMENTO.map((op) => (
+                              <option key={op} value={op}>{op}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => handleSalvarDocumento(d.id)}
+                            disabled={salvandoDocumento[d.id]}
+                            title="Salvar"
+                            className="p-1 rounded hover:bg-success/10 text-success disabled:opacity-40 transition"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleCancelarDocumento(d.id)}
+                            title="Cancelar"
+                            className="p-1 rounded hover:bg-destructive/10 text-destructive transition"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <div className="flex items-center gap-1 group">
+                          {d.documento ? (
+                            <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-muted/60 text-foreground font-medium">
+                              {d.documento}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                          {!d.lancado_sistema && (currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro") && (
+                            <button
+                              onClick={() => handleEditarDocumento(d.id, d.documento)}
+                              title="Editar documento"
+                              className="p-0.5 rounded opacity-0 group-hover:opacity-100 transition hover:bg-muted text-muted-foreground"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
