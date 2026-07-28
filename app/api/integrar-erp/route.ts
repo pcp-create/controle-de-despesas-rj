@@ -327,7 +327,6 @@ export async function POST(request: Request) {
   const M8_TENANT = process.env.M8_TENANT;
   const M8_USERNAME = process.env.M8_USERNAME;
   const M8_PASSWORD = process.env.M8_PASSWORD;
-  const M8_COMPANY = process.env.M8_COMPANY;
   const M8_DOMAIN = process.env.M8_DOMAIN;
 
   const variaveis = {
@@ -335,7 +334,6 @@ export async function POST(request: Request) {
     M8_TENANT,
     M8_USERNAME,
     M8_PASSWORD,
-    M8_COMPANY,
     M8_DOMAIN,
   };
 
@@ -450,6 +448,8 @@ export async function POST(request: Request) {
   const centroCustoId = paraNumero(cc?.centro_custo_erp);
   const valorDespesa = paraNumero(despesa.valor);
 
+  const empresaIdM8 = cartao?.empresa_id_m8 ? Number(cartao.empresa_id_m8) : null;
+
   const camposFaltando: string[] = [];
   if (!despesa.tipo_despesa_id) camposFaltando.push("Tipo de despesa");
   if (!codigoProduto) camposFaltando.push("Código de Produto ERP M8");
@@ -459,6 +459,7 @@ export async function POST(request: Request) {
   if (!despesa.data_despesa) camposFaltando.push("Data da despesa");
   if (!despesa.data_vencimento) camposFaltando.push("Data de vencimento");
   if (!valorDespesa || valorDespesa <= 0) camposFaltando.push("Valor da despesa");
+  if (!empresaIdM8) camposFaltando.push("Empresa ID M8 do cartão (configure em Administração → Usuários → Cartões)");
 
   if (camposFaltando.length > 0) {
     return NextResponse.json(
@@ -491,7 +492,7 @@ export async function POST(request: Request) {
     etapa1: {
       tenant: M8_TENANT,
       username: M8_USERNAME,
-      company: Number(M8_COMPANY),
+      company: empresaIdM8,
       domain: M8_DOMAIN,
     },
   };
@@ -517,7 +518,7 @@ export async function POST(request: Request) {
       tenant: M8_TENANT!,
       username: M8_USERNAME!,
       password: M8_PASSWORD!,
-      company: Number(M8_COMPANY),
+      company: empresaIdM8!,
       domain: M8_DOMAIN!,
     };
 
@@ -554,7 +555,7 @@ export async function POST(request: Request) {
       }
 
       const bodyEtapa2 = {
-        empresaId: 1,
+        empresaId: empresaIdM8!,
         pessoaId,
         tipoCompraId: 8,
         emissao: paraIso(despesa.data_despesa, "Data da despesa"),

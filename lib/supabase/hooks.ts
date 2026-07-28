@@ -32,6 +32,7 @@ export interface Cartao {
   apelido: string | null;
   is_padrao: boolean;
   ativo: boolean;
+  empresa_id_m8: number | null;
 }
 
 export interface Despesa {

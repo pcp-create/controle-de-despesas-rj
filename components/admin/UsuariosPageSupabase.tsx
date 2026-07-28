@@ -20,6 +20,7 @@ import {
   Key,
   CreditCard,
   Car,
+  Pencil,
 } from "lucide-react";
 import { mockEmpresas, mockFornecedores, mockCondicoesPagamento, mockOperacoesFinanceiras, mockMoedas } from "@/lib/mock-data";
 
@@ -106,8 +107,15 @@ export default function UsuariosPageSupabase() {
     ultimosDigitos: "",
     apelido: "",
     isPadrao: false,
+    empresaIdM8: "",
   });
   const [cartoesLoading, setCartoesLoading] = useState(false);
+  // Edição inline de cartão
+  const [editingCartaoId, setEditingCartaoId] = useState<string | null>(null);
+  const [editingCartaoData, setEditingCartaoData] = useState<{
+    banco: string; bandeira: string; ultimosDigitos: string;
+    apelido: string; isPadrao: boolean; empresaIdM8: string;
+  } | null>(null);
 
   const usuariosFiltrados = users
     .filter((u) => {
@@ -360,7 +368,11 @@ export default function UsuariosPageSupabase() {
 
   const handleAddCartao = async () => {
     if (!novoCartao.banco || !novoCartao.ultimosDigitos) {
-      setFeedback({ type: "error", msg: "Banco e últimos dígitos são obrigatórios" });
+      setFeedback({ type: "error", msg: "Banco e últimos dígitos são obrigatórios." });
+      return;
+    }
+    if (!novoCartao.empresaIdM8.trim()) {
+      setFeedback({ type: "error", msg: "O campo Empresa ID M8 é obrigatório." });
       return;
     }
 
@@ -371,16 +383,6 @@ export default function UsuariosPageSupabase() {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
 
-      console.log("[v0] Adding cartao with data:", {
-        user_id: editingUser.id,
-        banco: novoCartao.banco,
-        bandeira: novoCartao.bandeira,
-        ultimos_digitos: novoCartao.ultimosDigitos,
-        apelido: novoCartao.apelido,
-        is_padrao: novoCartao.isPadrao,
-        ativo: true,
-      });
-
       const { data, error } = await supabase
         .from("cartoes")
         .insert([
@@ -389,41 +391,95 @@ export default function UsuariosPageSupabase() {
             banco: novoCartao.banco,
             bandeira: novoCartao.bandeira,
             ultimos_digitos: novoCartao.ultimosDigitos,
-            apelido: novoCartao.apelido,
+            apelido: novoCartao.apelido || null,
             is_padrao: novoCartao.isPadrao,
+            empresa_id_m8: parseInt(novoCartao.empresaIdM8, 10),
             ativo: true,
           },
         ])
         .select();
 
-      console.log("[v0] Supabase response:", { data, error });
-
       if (error) {
-        console.error("[v0] Supabase error details:", {
-          message: error.message,
-          code: error.code,
-          details: error.details,
-          hint: error.hint,
-        });
         setFeedback({ type: "error", msg: `Erro: ${error.message}` });
         return;
       }
 
-      console.log("[v0] Cartao added successfully:", data);
       setUserCartoes([...userCartoes, data[0]]);
-      setNovoCartao({
-        banco: "",
-        bandeira: "VISA",
-        ultimosDigitos: "",
-        apelido: "",
-        isPadrao: false,
-      });
+      setNovoCartao({ banco: "", bandeira: "VISA", ultimosDigitos: "", apelido: "", isPadrao: false, empresaIdM8: "" });
       setShowNovoCartao(false);
       setFeedback({ type: "success", msg: "Cartão adicionado com sucesso!" });
       setTimeout(() => setFeedback(null), 3000);
     } catch (err) {
-      console.error("[v0] Exception caught:", err);
-      setFeedback({ type: "error", msg: `Erro: ${err instanceof Error ? err.message : 'Erro desconhecido'}` });
+      setFeedback({ type: "error", msg: `Erro: ${err instanceof Error ? err.message : "Erro desconhecido"}` });
+    } finally {
+      setCartoesLoading(false);
+    }
+  };
+
+  const handleStartEditCartao = (cartao: any) => {
+    setEditingCartaoId(cartao.id);
+    setEditingCartaoData({
+      banco: cartao.banco,
+      bandeira: cartao.bandeira,
+      ultimosDigitos: cartao.ultimos_digitos,
+      apelido: cartao.apelido || "",
+      isPadrao: cartao.is_padrao,
+      empresaIdM8: cartao.empresa_id_m8 != null ? String(cartao.empresa_id_m8) : "",
+    });
+  };
+
+  const handleSaveCartaoEdit = async () => {
+    if (!editingCartaoId || !editingCartaoData) return;
+    if (!editingCartaoData.banco || !editingCartaoData.ultimosDigitos) {
+      setFeedback({ type: "error", msg: "Banco e últimos dígitos são obrigatórios." });
+      return;
+    }
+    if (!editingCartaoData.empresaIdM8.trim()) {
+      setFeedback({ type: "error", msg: "O campo Empresa ID M8 é obrigatório." });
+      return;
+    }
+
+    try {
+      setCartoesLoading(true);
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+
+      const { error } = await supabase
+        .from("cartoes")
+        .update({
+          banco: editingCartaoData.banco,
+          bandeira: editingCartaoData.bandeira,
+          ultimos_digitos: editingCartaoData.ultimosDigitos,
+          apelido: editingCartaoData.apelido || null,
+          is_padrao: editingCartaoData.isPadrao,
+          empresa_id_m8: parseInt(editingCartaoData.empresaIdM8, 10),
+        })
+        .eq("id", editingCartaoId);
+
+      if (error) {
+        setFeedback({ type: "error", msg: `Erro: ${error.message}` });
+        return;
+      }
+
+      setUserCartoes(userCartoes.map((c) =>
+        c.id === editingCartaoId
+          ? {
+              ...c,
+              banco: editingCartaoData.banco,
+              bandeira: editingCartaoData.bandeira,
+              ultimos_digitos: editingCartaoData.ultimosDigitos,
+              apelido: editingCartaoData.apelido || null,
+              is_padrao: editingCartaoData.isPadrao,
+              empresa_id_m8: parseInt(editingCartaoData.empresaIdM8, 10),
+            }
+          : c
+      ));
+      setEditingCartaoId(null);
+      setEditingCartaoData(null);
+      setFeedback({ type: "success", msg: "Cartão atualizado com sucesso!" });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch (err) {
+      setFeedback({ type: "error", msg: `Erro: ${err instanceof Error ? err.message : "Erro desconhecido"}` });
     } finally {
       setCartoesLoading(false);
     }
@@ -907,6 +963,24 @@ export default function UsuariosPageSupabase() {
                         </div>
                       </div>
 
+                      {/* Empresa ID M8 */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-foreground">
+                          Empresa ID M8 <span className="text-destructive">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={novoCartao.empresaIdM8}
+                          onChange={(e) => setNovoCartao({ ...novoCartao, empresaIdM8: e.target.value })}
+                          placeholder="Ex: 1"
+                          className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Identificador da empresa no ERP M8. Utilizado na integração do lançamento.
+                        </p>
+                      </div>
+
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
@@ -942,31 +1016,157 @@ export default function UsuariosPageSupabase() {
                   {userCartoes.length > 0 ? (
                     <div className="space-y-2">
                       {userCartoes.map((cartao) => (
-                        <div key={cartao.id} className="bg-muted/50 border border-border rounded-lg p-3 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <CreditCard className="w-6 h-6 text-accent" />
-                            <div>
-                              <h4 className="font-medium text-foreground text-sm">
-                                {cartao.apelido || `${cartao.banco}`}
-                              </h4>
-                              <p className="text-xs text-muted-foreground">
-                                {cartao.banco} - {cartao.bandeira} - **** {cartao.ultimos_digitos}
-                              </p>
-                              {cartao.is_padrao && (
-                                <span className="inline-block mt-1 text-xs bg-accent/20 text-accent px-2 py-0.5 rounded">
-                                  Padrão
-                                </span>
-                              )}
+                        <div key={cartao.id} className="border border-border rounded-lg overflow-hidden">
+                          {/* Linha de exibição */}
+                          {editingCartaoId !== cartao.id && (
+                            <div className="bg-muted/50 p-3 flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <CreditCard className="w-6 h-6 text-accent shrink-0" />
+                                <div>
+                                  <h4 className="font-medium text-foreground text-sm">
+                                    {cartao.apelido || cartao.banco}
+                                  </h4>
+                                  <p className="text-xs text-muted-foreground">
+                                    {cartao.banco} · {cartao.bandeira} · **** {cartao.ultimos_digitos}
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                    {cartao.is_padrao && (
+                                      <span className="text-xs bg-accent/20 text-accent px-2 py-0.5 rounded">Padrão</span>
+                                    )}
+                                    {cartao.empresa_id_m8 != null ? (
+                                      <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded font-mono">
+                                        Empresa M8: {cartao.empresa_id_m8}
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs bg-warning/10 text-warning px-2 py-0.5 rounded">
+                                        Empresa ID M8 não definido
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditCartao(cartao)}
+                                  disabled={cartoesLoading}
+                                  className="p-1.5 rounded-lg hover:bg-muted transition disabled:opacity-50"
+                                  title="Editar cartão"
+                                >
+                                  <Pencil className="w-4 h-4 text-muted-foreground" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCartao(cartao.id)}
+                                  disabled={cartoesLoading}
+                                  className="p-1.5 rounded-lg hover:bg-destructive/10 transition disabled:opacity-50"
+                                  title="Excluir cartão"
+                                >
+                                  <Trash2 className="w-4 h-4 text-destructive" />
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteCartao(cartao.id)}
-                            disabled={cartoesLoading}
-                            className="p-1.5 rounded-lg hover:bg-destructive/10 transition disabled:opacity-50"
-                          >
-                            <Trash2 className="w-4 h-4 text-destructive" />
-                          </button>
+                          )}
+
+                          {/* Formulário de edição inline */}
+                          {editingCartaoId === cartao.id && editingCartaoData && (
+                            <div className="bg-muted/30 p-4 space-y-3">
+                              <h4 className="font-medium text-foreground text-sm">Editar Cartão</h4>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="flex flex-col gap-1.5">
+                                  <label className="text-sm font-medium text-foreground">Banco *</label>
+                                  <input
+                                    type="text"
+                                    value={editingCartaoData.banco}
+                                    onChange={(e) => setEditingCartaoData({ ...editingCartaoData, banco: e.target.value })}
+                                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                  <label className="text-sm font-medium text-foreground">Bandeira</label>
+                                  <select
+                                    value={editingCartaoData.bandeira}
+                                    onChange={(e) => setEditingCartaoData({ ...editingCartaoData, bandeira: e.target.value })}
+                                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                  >
+                                    <option value="VISA">VISA</option>
+                                    <option value="MASTERCARD">Mastercard</option>
+                                    <option value="AMEX">American Express</option>
+                                    <option value="ELO">Elo</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="flex flex-col gap-1.5">
+                                  <label className="text-sm font-medium text-foreground">Últimos 4 dígitos *</label>
+                                  <input
+                                    type="text"
+                                    value={editingCartaoData.ultimosDigitos}
+                                    onChange={(e) => setEditingCartaoData({ ...editingCartaoData, ultimosDigitos: e.target.value.slice(0, 4) })}
+                                    maxLength={4}
+                                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                  <label className="text-sm font-medium text-foreground">Apelido</label>
+                                  <input
+                                    type="text"
+                                    value={editingCartaoData.apelido}
+                                    onChange={(e) => setEditingCartaoData({ ...editingCartaoData, apelido: e.target.value })}
+                                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col gap-1.5">
+                                <label className="text-sm font-medium text-foreground">
+                                  Empresa ID M8 <span className="text-destructive">*</span>
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={editingCartaoData.empresaIdM8}
+                                  onChange={(e) => setEditingCartaoData({ ...editingCartaoData, empresaIdM8: e.target.value })}
+                                  placeholder="Ex: 1"
+                                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Identificador da empresa no ERP M8. Utilizado na integração do lançamento.
+                                </p>
+                              </div>
+
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={editingCartaoData.isPadrao}
+                                  onChange={(e) => setEditingCartaoData({ ...editingCartaoData, isPadrao: e.target.checked })}
+                                  className="w-4 h-4 rounded border-input"
+                                />
+                                <span className="text-sm text-foreground">Definir como padrão</span>
+                              </label>
+
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={handleSaveCartaoEdit}
+                                  disabled={cartoesLoading}
+                                  className="flex-1 px-3 py-2 rounded-lg bg-accent text-white text-sm hover:bg-accent/90 disabled:bg-accent/50 transition flex items-center justify-center gap-2"
+                                >
+                                  {cartoesLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                                  Salvar alterações
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setEditingCartaoId(null); setEditingCartaoData(null); }}
+                                  className="flex-1 px-3 py-2 rounded-lg border border-input text-sm hover:bg-muted transition"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
