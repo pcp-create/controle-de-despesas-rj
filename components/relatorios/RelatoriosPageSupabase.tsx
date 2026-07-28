@@ -22,7 +22,7 @@ import {
   LabelList,
   CartesianGrid,
 } from "recharts";
-import { Calendar, Download, TrendingUp, DollarSign, Users, FileText, CalendarDays, Gauge, Route, Clock, Car, X, ChevronDown, ChevronUp, Table2 } from "lucide-react";
+import { Calendar, Download, TrendingUp, DollarSign, Users, FileText, CalendarDays, Gauge, Route, Clock, Car, X, ChevronDown, ChevronUp, Table2, AlertTriangle } from "lucide-react";
 import { formatDate } from "@/lib/helpers";
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -394,7 +394,7 @@ export default function RelatoriosPageSupabase() {
       pdf.setTextColor(17, 24, 39);
       y += cardH + 8;
 
-      // ═══���������═════════════��══════════════════════
+      // ═══���������═════════════��════════════════════���═
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
       // ══���═══����══════════��══════════════════���══��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
