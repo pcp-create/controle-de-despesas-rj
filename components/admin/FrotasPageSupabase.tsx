@@ -63,7 +63,12 @@ export default function FrotasPageSupabase() {
       f.placa.toLowerCase().includes(term) ||
       f.modelo.toLowerCase().includes(term) ||
       f.marca.toLowerCase().includes(term) ||
-      (f.tipo?.toLowerCase().includes(term) ?? false);
+      (f.tipo?.toLowerCase().includes(term) ?? false) ||
+      (f.cor?.toLowerCase().includes(term) ?? false) ||
+      (f.ano?.toString().includes(term) ?? false) ||
+      (f.quilometragem?.toString().includes(term) ?? false) ||
+      (f.km_media_litro?.toString().includes(term) ?? false) ||
+      (f.observacao?.toLowerCase().includes(term) ?? false);
     return matchAtivo && matchSearch;
   });
 
