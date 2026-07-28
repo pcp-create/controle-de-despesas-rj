@@ -155,6 +155,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         errs.kmAtual = "Informe o KM atual";
       if (!form.litrosAbastecidos || isNaN(Number(form.litrosAbastecidos)) || Number(form.litrosAbastecidos) <= 0)
         errs.litrosAbastecidos = "Informe os litros abastecidos";
+      if (!form.valorLitro || isNaN(Number(form.valorLitro)) || Number(form.valorLitro) <= 0)
+        errs.valorLitro = "Informe o valor por litro";
     }
     return errs;
   };
@@ -845,6 +847,22 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 {errors.frotaId && <span className="text-xs text-destructive">{errors.frotaId}</span>}
               </div>
 
+              {/* KM Atual */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">
+                  KM Atual <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="number"
+                  value={form.kmAtual}
+                  onChange={(e) => setForm({ ...form, kmAtual: e.target.value })}
+                  placeholder="Ex: 45320"
+                  min={0}
+                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+                {errors.kmAtual && <span className="text-xs text-destructive">{errors.kmAtual}</span>}
+              </div>
+
               {/* Tipo de combustível */}
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium text-foreground">
@@ -869,22 +887,6 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 {errors.tipoCombustivel && <span className="text-xs text-destructive">{errors.tipoCombustivel}</span>}
               </div>
 
-              {/* KM Atual */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">
-                  KM Atual <span className="text-destructive">*</span>
-                </label>
-                <input
-                  type="number"
-                  value={form.kmAtual}
-                  onChange={(e) => setForm({ ...form, kmAtual: e.target.value })}
-                  placeholder="Ex: 45320"
-                  min={0}
-                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-                {errors.kmAtual && <span className="text-xs text-destructive">{errors.kmAtual}</span>}
-              </div>
-
               {/* Litros e Valor/litro — lado a lado */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
@@ -907,7 +909,9 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-foreground">Valor / litro</label>
+                  <label className="text-sm font-medium text-foreground">
+                    Valor / litro <span className="text-destructive">*</span>
+                  </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">R$</span>
                     <input
@@ -920,6 +924,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                       className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
+                  {errors.valorLitro && <span className="text-xs text-destructive">{errors.valorLitro}</span>}
                 </div>
               </div>
             </div>
