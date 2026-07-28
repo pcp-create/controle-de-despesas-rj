@@ -154,12 +154,11 @@ function montarResumoDespesa(
     `Data da despesa: ${dataDespesa}`,
     `Tipo: ${valorTexto(tipo?.nome)}`,
     `Pagamento: ${valorTexto(despesa.pagamento_tipo)}`,
+    `Cartão: ${formatarCartao(cartao)}`,
     `Cliente: ${valorTexto(despesa.cliente)}`,
     `OS: ${valorTexto(despesa.numero_os)}`,
     `Valor: ${formatarValorBR(Number(despesa.valor || 0))}`,
     `Observação: ${valorTexto(despesa.observacao)}`,
-    `Documento: ${valorTexto(despesa.documento)}`,
-    `Cartão: ${formatarCartao(cartao)}`,
     `Data aprovação: ${dataAprovacao}`,
     `Aprovado por: ${valorTexto(aprovador?.nome || aprovador?.full_name)}`,
   ].join(" | ");
