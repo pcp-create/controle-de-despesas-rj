@@ -407,15 +407,24 @@ export default function DespesaExpandida({
             </div>
           )}
           {d.aprovado_financeiro && (
-            <div className="flex items-center gap-2">
-              <StatusChip
-                ok
-                label={`Financeiro aprovado${financeiro?.nome ? ` por ${financeiro.nome}` : ""}`}
-                sub={fmt(d.aprovado_financeiro_em)}
-              />
-              {d.anexo_financeiro_url && (
-                <AnexoViewer url={d.anexo_financeiro_url} nome={d.anexo_financeiro_nome} compact />
-              )}
+            <div className="flex items-start gap-2 p-2.5 rounded-lg border bg-success/5 border-success/20 text-xs text-success">
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold leading-tight">
+                  {`Financeiro aprovado${financeiro?.nome ? ` por ${financeiro.nome}` : ""}`}
+                </p>
+                {d.aprovado_financeiro_em && (
+                  <p className="text-muted-foreground mt-0.5 leading-tight">{fmt(d.aprovado_financeiro_em)}</p>
+                )}
+                {d.observacao_financeiro && (
+                  <p className="text-muted-foreground mt-1 leading-snug italic">{d.observacao_financeiro}</p>
+                )}
+                {d.anexo_financeiro_url && (
+                  <div className="mt-1.5">
+                    <AnexoViewer url={d.anexo_financeiro_url} nome={d.anexo_financeiro_nome} compact />
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -447,13 +456,6 @@ export default function DespesaExpandida({
               : d.pagamento_tipo === "dinheiro" ? "Pendente" : "N/A"}
           />
         </div>
-
-        {/* Observação do financeiro */}
-        {d.observacao_financeiro && (
-          <div className="mt-2">
-            <InfoRow label="Obs. Financeiro" value={d.observacao_financeiro} />
-          </div>
-        )}
 
         {/* ERP ID + erro */}
         {(d.erp_id || d.erp_erro) && (
