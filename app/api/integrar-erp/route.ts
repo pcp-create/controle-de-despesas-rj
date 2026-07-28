@@ -604,14 +604,14 @@ export async function POST(request: Request) {
 
       // O M8 pode retornar a NF antes de concluir toda a persistência interna.
       // Aguarda brevemente antes de cadastrar o primeiro produto.
-      await aguardar(1200);
+      await aguardar(400);
     }
 
     if (!erpId) {
       throw new IntegracaoError(2, "documentoFiscalId não disponível.");
     }
 
-    // ETAPA 3 — Cadastrar produto
+    // ETAPA 3 — Cadastrar produto (com retry de backoff progressivo)
     if (etapaInicial <= 3) {
       const bodyEtapa3 = {
         produtoId: codigoProduto!,
@@ -626,39 +626,38 @@ export async function POST(request: Request) {
 
       let etapa3: Awaited<ReturnType<typeof m8Request>>;
 
-      try {
-        etapa3 = await m8Request(
-          3,
-          `${baseUrl}/v1/compras/notafiscal/${erpId}/produto`,
-          token,
-          { method: "POST", body: bodyEtapa3 }
-        );
-      } catch (erroEtapa3: any) {
-        const mensagemEtapa3 = String(erroEtapa3?.message || "");
+      const tentativasEtapa3 = 3;
+      let ultimoErroEtapa3: unknown;
 
-        const erroPersistenciaM8 =
-          mensagemEtapa3.includes(
-            "Object reference not set to an instance of an object"
-          ) ||
-          mensagemEtapa3.includes("VerificarStatusDocumento");
+      for (let tentativa = 1; tentativa <= tentativasEtapa3; tentativa++) {
+        try {
+          etapa3 = await m8Request(
+            3,
+            `${baseUrl}/v1/compras/notafiscal/${erpId}/produto`,
+            token,
+            { method: "POST", body: bodyEtapa3 }
+          );
+          ultimoErroEtapa3 = null;
+          break;
+        } catch (erroEtapa3: any) {
+          const mensagemEtapa3 = String(erroEtapa3?.message || "");
+          const erroPersistenciaM8 =
+            mensagemEtapa3.includes("Object reference not set to an instance of an object") ||
+            mensagemEtapa3.includes("VerificarStatusDocumento");
 
-        if (!erroPersistenciaM8) {
-          throw erroEtapa3;
+          if (!erroPersistenciaM8) throw erroEtapa3;
+
+          ultimoErroEtapa3 = erroEtapa3;
+
+          if (tentativa < tentativasEtapa3) {
+            const espera = 400 * Math.pow(2, tentativa - 1); // 400ms, 800ms
+            console.warn(`[M8][Etapa 3] NF ainda sendo persistida. Tentativa ${tentativa}/${tentativasEtapa3}. Aguardando ${espera}ms.`);
+            await aguardar(espera);
+          }
         }
-
-        console.warn(
-          "[M8][Etapa 3] A NF ainda pode estar sendo persistida. Nova tentativa em 2 segundos."
-        );
-
-        await aguardar(2000);
-
-        etapa3 = await m8Request(
-          3,
-          `${baseUrl}/v1/compras/notafiscal/${erpId}/produto`,
-          token,
-          { method: "POST", body: bodyEtapa3 }
-        );
       }
+
+      if (ultimoErroEtapa3) throw ultimoErroEtapa3;
 
       respostas.etapa3 = etapa3.respostaCompleta;
       await salvarProgresso(supabase, despesaId, {
