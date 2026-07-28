@@ -34,11 +34,7 @@ function formatKmRel(val: number): string {
   return val.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + " km";
 }
 
-function formatDuracaoRel(minutos: number): string {
-  const h = Math.floor(minutos / 60);
-  const m = minutos % 60;
-  return h > 0 ? `${h}h ${m}min` : `${m}min`;
-}
+
 
 // Paleta para tipos de despesa — do mais forte ao mais suave
 const TIPO_COLORS = [
@@ -395,7 +391,7 @@ export default function RelatoriosPageSupabase() {
       pdf.setTextColor(17, 24, 39);
       y += cardH + 8;
 
-      // ═══�������═════════════��══════════════════════
+      // ═══���������═════════════��══════════════════════
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
       // ══���═══����══════════��══════════════════���══��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
@@ -859,7 +855,26 @@ export default function RelatoriosPageSupabase() {
   const totalKmPeriodo = useMemo(() => registrosKmFiltrados.reduce((s, r) => s + kmPercorrido(r), 0), [registrosKmFiltrados]);
   const totalViagens = registrosKmFiltrados.length;
   const mediaKmViagem = totalViagens > 0 ? totalKmPeriodo / totalViagens : 0;
-  const totalMinutos = registrosKmFiltrados.reduce((s, r) => s + (r.duracao_minutos ?? 0), 0);
+  const totalSegundosKm = useMemo(
+    () =>
+      registrosKmFiltrados
+        .filter((r) => r.data_fim)
+        .reduce((s, r) => {
+          const secs = Math.floor(
+            (new Date(r.data_fim!).getTime() - new Date(r.data_inicio).getTime()) / 1000
+          );
+          return s + (secs > 0 ? secs : 0);
+        }, 0),
+    [registrosKmFiltrados]
+  );
+
+  const formatTempoKm = (secs: number) => {
+    if (secs === 0) return "—";
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    if (h > 0) return `${h}h ${String(m).padStart(2, "0")}min`;
+    return `${m}min`;
+  };
 
   // registros do ano todo respeitando filtro de funcionário
   const registrosKmAno = useMemo(() => {
@@ -1467,7 +1482,7 @@ export default function RelatoriosPageSupabase() {
           { icon: <Route className="w-5 h-5" />, value: formatKmRel(totalKmPeriodo), label: "KM Total Percorrido", bg: "bg-accent/10", color: "text-accent" },
           { icon: <Car className="w-5 h-5" />, value: totalViagens, label: "Viagens Finalizadas", bg: "bg-primary/10", color: "text-primary" },
           { icon: <Gauge className="w-5 h-5" />, value: formatKmRel(mediaKmViagem), label: "Média por Viagem", bg: "bg-success/10", color: "text-success" },
-          { icon: <Clock className="w-5 h-5" />, value: totalMinutos > 0 ? formatDuracaoRel(totalMinutos) : "—", label: "Tempo Total em Rota", bg: "bg-warning/10", color: "text-warning" },
+          { icon: <Clock className="w-5 h-5" />, value: formatTempoKm(totalSegundosKm), label: "Tempo Total em Rota", bg: "bg-warning/10", color: "text-warning" },
         ].map(({ icon, value, label, bg, color }) => (
           <div key={label} className="bg-white rounded-xl border border-border shadow-sm p-4">
             <div className={`w-9 h-9 rounded-lg ${bg} ${color} flex items-center justify-center mb-3`}>{icon}</div>
