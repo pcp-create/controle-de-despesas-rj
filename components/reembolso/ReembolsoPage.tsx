@@ -200,7 +200,7 @@ export default function ReembolsoPage() {
   const { profiles } = useProfiles();
 
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"todos" | StatusKey>("aguardando_aprovacao");
+  const [filterStatus, setFilterStatus] = useState<"todos" | "pendentes" | StatusKey>("pendentes");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -222,6 +222,7 @@ export default function ReembolsoPage() {
     return despesas
       .filter((d) => d.pagamento_tipo === "dinheiro" && d.status_aprovacao === "AprovadoGestor")
       .filter((d) => {
+        if (filterStatus === "pendentes") return !d.reembolso_processado;
         if (filterStatus === "aguardando_aprovacao") return !d.aprovado_financeiro && !d.reembolso_processado;
         if (filterStatus === "aguardando_lancamento") return d.aprovado_financeiro && !d.reembolso_processado;
         if (filterStatus === "enviado_pagamento") return d.reembolso_processado;
@@ -393,6 +394,7 @@ export default function ReembolsoPage() {
               onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
               className="pl-9 pr-8 py-2 rounded-lg border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
             >
+              <option value="pendentes">Pendentes</option>
               <option value="aguardando_aprovacao">Ag. Aprovação Financeiro</option>
               <option value="aguardando_lancamento">Ag. Lançamento</option>
               <option value="enviado_pagamento">Enviado para Pagamento</option>
@@ -409,7 +411,9 @@ export default function ReembolsoPage() {
               <Banknote className="w-8 h-8 text-muted-foreground" />
             </div>
             <h3 className="text-lg font-semibold text-foreground">
-              {filterStatus === "aguardando_aprovacao"
+              {filterStatus === "pendentes"
+                ? "Nenhum reembolso pendente"
+                : filterStatus === "aguardando_aprovacao"
                 ? "Nenhum reembolso aguardando aprovação"
                 : filterStatus === "aguardando_lancamento"
                 ? "Nenhum reembolso aguardando lançamento"
