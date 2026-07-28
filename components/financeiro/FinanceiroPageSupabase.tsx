@@ -748,9 +748,9 @@ export default function FinanceiroPageSupabase() {
             <button
               type="button"
               onClick={() => setFiltroLancamento(filtroLancamento === "lancado" ? "todos" : "lancado")}
-              className={`rounded-xl border p-3 text-left transition ${filtroLancamento === "lancado" ? "border-primary ring-1 ring-primary/30 bg-primary/5" : "border-border bg-white hover:border-primary/40"}`}
+              className={`rounded-xl border p-3 text-left transition ${filtroLancamento === "lancado" ? "border-success ring-1 ring-success/30 bg-success/5" : "border-border bg-white hover:border-success/40"}`}
             >
-              <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-1.5">
+              <div className="w-7 h-7 rounded-lg bg-success/10 text-success flex items-center justify-center mb-1.5">
                 <CheckCircle className="w-4 h-4" />
               </div>
               <p className="text-xl font-bold text-foreground">{qtdErpLancado}</p>
@@ -759,9 +759,9 @@ export default function FinanceiroPageSupabase() {
             <button
               type="button"
               onClick={() => setFiltroLancamento(filtroLancamento === "integrado" ? "todos" : "integrado")}
-              className={`rounded-xl border p-3 text-left transition ${filtroLancamento === "integrado" ? "border-success ring-1 ring-success/30 bg-success/5" : "border-border bg-white hover:border-success/40"}`}
+              className={`rounded-xl border p-3 text-left transition ${filtroLancamento === "integrado" ? "border-primary ring-1 ring-primary/30 bg-primary/5" : "border-border bg-white hover:border-primary/40"}`}
             >
-              <div className="w-7 h-7 rounded-lg bg-success/10 text-success flex items-center justify-center mb-1.5">
+              <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-1.5">
                 <Send className="w-4 h-4" />
               </div>
               <p className="text-xl font-bold text-foreground">{qtdErpIntegrado}</p>
@@ -1192,7 +1192,7 @@ export default function FinanceiroPageSupabase() {
                           <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${pc.color}`}>
                             {pc.label}
                           </span>
-                        ) : <span className="text-muted-foreground">��</span>;
+                        ) : <span className="text-muted-foreground">���</span>;
                       })()}
                     </td>
                     <td className="px-3 py-2 max-w-32 truncate">{d.cliente}</td>
