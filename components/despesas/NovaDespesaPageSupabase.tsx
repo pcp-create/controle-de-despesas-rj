@@ -846,18 +846,20 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               </div>
 
               {/* Tipo de combustível */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">Tipo de combustível *</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["Gasolina", "Gasolina Aditivada", "Etanol", "Diesel"] as const).map((tipo) => (
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-foreground">
+                  Tipo de combustível <span className="text-destructive">*</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {(["Gasolina", "Gasolina Aditivada", "Etanol", "Diesel S10", "Diesel 500"] as const).map((tipo) => (
                     <button
                       key={tipo}
                       type="button"
                       onClick={() => setForm({ ...form, tipoCombustivel: tipo })}
-                      className={`px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                      className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors whitespace-nowrap ${
                         form.tipoCombustivel === tipo
                           ? "border-primary bg-primary/10 text-primary"
-                          : "border-input bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                          : "border-input bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
                       }`}
                     >
                       {tipo}
@@ -867,9 +869,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 {errors.tipoCombustivel && <span className="text-xs text-destructive">{errors.tipoCombustivel}</span>}
               </div>
 
-              {/* KM */}
+              {/* KM Atual */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">KM Atual *</label>
+                <label className="text-sm font-medium text-foreground">
+                  KM Atual <span className="text-destructive">*</span>
+                </label>
                 <input
                   type="number"
                   value={form.kmAtual}
@@ -881,33 +885,42 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 {errors.kmAtual && <span className="text-xs text-destructive">{errors.kmAtual}</span>}
               </div>
 
-              {/* Litros abastecidos */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">Litros abastecidos *</label>
-                <input
-                  type="number"
-                  value={form.litrosAbastecidos}
-                  onChange={(e) => setForm({ ...form, litrosAbastecidos: e.target.value })}
-                  placeholder="Ex: 40.5"
-                  min={0}
-                  step={0.001}
-                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-                {errors.litrosAbastecidos && <span className="text-xs text-destructive">{errors.litrosAbastecidos}</span>}
-              </div>
+              {/* Litros e Valor/litro — lado a lado */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">
+                    Litros abastecidos <span className="text-destructive">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={form.litrosAbastecidos}
+                      onChange={(e) => setForm({ ...form, litrosAbastecidos: e.target.value })}
+                      placeholder="Ex: 40.5"
+                      min={0}
+                      step={0.001}
+                      className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">L</span>
+                  </div>
+                  {errors.litrosAbastecidos && <span className="text-xs text-destructive">{errors.litrosAbastecidos}</span>}
+                </div>
 
-              {/* Valor por litro */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">Valor / litro (R$)</label>
-                <input
-                  type="number"
-                  value={form.valorLitro}
-                  onChange={(e) => setForm({ ...form, valorLitro: e.target.value })}
-                  placeholder="Ex: 6.19"
-                  min={0}
-                  step={0.001}
-                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">Valor / litro</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">R$</span>
+                    <input
+                      type="number"
+                      value={form.valorLitro}
+                      onChange={(e) => setForm({ ...form, valorLitro: e.target.value })}
+                      placeholder="6,19"
+                      min={0}
+                      step={0.001}
+                      className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
