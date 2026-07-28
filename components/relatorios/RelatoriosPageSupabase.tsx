@@ -395,7 +395,7 @@ export default function RelatoriosPageSupabase() {
       pdf.setTextColor(17, 24, 39);
       y += cardH + 8;
 
-      // ═══�����═════════════��══════════════════════
+      // ═══�������═════════════��══════════════════════
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
       // ══���═══����══════════��══════════════════���══��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
@@ -1632,20 +1632,25 @@ export default function RelatoriosPageSupabase() {
                       className={`absolute inset-y-0 left-0 rounded-md opacity-80 transition-all ${barColor}`}
                       style={{ width: `${barAptPct}%` }}
                     />
-                    {/* KM apontado + estimado dentro da barra */}
-                    <div className="absolute inset-0 flex items-center justify-between px-2.5">
+                    {/* KM apontado dentro da barra */}
+                    <div className="absolute inset-0 flex items-center px-2.5">
                       <span className="text-[11px] font-bold text-white drop-shadow leading-none">
                         {item.kmApontado > 0 ? `${item.kmApontado.toLocaleString("pt-BR")} km apontado` : ""}
                       </span>
-                      {item.kmEstimado > 0 && (
-                        <span className="text-[10px] font-medium text-white/70 leading-none">
-                          {item.kmEstimado.toLocaleString("pt-BR")} km est.
-                        </span>
-                      )}
                     </div>
                   </div>
 
-                  {/* Subtexto: estimativa e memorial de cálculo */}
+                  {/* Linha de referência: KM estimado */}
+                  {item.kmEstimado > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-3 h-1.5 rounded-sm bg-muted-foreground/30 shrink-0" />
+                      <span className="text-[10px] text-muted-foreground">
+                        Estimativa: <span className="font-semibold text-foreground">{item.kmEstimado.toLocaleString("pt-BR")} km</span>
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Subtexto: memorial de cálculo */}
                   <div className="flex flex-col gap-1">
                     {item.kmEstimado > 0 ? (
                       <>
