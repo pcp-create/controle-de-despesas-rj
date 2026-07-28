@@ -52,9 +52,20 @@ function paraNumero(valor: unknown): number | null {
 function paraIso(valor: unknown, nomeCampo: string): string {
   if (!valor) throw new Error(`${nomeCampo} não informado.`);
 
-  const data = new Date(String(valor));
+  const str = String(valor).trim();
+
+  // Se o valor for apenas uma data (YYYY-MM-DD), constrói sem deslocamento de fuso
+  // evitando que "2026-07-22" vire "2026-07-21T21:00:00.000Z" (UTC-3)
+  const apenasData = /^\d{4}-\d{2}-\d{2}$/.test(str);
+  if (apenasData) {
+    const [ano, mes, dia] = str.split("-").map(Number);
+    // Usa horário meio-dia BRT (15:00 UTC) para garantir que a data nunca "vire" o dia
+    return new Date(Date.UTC(ano, mes - 1, dia, 15, 0, 0)).toISOString();
+  }
+
+  const data = new Date(str);
   if (Number.isNaN(data.getTime())) {
-    throw new Error(`${nomeCampo} inválido: ${String(valor)}`);
+    throw new Error(`${nomeCampo} inválido: ${str}`);
   }
 
   return data.toISOString();
@@ -143,12 +154,11 @@ function montarResumoDespesa(
     `Data da despesa: ${dataDespesa}`,
     `Tipo: ${valorTexto(tipo?.nome)}`,
     `Pagamento: ${valorTexto(despesa.pagamento_tipo)}`,
+    `Cartão: ${formatarCartao(cartao)}`,
     `Cliente: ${valorTexto(despesa.cliente)}`,
     `OS: ${valorTexto(despesa.numero_os)}`,
     `Valor: ${formatarValorBR(Number(despesa.valor || 0))}`,
     `Observação: ${valorTexto(despesa.observacao)}`,
-    `Documento: ${valorTexto(despesa.documento)}`,
-    `Cartão: ${formatarCartao(cartao)}`,
     `Data aprovação: ${dataAprovacao}`,
     `Aprovado por: ${valorTexto(aprovador?.nome || aprovador?.full_name)}`,
   ].join(" | ");
@@ -429,6 +439,7 @@ export async function POST(request: Request) {
   if (!despesa.tipo_despesa_id) camposFaltando.push("Tipo de despesa");
   if (!codigoProduto) camposFaltando.push("Código de Produto ERP M8");
   if (!tecnico?.area) camposFaltando.push("Área / Setor do funcionário");
+  if (!tecnico?.pessoa_id) camposFaltando.push("Pessoa ID do funcionário (configure em Administração → Usuários → Configurações ERP)");
   if (!centroCustoId) camposFaltando.push("Centro de Custo ERP M8");
   if (!despesa.data_despesa) camposFaltando.push("Data da despesa");
   if (!despesa.data_vencimento) camposFaltando.push("Data de vencimento");
@@ -522,10 +533,15 @@ export async function POST(request: Request) {
         numeroDocumentoErp
       );
 
+      const pessoaId = tecnico?.pessoa_id ? Number(tecnico.pessoa_id) : null;
+      if (!pessoaId) {
+        throw new IntegracaoError(2, "Pessoa ID não configurado para este funcionário. Configure em Administração → Usuários → Configurações ERP.", {});
+      }
+
       const bodyEtapa2 = {
         empresaId: 1,
-        pessoaId: 27977,
-        tipoCompraId: 1,
+        pessoaId,
+        tipoCompraId: 8,
         emissao: paraIso(despesa.data_despesa, "Data da despesa"),
         lancamento: agora,
         freteId: 9,

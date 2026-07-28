@@ -7,7 +7,7 @@ import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks"
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
 import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
-import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle, Clock, Send, CheckCircle } from "lucide-react";
+import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle, AlertTriangle, Clock, Send, CheckCircle, RefreshCw } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -454,9 +454,9 @@ export default function FinanceiroPageSupabase() {
         d.numero_os || "-",
         formatCurrency(Number(d.valor)),
         d.documento || "-",
+        d.comprovante_url ? "Sim" : "Não",
         cartaoLabel,
         statusLabel,
-        d.comprovante_url ? "Sim" : "Não",
         d.status_erp || "-",
         d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "-",
         d.erp_id || "-",
@@ -465,7 +465,7 @@ export default function FinanceiroPageSupabase() {
 
     autoTable(doc, {
       startY: 36,
-      head: [["Data", "Vencimento", "Parcela", "Funcionário", "Tipo", "Cliente", "OS", "Valor", "Doc.", "Cartão", "Status", "Comprovante", "Status ERP", "Envio", "ERP ID"]],
+      head: [["Data", "Vencimento", "Parcela", "Funcionário", "Tipo", "Cliente", "OS", "Valor", "Doc.", "Comprovante", "Cartão", "Status", "Status ERP", "Envio", "ERP ID"]],
       body: rows,
       styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
       headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: "bold", fontSize: 7.5 },
@@ -816,9 +816,9 @@ export default function FinanceiroPageSupabase() {
                     { key: "os",          label: "OS",          align: "left"  },
                     { key: "valor",       label: "Valor",       align: "right" },
                     { key: "documento",    label: "Documento",   align: "left"  },
+                    { key: null,          label: "Comprovante", align: "left"  },
                     { key: "cartao",      label: "Cartão",      align: "left"  },
                     { key: "status",      label: "Status",      align: "left"  },
-                    { key: null,          label: "Comprovante", align: "left"  },
                     { key: null,          label: "Status ERP",  align: "left"  },
                     { key: null,          label: "Envio",       align: "left"  },
                     { key: null,          label: "ERP ID",      align: "left"  },
@@ -1189,6 +1189,17 @@ export default function FinanceiroPageSupabase() {
                       )}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">
+                      {d.comprovante_url ? (
+                        <a href={d.comprovante_url} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary hover:text-primary/80">
+                          <Eye className="w-3.5 h-3.5" />
+                          Ver
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
                       {cartaoLabel ? (
                         <span className="text-xs text-foreground font-mono">{cartaoLabel}</span>
                       ) : (
@@ -1201,36 +1212,44 @@ export default function FinanceiroPageSupabase() {
                         {statusCfg.label}
                       </span>
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      {d.comprovante_url ? (
-                        <a href={d.comprovante_url} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-primary hover:text-primary/80">
-                          <Eye className="w-3.5 h-3.5" />
-                          Ver
-                        </a>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
                     {/* Status ERP */}
                     <td className="px-3 py-2 whitespace-nowrap">
-                      {!d.lancado_erp ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : d.status_erp ? (
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusErpCls}`}>
-                          {statusErpLabel[d.status_erp] ?? d.status_erp}
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-muted/30 text-muted-foreground">
-                          Não Enviado ao ERP
-                        </span>
-                      )}
+                      {(() => {
+                        const erpStatusKey = d.erp_status || "pendente";
+                        const erpStatusConfigMap: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+                          pendente:    { label: "Pendente",          color: "bg-muted text-muted-foreground",            icon: Clock },
+                          processando: { label: "Processando",       color: "bg-warning/10 text-warning",                icon: RefreshCw },
+                          integrado:   { label: "Integrado",         color: "bg-success/10 text-success",                icon: CheckCircle },
+                          erro:        { label: "Erro Integração",   color: "bg-destructive/10 text-destructive",        icon: AlertTriangle },
+                        };
+                        const cfg = erpStatusConfigMap[erpStatusKey] ?? erpStatusConfigMap["pendente"];
+                        const Icon = cfg.icon;
+                        const isProcessing = erpStatusKey === "processando";
+                        const isError = erpStatusKey === "erro";
+                        return (
+                          <div className="flex flex-col gap-0.5">
+                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${cfg.color}`}>
+                              <Icon className={`w-3 h-3 ${isProcessing ? "animate-spin" : ""}`} />
+                              {cfg.label}
+                              {isError && d.erp_etapa_erro ? ` — E${d.erp_etapa_erro}` : ""}
+                            </span>
+                            {isError && d.erp_erro && (
+                              <span className="text-[10px] text-destructive/70 max-w-[160px] truncate pl-1" title={d.erp_erro}>
+                                {d.erp_erro}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
-                    {/* Envio — futuramente retorna a data de integração com o ERP */}
-                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
-                      {d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "—"}
+                    {/* Data Envio */}
+                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground text-xs">
+                      {d.lancado_erp_em
+                        ? <span>{new Date(d.lancado_erp_em).toLocaleString("pt-BR")}</span>
+                        : <span>—</span>
+                      }
                     </td>
-                    {/* ERP ID — futuramente retorna o número do documento gerado pelo ERP */}
+                    {/* ERP ID */}
                     <td className="px-3 py-2 whitespace-nowrap font-mono">
                       {d.erp_id
                         ? <span className="text-success font-semibold">{d.erp_id}</span>
