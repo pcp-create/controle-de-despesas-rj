@@ -702,15 +702,15 @@ export default function FinanceiroPageSupabase() {
           </div>
         </div>
 
-        {/* Total Lançado */}
+        {/* Total Enviado ERP */}
         <div className="bg-white rounded-xl border border-border shadow-sm p-4">
-          <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center mb-3">
+          <div className="w-9 h-9 rounded-lg bg-success/10 text-success flex items-center justify-center mb-3">
             <SendHorizonal className="w-5 h-5" />
           </div>
           <p className="text-2xl font-bold text-foreground">{formatCurrency(totalLancadoValor)}</p>
           <div className="flex items-center justify-between mt-1">
-            <p className="text-xs text-muted-foreground">Total Lançado</p>
-            <span className="text-xs font-semibold bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+            <p className="text-xs text-muted-foreground">Total Enviado ERP</p>
+            <span className="text-xs font-semibold bg-success/10 text-success px-2 py-0.5 rounded-full">
               {totalLancadoQtd} {totalLancadoQtd === 1 ? "despesa" : "despesas"}
             </span>
           </div>
@@ -1192,7 +1192,7 @@ export default function FinanceiroPageSupabase() {
                           <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${pc.color}`}>
                             {pc.label}
                           </span>
-                        ) : <span className="text-muted-foreground">���</span>;
+                        ) : <span className="text-muted-foreground">����</span>;
                       })()}
                     </td>
                     <td className="px-3 py-2 max-w-32 truncate">{d.cliente}</td>
