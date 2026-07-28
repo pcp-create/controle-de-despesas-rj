@@ -18,7 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  Server,
+
   Car,
   Banknote,
   Gauge,
@@ -57,7 +57,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: "todas-despesas",  label: "Todas as Despesas", icon: <Files      className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro"] },
       { key: "financeiro",      label: "Financeiro / ERP",  icon: <TrendingUp className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro"] },
       { key: "reembolso",       label: "Reembolso",         icon: <Banknote   className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro"] },
-      { key: "integracoes-erp", label: "Integrações ERP",   icon: <Server     className="w-5 h-5 shrink-0" />, profiles: ["administrador","financeiro"] },
+
     ],
   },
   {
