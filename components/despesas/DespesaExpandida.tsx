@@ -309,6 +309,30 @@ export default function DespesaExpandida({
           />
         </div>
 
+        {/* Observação e anexo do financeiro */}
+        {(d.observacao_financeiro || d.anexo_financeiro_url) && (
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {d.observacao_financeiro && (
+              <div className="sm:col-span-2">
+                <InfoRow label="Obs. Financeiro" value={d.observacao_financeiro} />
+              </div>
+            )}
+            {d.anexo_financeiro_url && (
+              <a
+                href={d.anexo_financeiro_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+              >
+                <span>Evidência financeiro</span>
+                {d.anexo_financeiro_nome && (
+                  <span className="text-muted-foreground">({d.anexo_financeiro_nome})</span>
+                )}
+              </a>
+            )}
+          </div>
+        )}
+
         {/* ERP ID + erro */}
         {(d.erp_id || d.erp_erro) && (
           <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">

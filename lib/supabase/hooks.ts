@@ -80,6 +80,9 @@ export interface Despesa {
   aprovado_financeiro: boolean;
   aprovado_financeiro_em: string | null;
   aprovado_financeiro_por: string | null;
+  observacao_financeiro: string | null;
+  anexo_financeiro_url: string | null;
+  anexo_financeiro_nome: string | null;
   // Lançamento no sistema interno
   lancado_sistema: boolean;
   lancado_sistema_em: string | null;
@@ -727,7 +730,11 @@ export function useDespesas(userId?: string, perfil?: string) {
     return { error: null };
   };
 
-  const aprovarFinanceiro = async (id: string, aprovadoPor: string) => {
+  const aprovarFinanceiro = async (
+    id: string,
+    aprovadoPor: string,
+    opts?: { observacao?: string; anexoUrl?: string; anexoNome?: string }
+  ) => {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
@@ -737,6 +744,9 @@ export function useDespesas(userId?: string, perfil?: string) {
         aprovado_financeiro: true,
         aprovado_financeiro_em: new Date().toISOString(),
         aprovado_financeiro_por: aprovadoPor,
+        observacao_financeiro: opts?.observacao || null,
+        anexo_financeiro_url: opts?.anexoUrl || null,
+        anexo_financeiro_nome: opts?.anexoNome || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
