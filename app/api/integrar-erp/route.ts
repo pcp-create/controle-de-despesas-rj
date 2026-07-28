@@ -52,9 +52,20 @@ function paraNumero(valor: unknown): number | null {
 function paraIso(valor: unknown, nomeCampo: string): string {
   if (!valor) throw new Error(`${nomeCampo} não informado.`);
 
-  const data = new Date(String(valor));
+  const str = String(valor).trim();
+
+  // Se o valor for apenas uma data (YYYY-MM-DD), constrói sem deslocamento de fuso
+  // evitando que "2026-07-22" vire "2026-07-21T21:00:00.000Z" (UTC-3)
+  const apenasData = /^\d{4}-\d{2}-\d{2}$/.test(str);
+  if (apenasData) {
+    const [ano, mes, dia] = str.split("-").map(Number);
+    // Usa horário meio-dia BRT (15:00 UTC) para garantir que a data nunca "vire" o dia
+    return new Date(Date.UTC(ano, mes - 1, dia, 15, 0, 0)).toISOString();
+  }
+
+  const data = new Date(str);
   if (Number.isNaN(data.getTime())) {
-    throw new Error(`${nomeCampo} inválido: ${String(valor)}`);
+    throw new Error(`${nomeCampo} inválido: ${str}`);
   }
 
   return data.toISOString();
