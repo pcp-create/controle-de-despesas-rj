@@ -7,7 +7,7 @@ import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks"
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
 import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
-import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle, Clock, Send, CheckCircle } from "lucide-react";
+import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle, AlertTriangle, Clock, Send, CheckCircle, RefreshCw } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -1214,23 +1214,42 @@ export default function FinanceiroPageSupabase() {
                     </td>
                     {/* Status ERP */}
                     <td className="px-3 py-2 whitespace-nowrap">
-                      {!d.lancado_erp ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : d.status_erp ? (
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusErpCls}`}>
-                          {statusErpLabel[d.status_erp] ?? d.status_erp}
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-muted/30 text-muted-foreground">
-                          Não Enviado ao ERP
-                        </span>
-                      )}
+                      {(() => {
+                        const erpStatusKey = d.erp_status || "pendente";
+                        const erpStatusConfigMap: Record<string, { label: string; color: string; icon: React.ElementType }> = {
+                          pendente:    { label: "Pendente",          color: "bg-muted text-muted-foreground",            icon: Clock },
+                          processando: { label: "Processando",       color: "bg-warning/10 text-warning",                icon: RefreshCw },
+                          integrado:   { label: "Integrado",         color: "bg-success/10 text-success",                icon: CheckCircle },
+                          erro:        { label: "Erro Integração",   color: "bg-destructive/10 text-destructive",        icon: AlertTriangle },
+                        };
+                        const cfg = erpStatusConfigMap[erpStatusKey] ?? erpStatusConfigMap["pendente"];
+                        const Icon = cfg.icon;
+                        const isProcessing = erpStatusKey === "processando";
+                        const isError = erpStatusKey === "erro";
+                        return (
+                          <div className="flex flex-col gap-0.5">
+                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${cfg.color}`}>
+                              <Icon className={`w-3 h-3 ${isProcessing ? "animate-spin" : ""}`} />
+                              {cfg.label}
+                              {isError && d.erp_etapa_erro ? ` — E${d.erp_etapa_erro}` : ""}
+                            </span>
+                            {isError && d.erp_erro && (
+                              <span className="text-[10px] text-destructive/70 max-w-[160px] truncate pl-1" title={d.erp_erro}>
+                                {d.erp_erro}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
-                    {/* Envio — futuramente retorna a data de integração com o ERP */}
-                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
-                      {d.data_envio ? new Date(d.data_envio).toLocaleDateString("pt-BR") : "—"}
+                    {/* Data Envio */}
+                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground text-xs">
+                      {d.lancado_erp_em
+                        ? <span>{new Date(d.lancado_erp_em).toLocaleString("pt-BR")}</span>
+                        : <span>—</span>
+                      }
                     </td>
-                    {/* ERP ID — futuramente retorna o número do documento gerado pelo ERP */}
+                    {/* ERP ID */}
                     <td className="px-3 py-2 whitespace-nowrap font-mono">
                       {d.erp_id
                         ? <span className="text-success font-semibold">{d.erp_id}</span>
