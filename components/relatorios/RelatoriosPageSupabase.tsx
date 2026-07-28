@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosRelatorio } from "@/lib/supabase/use-filtros-persistidos";
-import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas, ControleKm } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { formatCurrency } from "@/lib/helpers";
 import {
@@ -114,7 +114,7 @@ export default function RelatoriosPageSupabase() {
   const { despesas, isLoading } = useDespesas(isFuncionario ? currentUser?.id : undefined);
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
-  const { registros: registrosKm } = useControleKm();
+  const { registros: registrosKm } = useControleKm(isFuncionario ? currentUser?.id : undefined);
   const { frotas } = useFrotas();
 
   const now = new Date();
@@ -132,6 +132,8 @@ export default function RelatoriosPageSupabase() {
   const [dataFinal, setDataFinal] = useState(() => now.toISOString().slice(0, 10));
   const [filtroFuncionario, setFiltroFuncionario] = useState<string | null>(null);
   const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
+  // Filtro interativo da seção KM — clicável nos gráficos
+  const [kmFuncFiltro, setKmFuncFiltro] = useState<string | null>(null);
 
   // Restaurar filtros salvos ao montar — apenas uma vez
   // Restaurar filtros salvos ao montar — roda uma única vez quando carregado=true
@@ -393,9 +395,9 @@ export default function RelatoriosPageSupabase() {
       pdf.setTextColor(17, 24, 39);
       y += cardH + 8;
 
-      // ════════════════════════════════════════
+      // ═══���═════════════��══════════════════════
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
-      // ═════════════════��═════════════════════��
+      // ══���═══����══════════��══════════════════���══��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
 
       const yStart2col = y;
@@ -826,8 +828,8 @@ export default function RelatoriosPageSupabase() {
       .slice(0, 10);
   }, [profiles, despesasAno, filtroTipo]);
 
-  // KM filtrado
-  const registrosKmFiltrados = useMemo(() => {
+  // KM filtrado (período)
+  const registrosKmPeriodo = useMemo(() => {
     return registrosKm.filter((r) => {
       if (r.status !== "finalizado") return false;
       if (!isGestorOuAdmin && currentUser?.id && r.usuario_id !== currentUser.id) return false;
@@ -843,30 +845,49 @@ export default function RelatoriosPageSupabase() {
     });
   }, [registrosKm, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, isGestorOuAdmin, currentUser]);
 
-  const totalKmPeriodo = useMemo(() => registrosKmFiltrados.reduce((s, r) => s + (r.km_percorrido ?? 0), 0), [registrosKmFiltrados]);
+  // KM filtrado (período + funcionário selecionado interativamente)
+  const registrosKmFiltrados = useMemo(() => {
+    if (!kmFuncFiltro) return registrosKmPeriodo;
+    // Encontra o profile pelo nome abreviado
+    const profile = profiles.find((p) => p.nome.split(" ").slice(0, 2).join(" ") === kmFuncFiltro);
+    if (!profile) return registrosKmPeriodo;
+    return registrosKmPeriodo.filter((r) => r.usuario_id === profile.id);
+  }, [registrosKmPeriodo, kmFuncFiltro, profiles]);
+
+  const kmPercorrido = (r: ControleKm) => r.km_percorrido ?? (r.km_final != null ? Math.max(0, r.km_final - r.km_inicial) : 0);
+
+  const totalKmPeriodo = useMemo(() => registrosKmFiltrados.reduce((s, r) => s + kmPercorrido(r), 0), [registrosKmFiltrados]);
   const totalViagens = registrosKmFiltrados.length;
   const mediaKmViagem = totalViagens > 0 ? totalKmPeriodo / totalViagens : 0;
   const totalMinutos = registrosKmFiltrados.reduce((s, r) => s + (r.duracao_minutos ?? 0), 0);
 
+  // registros do ano todo respeitando filtro de funcionário
+  const registrosKmAno = useMemo(() => {
+    const base = registrosKm.filter((r) => {
+      if (r.status !== "finalizado") return false;
+      if (!isGestorOuAdmin && currentUser?.id && r.usuario_id !== currentUser.id) return false;
+      return new Date(r.data_inicio).getFullYear() === anoSelecionado;
+    });
+    if (!kmFuncFiltro) return base;
+    const profile = profiles.find((p) => p.nome.split(" ").slice(0, 2).join(" ") === kmFuncFiltro);
+    if (!profile) return base;
+    return base.filter((r) => r.usuario_id === profile.id);
+  }, [registrosKm, isGestorOuAdmin, currentUser, anoSelecionado, kmFuncFiltro, profiles]);
+
   const kmByMes = useMemo(() => {
     return MESES.map((m, i) => ({
       mes: m,
-      km: registrosKm
-        .filter((r) => {
-          if (r.status !== "finalizado") return false;
-          if (!isGestorOuAdmin && currentUser?.id && r.usuario_id !== currentUser.id) return false;
-          const dt = new Date(r.data_inicio);
-          return dt.getMonth() === i && dt.getFullYear() === anoSelecionado;
-        })
-        .reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
+      km: registrosKmAno
+        .filter((r) => new Date(r.data_inicio).getMonth() === i)
+        .reduce((s, r) => s + kmPercorrido(r), 0),
     }));
-  }, [registrosKm, isGestorOuAdmin, currentUser, anoSelecionado]);
+  }, [registrosKmAno]);
 
   const kmByFrota = useMemo(() => {
     return frotas
       .map((f) => ({
         nome: f.placa,
-        km: registrosKmFiltrados.filter((r) => r.frota_id === f.id).reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
+        km: registrosKmFiltrados.filter((r) => r.frota_id === f.id).reduce((s, r) => s + kmPercorrido(r), 0),
       }))
       .filter((f) => f.km > 0)
       .sort((a, b) => b.km - a.km)
@@ -878,12 +899,82 @@ export default function RelatoriosPageSupabase() {
     return profiles
       .map((p) => ({
         nome: p.nome.split(" ").slice(0, 2).join(" "),
-        km: registrosKmFiltrados.filter((r) => r.usuario_id === p.id).reduce((s, r) => s + (r.km_percorrido ?? 0), 0),
+        km: registrosKmFiltrados.filter((r) => r.usuario_id === p.id).reduce((s, r) => s + kmPercorrido(r), 0),
       }))
       .filter((p) => p.km > 0)
       .sort((a, b) => b.km - a.km)
       .slice(0, 8);
   }, [profiles, registrosKmFiltrados, isGestorOuAdmin]);
+
+  // ─── Estimativa KM vs Apontado por funcionário ───────────────────────────────
+  // Calcula litros gastos em combustível * km/L da frota para estimar KM
+  const estimativaKmFuncionario = useMemo(() => {
+    if (!isGestorOuAdmin) return [];
+
+    return profiles
+      .map((p) => {
+        const kmApontado = registrosKmFiltrados
+          .filter((r) => r.usuario_id === p.id)
+          .reduce((s, r) => s + kmPercorrido(r), 0);
+
+        // Só inclui funcionários que tiveram KM apontado no período
+        if (kmApontado === 0) return null;
+
+        // Despesas de combustível do funcionário no período filtrado com litros e km/L preenchidos
+        const despesasCombustivel = despesas.filter((d) => {
+          if (d.tecnico_id !== p.id) return false;
+          if (!d.tipo_despesa?.nome?.toLowerCase().includes("combust")) return false;
+          if (!d.litros_abastecidos || !d.frota?.km_media_litro) return false;
+          const dataStr = d.data_despesa;
+          if (modoFiltro === "mes") {
+            const dt = new Date(dataStr + "T12:00:00");
+            return dt.getMonth() === mesSelecionado && dt.getFullYear() === anoSelecionado;
+          }
+          if (dataInicial && dataStr < dataInicial) return false;
+          if (dataFinal && dataStr > dataFinal) return false;
+          return true;
+        });
+
+        const memorialItens = despesasCombustivel.map((d) => ({
+          data: d.data_despesa,
+          litros: d.litros_abastecidos ?? 0,
+          kmMedia: d.frota?.km_media_litro ?? 0,
+          kmEstimadoParcial: (d.litros_abastecidos ?? 0) * (d.frota?.km_media_litro ?? 0),
+          placa: (d.frota as any)?.placa ?? "",
+        }));
+
+        const kmEstimado = memorialItens.reduce((s, i) => s + i.kmEstimadoParcial, 0);
+        const totalLitros = memorialItens.reduce((s, i) => s + i.litros, 0);
+        const pct = kmEstimado > 0 ? Math.round((kmApontado / kmEstimado) * 100) : null;
+
+        // KM/L real = km rodados apontados / litros abastecidos no período
+        const kmLReal = totalLitros > 0 ? Math.round((kmApontado / totalLitros) * 100) / 100 : null;
+
+        // Inconsistências detectadas
+        const semAbastecimento = kmApontado > 0 && totalLitros === 0;
+        const semViagem = kmApontado === 0 && totalLitros > 0;
+
+        return {
+          id: p.id,
+          nome: p.nome.split(" ").slice(0, 2).join(" "),
+          kmApontado: Math.round(kmApontado),
+          kmEstimado: Math.round(kmEstimado),
+          totalLitros: Math.round(totalLitros * 100) / 100,
+          pct,
+          kmLReal,
+          semAbastecimento,
+          semViagem,
+          memorial: memorialItens,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b!.kmApontado - a!.kmApontado) as {
+        id: string; nome: string; kmApontado: number; kmEstimado: number;
+        totalLitros: number; pct: number | null;
+        kmLReal: number | null; semAbastecimento: boolean; semViagem: boolean;
+        memorial: { data: string; litros: number; kmMedia: number; kmEstimadoParcial: number; placa: string }[];
+      }[];
+  }, [profiles, registrosKmFiltrados, despesas, isGestorOuAdmin, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
 
   const filtroFuncionarioNome = filtroFuncionario ? profiles.find((p) => p.id === filtroFuncionario)?.nome : null;
   const filtroTipoNome = filtroTipo ? tiposDespesa.find((t) => t.id === filtroTipo)?.nome : null;
@@ -1353,7 +1444,22 @@ export default function RelatoriosPageSupabase() {
           <Gauge className="w-4 h-4" />
         </div>
         <h2 className="text-base font-bold text-foreground">Controle de KM</h2>
+        {kmFuncFiltro && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-primary">
+            <span>{kmFuncFiltro}</span>
+            <button
+              onClick={() => setKmFuncFiltro(null)}
+              className="hover:text-primary/60 transition"
+              title="Limpar filtro"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
         <div className="h-px flex-1 bg-border" />
+        {kmFuncFiltro && (
+          <span className="text-xs text-muted-foreground italic">Clique no funcionário novamente para limpar</span>
+        )}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1410,14 +1516,37 @@ export default function RelatoriosPageSupabase() {
 
         {isGestorOuAdmin && kmByFuncionario.length > 0 && (
           <div className="bg-white rounded-xl border border-border shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-foreground mb-4">KM por Funcionário</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-foreground">KM por Funcionário</h3>
+              <span className="text-[10px] text-muted-foreground italic">Clique para filtrar todos os gráficos</span>
+            </div>
             <ResponsiveContainer width="100%" height={Math.max(180, kmByFuncionario.length * 36)}>
-              <BarChart data={kmByFuncionario} layout="vertical" barSize={16} margin={{ right: 80 }}>
+              <BarChart
+                data={kmByFuncionario}
+                layout="vertical"
+                barSize={16}
+                margin={{ right: 80 }}
+                style={{ cursor: "pointer" }}
+                onClick={(data) => {
+                  if (data?.activePayload?.[0]) {
+                    const nome = data.activePayload[0].payload.nome;
+                    setKmFuncFiltro((prev) => (prev === nome ? null : nome));
+                  }
+                }}
+              >
                 <XAxis type="number" hide />
                 <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={75} />
                 <Tooltip formatter={(v: number) => [`${v.toLocaleString("pt-BR")} km`, "KM"]}
                   contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }} />
-                <Bar dataKey="km" radius={[0, 4, 4, 0]} fill="oklch(0.577 0.245 27.325)">
+                <Bar dataKey="km" radius={[0, 4, 4, 0]}>
+                  {kmByFuncionario.map((entry) => (
+                    <Cell
+                      key={entry.nome}
+                      fill={kmFuncFiltro === null || kmFuncFiltro === entry.nome
+                        ? "oklch(0.577 0.245 27.325)"
+                        : "oklch(0.577 0.245 27.325 / 0.3)"}
+                    />
+                  ))}
                   <LabelList dataKey="km" content={<KmBarLabel />} />
                 </Bar>
               </BarChart>
@@ -1425,6 +1554,182 @@ export default function RelatoriosPageSupabase() {
           </div>
         )}
       </div>
+
+      {/* ── Estimativa KM vs Apontado por Funcionário ── */}
+      {isGestorOuAdmin && estimativaKmFuncionario.length > 0 && (
+        <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Estimativa KM vs Apontado por Funcionário</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Estimativa baseada nos litros abastecidos × média KM/L do veículo. Apontado = KM registrado no Controle de KM.
+              </p>
+            </div>
+            <div className="flex items-center gap-4 shrink-0">
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="w-3 h-3 rounded-sm bg-muted-foreground/20 inline-block" />
+                Estimado
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="w-3 h-3 rounded-sm bg-primary inline-block" />
+                Apontado
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-col divide-y divide-border">
+            {estimativaKmFuncionario.map((item) => {
+              const max = Math.max(item.kmEstimado, item.kmApontado, 1);
+              const barEstPct = (item.kmEstimado / max) * 100;
+              const barAptPct = (item.kmApontado / max) * 100;
+
+              const barColor =
+                item.pct === null
+                  ? "bg-primary"
+                  : item.pct >= 85 && item.pct <= 115
+                  ? "bg-success"
+                  : item.pct > 115
+                  ? "bg-warning"
+                  : "bg-destructive";
+
+              const pctColor =
+                item.pct === null ? "text-muted-foreground"
+                : item.pct >= 85 && item.pct <= 115 ? "text-success"
+                : item.pct > 115 ? "text-warning"
+                : "text-destructive";
+
+              const pctLabel =
+                item.pct !== null
+                  ? item.pct >= 85 && item.pct <= 115
+                    ? `${item.pct}% — dentro do estimado`
+                    : item.pct > 115
+                    ? `${item.pct}% — acima do estimado`
+                    : `${item.pct}% — abaixo do estimado`
+                  : "sem estimativa";
+
+              return (
+                <div key={item.id} className="py-3 first:pt-0 last:pb-0 flex flex-col gap-2">
+                  {/* Linha principal: nome + barra + % */}
+                  <div className="grid grid-cols-[140px_1fr_auto] items-center gap-3">
+                    <span className="text-xs font-semibold text-foreground truncate" title={item.nome}>
+                      {item.nome}
+                    </span>
+
+                    {/* Barra */}
+                    <div className="relative h-6 rounded-md overflow-hidden bg-muted/30">
+                      {/* Fundo estimado */}
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-md bg-muted-foreground/20 transition-all"
+                        style={{ width: `${barEstPct}%` }}
+                      />
+                      {/* Frente apontado */}
+                      <div
+                        className={`absolute inset-y-0 left-0 rounded-md opacity-80 transition-all ${barColor}`}
+                        style={{ width: `${barAptPct}%` }}
+                      />
+                      {/* KM apontado dentro da barra (branco, sempre legível) */}
+                      <div className="absolute inset-0 flex items-center px-2">
+                        <span className="text-[10px] font-bold text-white drop-shadow leading-none">
+                          {item.kmApontado > 0 ? `${item.kmApontado.toLocaleString("pt-BR")} km` : ""}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* % */}
+                    <span className={`text-[11px] font-semibold whitespace-nowrap min-w-[130px] text-right ${pctColor}`}>
+                      {pctLabel}
+                    </span>
+                  </div>
+
+                  {/* Subtexto: estimativa e memorial de cálculo */}
+                  <div className="pl-[152px] flex flex-col gap-1">
+                    {item.kmEstimado > 0 ? (
+                      <>
+                        {/* Linha resumo estimativa */}
+                        <p className="text-[10px] text-muted-foreground">
+                          Estimativa: <span className="font-medium text-foreground">{item.kmEstimado.toLocaleString("pt-BR")} km</span>
+                          {" "}·{" "}
+                          Total abastecido: <span className="font-medium text-foreground">{item.totalLitros.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span>
+                        </p>
+                        {/* Memorial detalhado por abastecimento */}
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                          {item.memorial.map((m, i) => (
+                            <span key={i} className="text-[10px] text-muted-foreground">
+                              {new Date(m.data + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                              {m.placa ? ` (${m.placa})` : ""}
+                              {": "}
+                              <span className="font-medium text-foreground">
+                                {m.litros.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L
+                                {" × "}
+                                {m.kmMedia} km/L
+                                {" = "}
+                                {Math.round(m.kmEstimadoParcial).toLocaleString("pt-BR")} km
+                              </span>
+                            </span>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground italic">
+                        Sem abastecimentos com litros e média KM/L cadastrados no período.
+                      </p>
+                    )}
+
+                    {/* KM/L real calculado + alertas de inconsistência */}
+                    <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                      {/* KM/L real apontado */}
+                      {item.kmLReal !== null && (
+                        <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border ${
+                          item.kmLReal >= (item.memorial[0]?.kmMedia ?? 0) * 0.85
+                            ? "bg-success/8 border-success/20 text-success"
+                            : "bg-warning/8 border-warning/20 text-warning"
+                        }`}>
+                          <span className="font-mono font-bold">{item.kmLReal.toFixed(2)} km/L</span>
+                          <span className="text-[9px] opacity-70">real apontado</span>
+                          {item.memorial[0]?.kmMedia > 0 && (
+                            <span className="text-[9px] opacity-70">
+                              · ref. veículo: {item.memorial[0].kmMedia} km/L
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Alerta: km apontado sem abastecimento cadastrado */}
+                      {item.semAbastecimento && (
+                        <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-warning/8 border border-warning/20 text-warning">
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          <span>KM apontado sem abastecimento no período — verifique lançamentos de combustível</span>
+                        </div>
+                      )}
+
+                      {/* Alerta: abastecimento sem km apontado */}
+                      {item.semViagem && (
+                        <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-destructive/8 border border-destructive/20 text-destructive">
+                          <AlertTriangle className="w-3 h-3 shrink-0" />
+                          <span>Abastecimento registrado sem viagens apontadas no período — verifique o controle de KM</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Legenda de cores */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 pt-3 border-t border-border">
+            <span className="text-[10px] text-muted-foreground font-medium">Interpretação:</span>
+            <span className="flex items-center gap-1 text-[10px] text-success"><span className="w-2 h-2 rounded-full bg-success inline-block" />85–115% — dentro do esperado</span>
+            <span className="flex items-center gap-1 text-[10px] text-warning"><span className="w-2 h-2 rounded-full bg-warning inline-block" />{">"}115% — acima do estimado</span>
+            <span className="flex items-center gap-1 text-[10px] text-destructive"><span className="w-2 h-2 rounded-full bg-destructive inline-block" />{"<"}85% — abaixo do estimado</span>
+            <span className="flex items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground ml-auto italic">
+              <span>Estimativa: litros × média KM/L do veículo</span>
+              <span>·</span>
+              <span>KM/L real: km apontados ÷ litros abastecidos</span>
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

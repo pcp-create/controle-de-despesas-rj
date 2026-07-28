@@ -78,14 +78,17 @@ const EMPTY_FIN = {
 };
 
 export default function ControleKmPage() {
-  const { registros, isLoading, iniciarKm, finalizarKm, deleteControleKm } = useControleKm();
-  const { frotas } = useFrotas();
-  const { profiles } = useProfiles();
   const { currentUser } = useAppStore();
 
   // Controle de perfil
   // Somente administrador e gestor podem ver viagens de todos os funcionários
   const isGestorOuAdmin = currentUser?.perfil === "administrador" || currentUser?.perfil === "gestor";
+
+  const { registros, isLoading, iniciarKm, finalizarKm, deleteControleKm } = useControleKm(
+    isGestorOuAdmin ? undefined : currentUser?.id
+  );
+  const { frotas } = useFrotas();
+  const { profiles } = useProfiles();
 
   // Filtros
   const [search, setSearch] = useState("");
@@ -809,7 +812,7 @@ export default function ControleKmPage() {
 
               return (
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-foreground">Veículo *</label>
+                  <label className="text-sm font-medium text-foreground">Veículo <span className="text-destructive">*</span></label>
 
                   {frotasDisponiveis.length === 0 ? (
                     <p className="text-sm text-muted-foreground italic">Nenhum veículo disponível no momento.</p>
@@ -947,7 +950,7 @@ export default function ControleKmPage() {
 
             {/* KM Inicial */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-foreground">KM Inicial *</label>
+              <label className="text-sm font-medium text-foreground">KM Inicial <span className="text-destructive">*</span></label>
               <input
                 type="number"
                 value={form.km_inicial}
@@ -1063,7 +1066,7 @@ export default function ControleKmPage() {
 
             <form onSubmit={handleFinalizar} className="p-5 flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">KM Final *</label>
+                <label className="text-sm font-medium text-foreground">KM Final <span className="text-destructive">*</span></label>
                 <input
                   type="number"
                   value={fin.km_final}

@@ -61,6 +61,10 @@ export interface Despesa {
   erp_resposta: Record<string, unknown> | null;
   frota_id: string | null;
   km_atual: number | null;
+  litros_abastecidos: number | null;
+  valor_litro: number | null;
+  tipo_combustivel: string | null;
+  frota?: { id: string; placa: string; modelo: string; km_media_litro: number | null } | null;
   // Parcelamento
   parcelado: boolean;
   numero_parcelas: number;
@@ -106,6 +110,7 @@ export interface Frota {
   tipo: string | null;
   quilometragem: number;
   km_atualizado_em: string | null;
+  km_media_litro: number | null;
   observacao: string | null;
   ativo: boolean;
   created_at: string;
@@ -170,7 +175,8 @@ const fetchDespesas = async (userId?: string, perfil?: string): Promise<Despesa[
       *,
       tipo_despesa:tipos_despesa(*),
       cartao:cartoes(*),
-      tecnico:profiles!despesas_tecnico_id_fkey(id, nome, email)
+      tecnico:profiles!despesas_tecnico_id_fkey(id, nome, email),
+      frota:frotas(id, placa, modelo, km_media_litro)
     `)
     .order("created_at", { ascending: false });
 
@@ -1071,18 +1077,21 @@ export interface ControleKm {
   updated_at: string;
 }
 
-async function fetchControleKm() {
+async function fetchControleKm(userId?: string) {
   const supabase = getSupabase();
   if (!supabase) return [];
-  const { data } = await supabase
+  let query = supabase
     .from("controle_km")
     .select("*")
     .order("data_inicio", { ascending: false });
+  if (userId) query = query.eq("usuario_id", userId);
+  const { data } = await query;
   return data || [];
 }
 
-export function useControleKm() {
-  const { data, error, isLoading, mutate } = useSWR("controle_km", fetchControleKm, {
+export function useControleKm(userId?: string) {
+  const key = userId ? `controle_km_${userId}` : "controle_km";
+  const { data, error, isLoading, mutate } = useSWR(key, () => fetchControleKm(userId), {
     revalidateOnFocus: false,
     refreshInterval: 30000,
   });
@@ -1128,14 +1137,30 @@ export function useControleKm() {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
+    // Busca km_inicial e data_inicio para calcular km_percorrido e duracao_minutos
+    const { data: registro } = await supabase
+      .from("controle_km")
+      .select("km_inicial, data_inicio")
+      .eq("id", id)
+      .single();
+
+    const km_percorrido = registro?.km_inicial != null ? Math.max(0, km_final - registro.km_inicial) : null;
+
+    const dataFim = new Date();
+    const duracao_minutos = registro?.data_inicio
+      ? Math.round((dataFim.getTime() - new Date(registro.data_inicio).getTime()) / 60000)
+      : null;
+
     const { error } = await supabase
       .from("controle_km")
       .update({
         km_final,
-        data_fim: new Date().toISOString(),
+        km_percorrido,
+        data_fim: dataFim.toISOString(),
+        duracao_minutos,
         status: "finalizado",
         observacao: observacao || null,
-        updated_at: new Date().toISOString(),
+        updated_at: dataFim.toISOString(),
       })
       .eq("id", id);
 

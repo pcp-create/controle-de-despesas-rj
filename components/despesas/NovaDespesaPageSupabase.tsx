@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
@@ -47,6 +47,9 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     // Campos de combustível — pré-seleciona veículo padrão em nova despesa
     frotaId: editDespesa?.frota_id || ((currentUser as any)?.frota_padrao_id as string | null) || "",
     kmAtual: editDespesa?.km_atual?.toString() || "",
+    litrosAbastecidos: editDespesa?.litros_abastecidos?.toString() || "",
+    valorLitro: editDespesa?.valor_litro?.toString() || "",
+    tipoCombustivel: (editDespesa as any)?.tipo_combustivel || "",
   });
 
   // ─── Tipo de pagamento ───────────────────────────────────────────────────────
@@ -63,6 +66,14 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [migrationSql, setMigrationSql] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/setup-km-metricas")
+      .then((r) => r.json())
+      .then((d) => { if (d.needsMigration) setMigrationSql(d.sql); })
+      .catch(() => {});
+  }, []);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -147,8 +158,13 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     }
     if (isCombustivel) {
       if (!form.frotaId) errs.frotaId = "Selecione o veículo";
+      if (!form.tipoCombustivel) errs.tipoCombustivel = "Selecione o tipo de combustível";
       if (!form.kmAtual || isNaN(Number(form.kmAtual)) || Number(form.kmAtual) < 0)
         errs.kmAtual = "Informe o KM atual";
+      if (!form.litrosAbastecidos || isNaN(Number(form.litrosAbastecidos)) || Number(form.litrosAbastecidos) <= 0)
+        errs.litrosAbastecidos = "Informe os litros abastecidos";
+      if (!form.valorLitro || isNaN(Number(form.valorLitro)) || Number(form.valorLitro) <= 0)
+        errs.valorLitro = "Informe o valor por litro";
     }
     return errs;
   };
@@ -179,6 +195,9 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       numero_diarias: numeroDiarias ?? null,
       frota_id: isCombustivel && form.frotaId ? form.frotaId : null,
       km_atual: isCombustivel && form.kmAtual ? Number(form.kmAtual) : null,
+      litros_abastecidos: isCombustivel && form.litrosAbastecidos ? Number(form.litrosAbastecidos) : null,
+      valor_litro: isCombustivel && form.valorLitro ? Number(form.valorLitro) : null,
+      tipo_combustivel: isCombustivel && form.tipoCombustivel ? form.tipoCombustivel : null,
       comprovante_nome: comprovante?.nome || null,
       comprovante_url: comprovante?.url || null,
       status_aprovacao: "AguardandoGestor" as const,
@@ -285,6 +304,47 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
   return (
     <div className="max-w-2xl mx-auto">
+
+      {/* Banner: migration pendente para campos de abastecimento */}
+      {migrationSql && (
+        <div className="flex flex-col gap-2 p-4 mb-4 rounded-xl border border-warning/40 bg-warning/5">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-warning">Atualização de banco necessária</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Execute o SQL abaixo no <strong>Supabase SQL Editor</strong> (Dashboard → SQL Editor) para habilitar os campos de abastecimento. Após executar, recarregue a página.
+              </p>
+            </div>
+            <button onClick={() => setMigrationSql(null)} className="text-muted-foreground hover:text-foreground transition shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-xs font-mono bg-muted px-3 py-2 rounded-lg text-foreground break-all select-all">
+              {migrationSql}
+            </code>
+            <button
+              onClick={() => {
+                try {
+                  const el = document.createElement("textarea");
+                  el.value = migrationSql;
+                  el.style.position = "fixed";
+                  el.style.opacity = "0";
+                  document.body.appendChild(el);
+                  el.select();
+                  document.execCommand("copy");
+                  document.body.removeChild(el);
+                } catch {}
+              }}
+              className="shrink-0 text-xs px-3 py-2 rounded-lg border border-input bg-background hover:bg-muted transition font-medium"
+            >
+              Copiar SQL
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="p-2 rounded-lg hover:bg-muted transition text-muted-foreground">
@@ -313,7 +373,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
         {/* -------- Forma de Pagamento -------- */}
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-foreground">Forma de Pagamento *</label>
+          <label className="text-sm font-medium text-foreground">Forma de Pagamento <span className="text-destructive">*</span></label>
           <div className="grid grid-cols-2 sm:grid-cols-4 rounded-lg border border-input overflow-hidden">
             <button
               type="button"
@@ -396,7 +456,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
           {/* Tipo */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-foreground">Tipo de Despesa *</label>
+            <label className="text-sm font-medium text-foreground">Tipo de Despesa <span className="text-destructive">*</span></label>
             <select
               value={form.tipoDespesaId}
               onChange={(e) => setForm({ ...form, tipoDespesaId: e.target.value, dataCheckin: "", dataCheckout: "" })}
@@ -413,7 +473,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           {/* Cartão — só exibido quando pagamento for cartão */}
           {pagamentoTipo === "cartao" && (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-foreground">Cartão *</label>
+              <label className="text-sm font-medium text-foreground">Cartão <span className="text-destructive">*</span></label>
               <select
                 value={form.cartaoId}
                 onChange={(e) => setForm({ ...form, cartaoId: e.target.value })}
@@ -460,7 +520,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           {/* Valor total */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-foreground">
-              {calculaDiarias ? "Valor total da nota (R$) *" : "Valor (R$) *"}
+              {calculaDiarias ? "Valor total da nota (R$)" : "Valor (R$)"} <span className="text-destructive">*</span>
             </label>
             <input
               type="number"
@@ -475,7 +535,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
           {/* Data da despesa — sempre visível, seja hospedagem ou não */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-foreground">Data da Despesa *</label>
+            <label className="text-sm font-medium text-foreground">Data da Despesa <span className="text-destructive">*</span></label>
             <input
               type="date"
               value={form.dataDespesa}
@@ -518,7 +578,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Número de parcelas */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-sm font-medium text-foreground">Número de Parcelas *</label>
+                  <label className="text-sm font-medium text-foreground">Número de Parcelas <span className="text-destructive">*</span></label>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -617,7 +677,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Check-in */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">Check-in *</label>
+                <label className="text-sm font-medium text-foreground">Check-in <span className="text-destructive">*</span></label>
                 <input
                   type="date"
                   value={form.dataCheckin}
@@ -632,7 +692,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
               {/* Check-out */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">Check-out *</label>
+                <label className="text-sm font-medium text-foreground">Check-out <span className="text-destructive">*</span></label>
                 <input
                   type="date"
                   value={form.dataCheckout}
@@ -836,9 +896,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 {errors.frotaId && <span className="text-xs text-destructive">{errors.frotaId}</span>}
               </div>
 
-              {/* KM */}
+              {/* KM Atual */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-medium text-foreground">KM Atual *</label>
+                <label className="text-sm font-medium text-foreground">
+                  KM Atual <span className="text-destructive">*</span>
+                </label>
                 <input
                   type="number"
                   value={form.kmAtual}
@@ -849,6 +911,71 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 />
                 {errors.kmAtual && <span className="text-xs text-destructive">{errors.kmAtual}</span>}
               </div>
+
+              {/* Tipo de combustível */}
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-foreground">
+                  Tipo de combustível <span className="text-destructive">*</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {(["Gasolina", "Gasolina Aditivada", "Etanol", "Diesel S10", "Diesel S500"] as const).map((tipo) => (
+                    <button
+                      key={tipo}
+                      type="button"
+                      onClick={() => setForm({ ...form, tipoCombustivel: tipo })}
+                      className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors whitespace-nowrap ${
+                        form.tipoCombustivel === tipo
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-input bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                      }`}
+                    >
+                      {tipo}
+                    </button>
+                  ))}
+                </div>
+                {errors.tipoCombustivel && <span className="text-xs text-destructive">{errors.tipoCombustivel}</span>}
+              </div>
+
+              {/* Litros e Valor/litro — lado a lado */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">
+                    Litros abastecidos <span className="text-destructive">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={form.litrosAbastecidos}
+                      onChange={(e) => setForm({ ...form, litrosAbastecidos: e.target.value })}
+                      placeholder="Ex: 40.5"
+                      min={0}
+                      step={0.001}
+                      className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">L</span>
+                  </div>
+                  {errors.litrosAbastecidos && <span className="text-xs text-destructive">{errors.litrosAbastecidos}</span>}
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">
+                    Valor / litro <span className="text-destructive">*</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">R$</span>
+                    <input
+                      type="number"
+                      value={form.valorLitro}
+                      onChange={(e) => setForm({ ...form, valorLitro: e.target.value })}
+                      placeholder="6,19"
+                      min={0}
+                      step={0.001}
+                      className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+                  {errors.valorLitro && <span className="text-xs text-destructive">{errors.valorLitro}</span>}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -856,7 +983,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         {/* Documento */}
         <div className="flex flex-col gap-1.5">
           <label className="text-sm font-medium text-foreground">
-            Documento *
+            Documento <span className="text-destructive">*</span>
             {tipoSelecionado?.documento_padrao && (
               <span className="ml-2 text-xs text-muted-foreground">Sugestão: {tipoSelecionado.documento_padrao}</span>
             )}

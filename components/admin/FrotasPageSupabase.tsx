@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useFrotas, type Frota } from "@/lib/supabase/hooks";
 import {
   Car,
@@ -28,6 +28,7 @@ const EMPTY_FORM = {
   cor: "",
   tipo: "Carro",
   quilometragem: "0",
+  km_media_litro: "",
   observacao: "",
   ativo: true,
 };
@@ -44,6 +45,15 @@ export default function FrotasPageSupabase() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [migrationSqlKm, setMigrationSqlKm] = useState<string | null>(null);
+
+  // Verifica se as colunas de métricas KM existem no banco
+  useEffect(() => {
+    fetch("/api/setup-km-metricas")
+      .then((r) => r.json())
+      .then((d) => { if (d.needsMigration) setMigrationSqlKm(d.sql); })
+      .catch(() => {});
+  }, []);
 
   const frostasFiltradas = frotas.filter((f) => {
     const matchAtivo = showAtivos ? f.ativo : !f.ativo;
@@ -74,6 +84,7 @@ export default function FrotasPageSupabase() {
       cor: frota.cor || "",
       tipo: frota.tipo || "Carro",
       quilometragem: frota.quilometragem.toString(),
+      km_media_litro: frota.km_media_litro?.toString() || "",
       observacao: frota.observacao || "",
       ativo: frota.ativo,
     });
@@ -119,6 +130,7 @@ export default function FrotasPageSupabase() {
       cor: form.cor.trim() || null,
       tipo: form.tipo || null,
       quilometragem: Number(form.quilometragem) || 0,
+      km_media_litro: form.km_media_litro ? Number(form.km_media_litro) : null,
       observacao: form.observacao.trim() || null,
       ativo: form.ativo,
     };
@@ -150,6 +162,48 @@ export default function FrotasPageSupabase() {
 
   return (
     <div className="flex flex-col gap-6">
+
+      {/* Banner: migration pendente para métricas KM */}
+      {migrationSqlKm && (
+        <div className="flex flex-col gap-2 p-4 rounded-xl border border-warning/40 bg-warning/5">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-warning">Atualização de banco necessária</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Execute o SQL abaixo no <strong>Supabase SQL Editor</strong> (Dashboard → SQL Editor) para habilitar as métricas de KM/L.
+                Após executar, recarregue a página.
+              </p>
+            </div>
+            <button onClick={() => setMigrationSqlKm(null)} className="text-muted-foreground hover:text-foreground transition shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-xs font-mono bg-muted px-3 py-2 rounded-lg text-foreground break-all select-all">
+              {migrationSqlKm}
+            </code>
+            <button
+              onClick={() => {
+                try {
+                  const el = document.createElement("textarea");
+                  el.value = migrationSqlKm;
+                  el.style.position = "fixed";
+                  el.style.opacity = "0";
+                  document.body.appendChild(el);
+                  el.select();
+                  document.execCommand("copy");
+                  document.body.removeChild(el);
+                } catch {}
+              }}
+              className="shrink-0 text-xs px-3 py-2 rounded-lg border border-input bg-background hover:bg-muted transition font-medium"
+            >
+              Copiar SQL
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex-1">
@@ -440,7 +494,7 @@ export default function FrotasPageSupabase() {
                 </div>
 
                 {/* KM */}
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-foreground">Quilometragem atual</label>
                   <input
                     type="number"
@@ -451,6 +505,21 @@ export default function FrotasPageSupabase() {
                     className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   {errors.quilometragem && <span className="text-xs text-destructive">{errors.quilometragem}</span>}
+                </div>
+
+                {/* Média KM/L */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">Média KM/L</label>
+                  <input
+                    type="number"
+                    value={form.km_media_litro}
+                    onChange={(e) => setForm({ ...form, km_media_litro: e.target.value })}
+                    placeholder="Ex: 12.5"
+                    min={0}
+                    step={0.1}
+                    className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <span className="text-xs text-muted-foreground">Usado para calcular estimativa de KM a partir do combustível abastecido.</span>
                 </div>
               </div>
 
