@@ -395,7 +395,7 @@ export default function RelatoriosPageSupabase() {
 
       // ════════════════════════════════════════
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
-      // ══════��══════════��═════════════════════��
+      // ══════���══════════��═════════════════════��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
 
       const yStart2col = y;
@@ -896,12 +896,14 @@ export default function RelatoriosPageSupabase() {
           .filter((r) => r.usuario_id === p.id)
           .reduce((s, r) => s + (r.km_percorrido ?? 0), 0);
 
-        // Despesas de combustível do funcionário no período filtrado
+        // Só inclui funcionários que tiveram KM apontado no período
+        if (kmApontado === 0) return null;
+
+        // Despesas de combustível do funcionário no período filtrado com litros e km/L preenchidos
         const despesasCombustivel = despesas.filter((d) => {
           if (d.tecnico_id !== p.id) return false;
           if (!d.tipo_despesa?.nome?.toLowerCase().includes("combust")) return false;
           if (!d.litros_abastecidos || !d.frota?.km_media_litro) return false;
-          // Aplica mesmo filtro de período
           const dataStr = d.data_despesa;
           if (modoFiltro === "mes") {
             const dt = new Date(dataStr + "T12:00:00");
@@ -913,10 +915,8 @@ export default function RelatoriosPageSupabase() {
         });
 
         const kmEstimado = despesasCombustivel.reduce((s, d) => {
-          return s + (d.litros_abastecidos! * d.frota!.km_media_litro!);
+          return s + ((d.litros_abastecidos ?? 0) * (d.frota?.km_media_litro ?? 0));
         }, 0);
-
-        if (kmApontado === 0 && kmEstimado === 0) return null;
 
         const pct = kmEstimado > 0 ? Math.round((kmApontado / kmEstimado) * 100) : null;
 
@@ -929,8 +929,7 @@ export default function RelatoriosPageSupabase() {
         };
       })
       .filter(Boolean)
-      .filter((item) => item!.kmApontado > 0 || item!.kmEstimado > 0)
-      .sort((a, b) => b!.kmEstimado - a!.kmEstimado) as {
+      .sort((a, b) => b!.kmApontado - a!.kmApontado) as {
         id: string; nome: string; kmApontado: number; kmEstimado: number; pct: number | null;
       }[];
   }, [profiles, registrosKmFiltrados, despesas, isGestorOuAdmin, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);

@@ -63,6 +63,7 @@ export interface Despesa {
   km_atual: number | null;
   litros_abastecidos: number | null;
   valor_litro: number | null;
+  frota?: { id: string; placa: string; modelo: string; km_media_litro: number | null } | null;
   // Parcelamento
   parcelado: boolean;
   numero_parcelas: number;
@@ -173,7 +174,8 @@ const fetchDespesas = async (userId?: string, perfil?: string): Promise<Despesa[
       *,
       tipo_despesa:tipos_despesa(*),
       cartao:cartoes(*),
-      tecnico:profiles!despesas_tecnico_id_fkey(id, nome, email)
+      tecnico:profiles!despesas_tecnico_id_fkey(id, nome, email),
+      frota:frotas(id, placa, modelo, km_media_litro)
     `)
     .order("created_at", { ascending: false });
 
