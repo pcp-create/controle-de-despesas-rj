@@ -4,13 +4,12 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles, type Despesa } from "@/lib/supabase/hooks";
 import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
+import DespesaExpandida from "./DespesaExpandida";
 import {
   Search,
   Filter,
-  Eye,
   ChevronDown,
   Users,
-  CreditCard,
   Layers,
 } from "lucide-react";
 
@@ -18,7 +17,6 @@ interface Props {
   initialStatus?: string;
 }
 
-// ─── Tipo de agrupamento ──────────────────────────────────────────────────────
 interface GrupoDespesa {
   chave: string;
   despesaPrincipal: Despesa;
@@ -34,14 +32,13 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
 
-  const [search, setSearch]             = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>(initialStatus ?? "todos");
+  const [search, setSearch]               = useState("");
+  const [filterStatus, setFilterStatus]   = useState<string>(initialStatus ?? "todos");
   const [filterTecnico, setFilterTecnico] = useState<string>("todos");
-  const [expandedId, setExpandedId]     = useState<string | null>(null);
+  const [expandedId, setExpandedId]       = useState<string | null>(null);
 
   const tecnicos = useMemo(() => profiles, [profiles]);
 
-  // ─── Agrupa despesas parceladas pelo grupo_parcela_id ─────────────────────
   const grupos = useMemo<GrupoDespesa[]>(() => {
     const mapa = new Map<string, Despesa[]>();
     for (const d of despesas) {
@@ -57,7 +54,6 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
       const principal = ordenadas[0];
       const valorTotal = ordenadas.reduce((acc, p) => acc + Number(p.valor), 0);
       const parcelado = principal.parcelado === true && lista.length > 1;
-
       resultado.push({
         chave,
         despesaPrincipal: principal,
@@ -71,14 +67,11 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
     return resultado
       .filter((g) => {
         const d = g.despesaPrincipal;
-
         if (filterStatus !== "todos") {
           const sg = getStatusGeral(d.status_erp, d.status_aprovacao);
           if (sg !== filterStatus) return false;
         }
-
         if (filterTecnico !== "todos" && d.tecnico_id !== filterTecnico) return false;
-
         if (search) {
           const term = search.toLowerCase();
           const tipo    = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
@@ -175,11 +168,11 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
       ) : (
         <div className="flex flex-col gap-3">
           {grupos.map((grupo) => {
-            const d       = grupo.despesaPrincipal;
-            const tipo    = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
-            const tecnico = profiles.find((p) => p.id === d.tecnico_id);
-            const sg      = getStatusGeral(d.status_erp, d.status_aprovacao);
-            const status  = statusGeralConfig[sg];
+            const d          = grupo.despesaPrincipal;
+            const tipo       = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
+            const tecnico    = profiles.find((p) => p.id === d.tecnico_id);
+            const sg         = getStatusGeral(d.status_erp, d.status_aprovacao);
+            const status     = statusGeralConfig[sg];
             const isExpanded = expandedId === grupo.chave;
 
             return (
@@ -210,7 +203,7 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
                       </span>
                     </div>
 
-                    {/* Linha 2: técnico • cliente • OS • data • valor/parcela */}
+                    {/* Linha 2: técnico • cliente • OS • data */}
                     <div className="flex items-center gap-2 mt-0.5 text-sm text-muted-foreground flex-wrap">
                       <span className="font-medium text-foreground/70">{tecnico?.nome ?? "-"}</span>
                       {d.cliente && <><span>•</span><span>{d.cliente}</span></>}
@@ -248,149 +241,13 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
                 </button>
 
                 {isExpanded && (
-                  <div className="px-4 pb-4 border-t border-border pt-4 space-y-4">
-
-                    {/* Parcelas detalhadas */}
-                    {grupo.parcelado && (
-                      <div className="flex flex-col gap-1.5">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                          <CreditCard className="w-3.5 h-3.5" />
-                          Parcelas
-                        </p>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {grupo.parcelas.map((p) => (
-                            <div key={p.id} className="flex flex-col gap-0.5 p-2.5 rounded-lg bg-muted/40 border border-border text-xs">
-                              <span className="text-muted-foreground font-medium">
-                                {p.parcela_atual}/{grupo.numeroParcelas}
-                              </span>
-                              <span className="font-semibold text-foreground">{formatCurrency(Number(p.valor))}</span>
-                              {p.data_vencimento && (
-                                <span className="text-primary">
-                                  Vence: {new Date(p.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR")}
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Grid de informações */}
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Criado em</p>
-                        <p className="text-foreground">{new Date(d.created_at).toLocaleString("pt-BR")}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Técnico</p>
-                        <p className="text-foreground">{tecnico?.nome ?? "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Documento</p>
-                        <p className="text-foreground">{d.documento || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Comprovante</p>
-                        <p className="text-foreground">{d.comprovante_nome || "Não anexado"}</p>
-                      </div>
-                      {d.data_envio && (
-                        <div>
-                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Enviado em</p>
-                          <p className="text-foreground">{new Date(d.data_envio).toLocaleString("pt-BR")}</p>
-                        </div>
-                      )}
-
-                      {/* Hospedagem */}
-                      {d.data_checkin && d.data_checkout && (
-                        <>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Check-in</p>
-                            <p className="text-foreground">{formatDate(d.data_checkin ?? "")}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Check-out</p>
-                            <p className="text-foreground">{formatDate(d.data_checkout ?? "")}</p>
-                          </div>
-                          {d.numero_diarias && (
-                            <div className="col-span-2 flex items-center justify-between p-2.5 rounded-lg bg-primary/5 border border-primary/15 text-sm">
-                              <span className="text-muted-foreground">
-                                <strong className="text-foreground">{d.numero_diarias}</strong> diária{d.numero_diarias > 1 ? "s" : ""}
-                              </span>
-                              <span className="text-muted-foreground">
-                                <strong className="text-foreground">{formatCurrency(Number(d.valor) / d.numero_diarias)}</strong> / di��ria
-                              </span>
-                            </div>
-                          )}
-                        </>
-                      )}
-
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">ERP ID</p>
-                        <p className="font-mono text-foreground">{d.erp_id || "-"}</p>
-                      </div>
-
-                      {/* Aprovação */}
-                      {d.status_aprovacao === "AprovadoGestor" && d.data_aprovacao && (
-                        <>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Aprovado em</p>
-                            <p className="text-success font-medium">{new Date(d.data_aprovacao).toLocaleString("pt-BR")}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Aprovado por</p>
-                            <p className="text-success font-medium">
-                              {d.gestor_aprovador_id
-                                ? (profiles.find((p) => p.id === d.gestor_aprovador_id)?.nome ?? d.gestor_aprovador_id)
-                                : "Aprovação automática"}
-                            </p>
-                          </div>
-                        </>
-                      )}
-
-                      {/* Reprovação */}
-                      {d.status_aprovacao === "Reprovado" && d.data_aprovacao && (
-                        <>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Reprovado em</p>
-                            <p className="text-destructive font-medium">{new Date(d.data_aprovacao).toLocaleString("pt-BR")}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Reprovado por</p>
-                            <p className="text-destructive font-medium">
-                              {d.gestor_aprovador_id
-                                ? (profiles.find((p) => p.id === d.gestor_aprovador_id)?.nome ?? d.gestor_aprovador_id)
-                                : "Aprovado automaticamente"}
-                            </p>
-                          </div>
-                        </>
-                      )}
-
-                      {d.observacao && (
-                        <div className="col-span-2">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Observação</p>
-                          <p className="text-foreground">{d.observacao}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Motivo reprovação */}
-                    {d.status_aprovacao === "Reprovado" && d.justificativa_reprovacao && (
-                      <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
-                        <p className="font-semibold mb-0.5">Motivo da reprovação</p>
-                        <p>{d.justificativa_reprovacao}</p>
-                      </div>
-                    )}
-
-                    {d.comprovante_url && (
-                      <button
-                        onClick={() => window.open(d.comprovante_url!, "_blank")}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition"
-                      >
-                        <Eye className="w-4 h-4" />
-                        Ver Comprovante
-                      </button>
-                    )}
-                  </div>
+                  <DespesaExpandida
+                    d={d}
+                    parcelas={grupo.parcelas}
+                    parcelado={grupo.parcelado}
+                    numeroParcelas={grupo.numeroParcelas}
+                    profiles={profiles}
+                  />
                 )}
               </div>
             );

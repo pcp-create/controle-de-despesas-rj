@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles, type Despesa } from "@/lib/supabase/hooks";
 import { formatCurrency, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
+import DespesaExpandida from "./DespesaExpandida";
 import {
   PlusCircle,
   Search,
@@ -11,9 +12,7 @@ import {
   Send,
   Edit2,
   Trash2,
-  Eye,
   ChevronDown,
-  CreditCard,
   Layers,
 } from "lucide-react";
 
@@ -274,172 +273,42 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                 </button>
 
                 {isExpanded && (
-                  <div className="px-4 pb-4 border-t border-border pt-4 space-y-4">
-
-                    {/* Parcelas (se parcelado) */}
-                    {grupo.parcelado && (
-                      <div className="flex flex-col gap-1.5">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                          <CreditCard className="w-3.5 h-3.5" />
-                          Parcelas
-                        </p>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {grupo.parcelas.map((p) => (
-                            <div key={p.id} className="flex flex-col gap-0.5 p-2.5 rounded-lg bg-muted/40 border border-border text-xs">
-                              <span className="text-muted-foreground font-medium">
-                                {p.parcela_atual}/{grupo.numeroParcelas}
-                              </span>
-                              <span className="font-semibold text-foreground">{formatCurrency(Number(p.valor))}</span>
-                              {p.data_vencimento && (
-                                <span className="text-primary">
-                                  Vence: {new Date(p.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR")}
-                                </span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Informações da despesa */}
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Criado em</p>
-                        <p className="text-foreground">{new Date(d.created_at).toLocaleString("pt-BR")}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Documento</p>
-                        <p className="text-foreground">{d.documento || "-"}</p>
-                      </div>
-                      {d.cartao && (
-                        <div className="col-span-2">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Cartão</p>
-                          <p className="text-foreground font-mono">
-                            {d.cartao.banco} — {d.cartao.bandeira} — **** {d.cartao.ultimos_digitos}
-                            {d.cartao.apelido ? ` (${d.cartao.apelido})` : ""}
-                          </p>
-                        </div>
-                      )}
-                      <div className={d.comprovante_nome ? "col-span-2" : ""}>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Comprovante</p>
-                        {d.comprovante_nome ? (
-                          <p className="text-foreground text-sm break-all leading-snug">{d.comprovante_nome}</p>
-                        ) : (
-                          <p className="text-muted-foreground">Não anexado</p>
+                  <DespesaExpandida
+                    d={d}
+                    parcelas={grupo.parcelas}
+                    parcelado={grupo.parcelado}
+                    numeroParcelas={grupo.numeroParcelas}
+                    profiles={profiles}
+                    acoes={
+                      <>
+                        {d.status_erp === "Rascunho" && (
+                          <>
+                            <button
+                              onClick={() => onEditar(d)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => handleDelete(d.id)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive text-sm hover:bg-destructive/10 transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Excluir
+                            </button>
+                            <button
+                              onClick={() => handleEnviar(grupo)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-sm hover:bg-accent/90 transition"
+                            >
+                              <Send className="w-4 h-4" />
+                              {grupo.parcelado ? `Enviar ${grupo.numeroParcelas} Parcelas` : "Enviar Despesa"}
+                            </button>
+                          </>
                         )}
-                      </div>
-                      {d.data_envio && (
-                        <div>
-                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Enviado em</p>
-                          <p className="text-foreground">{new Date(d.data_envio).toLocaleString("pt-BR")}</p>
-                        </div>
-                      )}
-                      {/* Hospedagem */}
-                      {d.data_checkin && d.data_checkout && (
-                        <>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Check-in</p>
-                            <p className="text-foreground">{formatDate(d.data_checkin ?? "")}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Check-out</p>
-                            <p className="text-foreground">{formatDate(d.data_checkout ?? "")}</p>
-                          </div>
-                          {d.numero_diarias && (
-                            <div className="col-span-2 flex items-center justify-between p-2.5 rounded-lg bg-primary/5 border border-primary/15 text-sm">
-                              <span className="text-muted-foreground"><strong className="text-foreground">{d.numero_diarias}</strong> diária{d.numero_diarias > 1 ? "s" : ""}</span>
-                              <span className="text-muted-foreground"><strong className="text-foreground">{formatCurrency(Number(d.valor) / d.numero_diarias)}</strong> / diária</span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {/* Aprovação */}
-                      {d.status_aprovacao === "AprovadoGestor" && d.data_aprovacao && (
-                        <>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Aprovado em</p>
-                            <p className="text-success font-medium">{new Date(d.data_aprovacao).toLocaleString("pt-BR")}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Aprovado por</p>
-                            <p className="text-success font-medium">
-                              {d.gestor_aprovador_id
-                                ? (profiles.find((p) => p.id === d.gestor_aprovador_id)?.nome ?? d.gestor_aprovador_id)
-                                : "Aprovação automática"}
-                            </p>
-                          </div>
-                        </>
-                      )}
-                      {d.status_aprovacao === "Reprovado" && d.data_aprovacao && (
-                        <>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Reprovado em</p>
-                            <p className="text-destructive font-medium">{new Date(d.data_aprovacao).toLocaleString("pt-BR")}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Reprovado por</p>
-                            <p className="text-destructive font-medium">
-                              {d.gestor_aprovador_id
-                                ? (profiles.find((p) => p.id === d.gestor_aprovador_id)?.nome ?? d.gestor_aprovador_id)
-                                : "Aprovado automaticamente"}
-                            </p>
-                          </div>
-                        </>
-                      )}
-                      {d.observacao && (
-                        <div className="col-span-2">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Observação</p>
-                          <p className="text-foreground">{d.observacao}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Motivo reprovação */}
-                    {d.status_aprovacao === "Reprovado" && d.justificativa_reprovacao && (
-                      <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
-                        <p className="font-semibold mb-0.5">Motivo da reprovação</p>
-                        <p>{d.justificativa_reprovacao}</p>
-                      </div>
-                    )}
-
-                    {/* Ações */}
-                    <div className="flex flex-wrap gap-2">
-                      {d.status_erp === "Rascunho" && (
-                        <>
-                          <button
-                            onClick={() => onEditar(d)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => handleDelete(d.id)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive text-sm hover:bg-destructive/10 transition"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Excluir
-                          </button>
-                          <button
-                            onClick={() => handleEnviar(grupo)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-sm hover:bg-accent/90 transition"
-                          >
-                            <Send className="w-4 h-4" />
-                            {grupo.parcelado ? `Enviar ${grupo.numeroParcelas} Parcelas` : "Enviar Despesa"}
-                          </button>
-                        </>
-                      )}
-                      {d.comprovante_url && (
-                        <button
-                          onClick={() => window.open(d.comprovante_url!, "_blank")}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition"
-                        >
-                          <Eye className="w-4 h-4" />
-                          Ver Comprovante
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                      </>
+                    }
+                  />
                 )}
               </div>
             );
