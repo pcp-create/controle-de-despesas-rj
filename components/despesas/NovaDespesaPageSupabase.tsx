@@ -869,7 +869,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                   Tipo de combustível <span className="text-destructive">*</span>
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  {(["Gasolina", "Gasolina Aditivada", "Etanol", "Diesel S10", "Diesel 500"] as const).map((tipo) => (
+                  {(["Gasolina", "Gasolina Aditivada", "Etanol", "Diesel S10", "Diesel S500"] as const).map((tipo) => (
                     <button
                       key={tipo}
                       type="button"
