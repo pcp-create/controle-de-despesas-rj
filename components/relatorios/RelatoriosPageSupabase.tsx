@@ -132,6 +132,8 @@ export default function RelatoriosPageSupabase() {
   const [dataFinal, setDataFinal] = useState(() => now.toISOString().slice(0, 10));
   const [filtroFuncionario, setFiltroFuncionario] = useState<string | null>(null);
   const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
+  // Filtro interativo da seção KM — clicável nos gráficos
+  const [kmFuncFiltro, setKmFuncFiltro] = useState<string | null>(null);
 
   // Restaurar filtros salvos ao montar — apenas uma vez
   // Restaurar filtros salvos ao montar — roda uma única vez quando carregado=true
@@ -395,7 +397,7 @@ export default function RelatoriosPageSupabase() {
 
       // ════════════════════════════════════════
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
-      // ══��═══����══════════��═════════════════════��
+      // ══���═══����══════════��═════════════════════��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
 
       const yStart2col = y;
@@ -826,8 +828,8 @@ export default function RelatoriosPageSupabase() {
       .slice(0, 10);
   }, [profiles, despesasAno, filtroTipo]);
 
-  // KM filtrado
-  const registrosKmFiltrados = useMemo(() => {
+  // KM filtrado (período)
+  const registrosKmPeriodo = useMemo(() => {
     return registrosKm.filter((r) => {
       if (r.status !== "finalizado") return false;
       if (!isGestorOuAdmin && currentUser?.id && r.usuario_id !== currentUser.id) return false;
@@ -843,6 +845,15 @@ export default function RelatoriosPageSupabase() {
     });
   }, [registrosKm, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, isGestorOuAdmin, currentUser]);
 
+  // KM filtrado (período + funcionário selecionado interativamente)
+  const registrosKmFiltrados = useMemo(() => {
+    if (!kmFuncFiltro) return registrosKmPeriodo;
+    // Encontra o profile pelo nome abreviado
+    const profile = profiles.find((p) => p.nome.split(" ").slice(0, 2).join(" ") === kmFuncFiltro);
+    if (!profile) return registrosKmPeriodo;
+    return registrosKmPeriodo.filter((r) => r.usuario_id === profile.id);
+  }, [registrosKmPeriodo, kmFuncFiltro, profiles]);
+
   const kmPercorrido = (r: ControleKm) => r.km_percorrido ?? (r.km_final != null ? Math.max(0, r.km_final - r.km_inicial) : 0);
 
   const totalKmPeriodo = useMemo(() => registrosKmFiltrados.reduce((s, r) => s + kmPercorrido(r), 0), [registrosKmFiltrados]);
@@ -850,19 +861,27 @@ export default function RelatoriosPageSupabase() {
   const mediaKmViagem = totalViagens > 0 ? totalKmPeriodo / totalViagens : 0;
   const totalMinutos = registrosKmFiltrados.reduce((s, r) => s + (r.duracao_minutos ?? 0), 0);
 
+  // registros do ano todo respeitando filtro de funcionário
+  const registrosKmAno = useMemo(() => {
+    const base = registrosKm.filter((r) => {
+      if (r.status !== "finalizado") return false;
+      if (!isGestorOuAdmin && currentUser?.id && r.usuario_id !== currentUser.id) return false;
+      return new Date(r.data_inicio).getFullYear() === anoSelecionado;
+    });
+    if (!kmFuncFiltro) return base;
+    const profile = profiles.find((p) => p.nome.split(" ").slice(0, 2).join(" ") === kmFuncFiltro);
+    if (!profile) return base;
+    return base.filter((r) => r.usuario_id === profile.id);
+  }, [registrosKm, isGestorOuAdmin, currentUser, anoSelecionado, kmFuncFiltro, profiles]);
+
   const kmByMes = useMemo(() => {
     return MESES.map((m, i) => ({
       mes: m,
-      km: registrosKm
-        .filter((r) => {
-          if (r.status !== "finalizado") return false;
-          if (!isGestorOuAdmin && currentUser?.id && r.usuario_id !== currentUser.id) return false;
-          const dt = new Date(r.data_inicio);
-          return dt.getMonth() === i && dt.getFullYear() === anoSelecionado;
-        })
+      km: registrosKmAno
+        .filter((r) => new Date(r.data_inicio).getMonth() === i)
         .reduce((s, r) => s + kmPercorrido(r), 0),
     }));
-  }, [registrosKm, isGestorOuAdmin, currentUser, anoSelecionado]);
+  }, [registrosKmAno]);
 
   const kmByFrota = useMemo(() => {
     return frotas
@@ -1414,7 +1433,22 @@ export default function RelatoriosPageSupabase() {
           <Gauge className="w-4 h-4" />
         </div>
         <h2 className="text-base font-bold text-foreground">Controle de KM</h2>
+        {kmFuncFiltro && (
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-medium text-primary">
+            <span>{kmFuncFiltro}</span>
+            <button
+              onClick={() => setKmFuncFiltro(null)}
+              className="hover:text-primary/60 transition"
+              title="Limpar filtro"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
         <div className="h-px flex-1 bg-border" />
+        {kmFuncFiltro && (
+          <span className="text-xs text-muted-foreground italic">Clique no funcionário novamente para limpar</span>
+        )}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1471,14 +1505,37 @@ export default function RelatoriosPageSupabase() {
 
         {isGestorOuAdmin && kmByFuncionario.length > 0 && (
           <div className="bg-white rounded-xl border border-border shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-foreground mb-4">KM por Funcionário</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-foreground">KM por Funcionário</h3>
+              <span className="text-[10px] text-muted-foreground italic">Clique para filtrar todos os gráficos</span>
+            </div>
             <ResponsiveContainer width="100%" height={Math.max(180, kmByFuncionario.length * 36)}>
-              <BarChart data={kmByFuncionario} layout="vertical" barSize={16} margin={{ right: 80 }}>
+              <BarChart
+                data={kmByFuncionario}
+                layout="vertical"
+                barSize={16}
+                margin={{ right: 80 }}
+                style={{ cursor: "pointer" }}
+                onClick={(data) => {
+                  if (data?.activePayload?.[0]) {
+                    const nome = data.activePayload[0].payload.nome;
+                    setKmFuncFiltro((prev) => (prev === nome ? null : nome));
+                  }
+                }}
+              >
                 <XAxis type="number" hide />
                 <YAxis type="category" dataKey="nome" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={75} />
                 <Tooltip formatter={(v: number) => [`${v.toLocaleString("pt-BR")} km`, "KM"]}
                   contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }} />
-                <Bar dataKey="km" radius={[0, 4, 4, 0]} fill="oklch(0.577 0.245 27.325)">
+                <Bar dataKey="km" radius={[0, 4, 4, 0]}>
+                  {kmByFuncionario.map((entry) => (
+                    <Cell
+                      key={entry.nome}
+                      fill={kmFuncFiltro === null || kmFuncFiltro === entry.nome
+                        ? "oklch(0.577 0.245 27.325)"
+                        : "oklch(0.577 0.245 27.325 / 0.3)"}
+                    />
+                  ))}
                   <LabelList dataKey="km" content={<KmBarLabel />} />
                 </Bar>
               </BarChart>

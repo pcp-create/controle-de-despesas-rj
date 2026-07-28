@@ -18,6 +18,7 @@ export async function GET() {
   const { error: checkValorLitro }    = await supabase.from("despesas").select("valor_litro").limit(1);
   const { error: checkTipoCombust }   = await supabase.from("despesas").select("tipo_combustivel").limit(1);
   const { error: checkKmPercorrido }  = await supabase.from("controle_km").select("km_percorrido").limit(1);
+  const { error: checkDuracao }       = await supabase.from("controle_km").select("duracao_minutos").limit(1);
 
   const missing: { col: string; sql: string }[] = [];
 
@@ -45,6 +46,11 @@ export async function GET() {
     missing.push({
       col: "controle_km.km_percorrido",
       sql: "ALTER TABLE controle_km ADD COLUMN IF NOT EXISTS km_percorrido INTEGER;",
+    });
+  if (checkDuracao)
+    missing.push({
+      col: "controle_km.duracao_minutos",
+      sql: "ALTER TABLE controle_km ADD COLUMN IF NOT EXISTS duracao_minutos INTEGER;",
     });
 
   if (missing.length === 0) {

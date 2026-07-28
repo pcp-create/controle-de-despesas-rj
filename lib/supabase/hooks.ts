@@ -1134,24 +1134,30 @@ export function useControleKm() {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
-    // Busca km_inicial para calcular km_percorrido
+    // Busca km_inicial e data_inicio para calcular km_percorrido e duracao_minutos
     const { data: registro } = await supabase
       .from("controle_km")
-      .select("km_inicial")
+      .select("km_inicial, data_inicio")
       .eq("id", id)
       .single();
 
     const km_percorrido = registro?.km_inicial != null ? Math.max(0, km_final - registro.km_inicial) : null;
+
+    const dataFim = new Date();
+    const duracao_minutos = registro?.data_inicio
+      ? Math.round((dataFim.getTime() - new Date(registro.data_inicio).getTime()) / 60000)
+      : null;
 
     const { error } = await supabase
       .from("controle_km")
       .update({
         km_final,
         km_percorrido,
-        data_fim: new Date().toISOString(),
+        data_fim: dataFim.toISOString(),
+        duracao_minutos,
         status: "finalizado",
         observacao: observacao || null,
-        updated_at: new Date().toISOString(),
+        updated_at: dataFim.toISOString(),
       })
       .eq("id", id);
 
