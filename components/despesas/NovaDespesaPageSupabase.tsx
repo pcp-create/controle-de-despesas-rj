@@ -47,6 +47,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     // Campos de combustível — pré-seleciona veículo padrão em nova despesa
     frotaId: editDespesa?.frota_id || ((currentUser as any)?.frota_padrao_id as string | null) || "",
     kmAtual: editDespesa?.km_atual?.toString() || "",
+    litrosAbastecidos: editDespesa?.litros_abastecidos?.toString() || "",
+    valorLitro: editDespesa?.valor_litro?.toString() || "",
   });
 
   // ─── Tipo de pagamento ───────────────────────────────────────────────────────
@@ -179,6 +181,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       numero_diarias: numeroDiarias ?? null,
       frota_id: isCombustivel && form.frotaId ? form.frotaId : null,
       km_atual: isCombustivel && form.kmAtual ? Number(form.kmAtual) : null,
+      litros_abastecidos: isCombustivel && form.litrosAbastecidos ? Number(form.litrosAbastecidos) : null,
+      valor_litro: isCombustivel && form.valorLitro ? Number(form.valorLitro) : null,
       comprovante_nome: comprovante?.nome || null,
       comprovante_url: comprovante?.url || null,
       status_aprovacao: "AguardandoGestor" as const,
@@ -848,6 +852,34 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                   className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
                 {errors.kmAtual && <span className="text-xs text-destructive">{errors.kmAtual}</span>}
+              </div>
+
+              {/* Litros abastecidos */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Litros abastecidos</label>
+                <input
+                  type="number"
+                  value={form.litrosAbastecidos}
+                  onChange={(e) => setForm({ ...form, litrosAbastecidos: e.target.value })}
+                  placeholder="Ex: 40.5"
+                  min={0}
+                  step={0.001}
+                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+
+              {/* Valor por litro */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Valor / litro (R$)</label>
+                <input
+                  type="number"
+                  value={form.valorLitro}
+                  onChange={(e) => setForm({ ...form, valorLitro: e.target.value })}
+                  placeholder="Ex: 6.19"
+                  min={0}
+                  step={0.001}
+                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
               </div>
             </div>
           </div>

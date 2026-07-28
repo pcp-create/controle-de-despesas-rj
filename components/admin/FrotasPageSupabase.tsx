@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useFrotas, type Frota } from "@/lib/supabase/hooks";
 import {
   Car,
@@ -28,6 +28,7 @@ const EMPTY_FORM = {
   cor: "",
   tipo: "Carro",
   quilometragem: "0",
+  km_media_litro: "",
   observacao: "",
   ativo: true,
 };
@@ -44,6 +45,9 @@ export default function FrotasPageSupabase() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  // Garante que as colunas novas existam no banco
+  useEffect(() => { fetch("/api/setup-km-metricas").catch(() => {}); }, []);
 
   const frostasFiltradas = frotas.filter((f) => {
     const matchAtivo = showAtivos ? f.ativo : !f.ativo;
@@ -74,6 +78,7 @@ export default function FrotasPageSupabase() {
       cor: frota.cor || "",
       tipo: frota.tipo || "Carro",
       quilometragem: frota.quilometragem.toString(),
+      km_media_litro: frota.km_media_litro?.toString() || "",
       observacao: frota.observacao || "",
       ativo: frota.ativo,
     });
@@ -119,6 +124,7 @@ export default function FrotasPageSupabase() {
       cor: form.cor.trim() || null,
       tipo: form.tipo || null,
       quilometragem: Number(form.quilometragem) || 0,
+      km_media_litro: form.km_media_litro ? Number(form.km_media_litro) : null,
       observacao: form.observacao.trim() || null,
       ativo: form.ativo,
     };
@@ -440,7 +446,7 @@ export default function FrotasPageSupabase() {
                 </div>
 
                 {/* KM */}
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-foreground">Quilometragem atual</label>
                   <input
                     type="number"
@@ -451,6 +457,21 @@ export default function FrotasPageSupabase() {
                     className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   {errors.quilometragem && <span className="text-xs text-destructive">{errors.quilometragem}</span>}
+                </div>
+
+                {/* Média KM/L */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">Média KM/L</label>
+                  <input
+                    type="number"
+                    value={form.km_media_litro}
+                    onChange={(e) => setForm({ ...form, km_media_litro: e.target.value })}
+                    placeholder="Ex: 12.5"
+                    min={0}
+                    step={0.1}
+                    className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <span className="text-xs text-muted-foreground">Usado para calcular estimativa de KM a partir do combustível abastecido.</span>
                 </div>
               </div>
 

@@ -395,7 +395,7 @@ export default function RelatoriosPageSupabase() {
 
       // ════════════════════════════════════════
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
-      // ═════════════════��═════════════════════��
+      // ══════��══════════��═════════════════════��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
 
       const yStart2col = y;
@@ -884,6 +884,56 @@ export default function RelatoriosPageSupabase() {
       .sort((a, b) => b.km - a.km)
       .slice(0, 8);
   }, [profiles, registrosKmFiltrados, isGestorOuAdmin]);
+
+  // ─── Estimativa KM vs Apontado por funcionário ───────────────────────────────
+  // Calcula litros gastos em combustível * km/L da frota para estimar KM
+  const estimativaKmFuncionario = useMemo(() => {
+    if (!isGestorOuAdmin) return [];
+
+    return profiles
+      .map((p) => {
+        const kmApontado = registrosKmFiltrados
+          .filter((r) => r.usuario_id === p.id)
+          .reduce((s, r) => s + (r.km_percorrido ?? 0), 0);
+
+        // Despesas de combustível do funcionário no período filtrado
+        const despesasCombustivel = despesas.filter((d) => {
+          if (d.tecnico_id !== p.id) return false;
+          if (!d.tipo_despesa?.nome?.toLowerCase().includes("combust")) return false;
+          if (!d.litros_abastecidos || !d.frota?.km_media_litro) return false;
+          // Aplica mesmo filtro de período
+          const dataStr = d.data_despesa;
+          if (modoFiltro === "mes") {
+            const dt = new Date(dataStr + "T12:00:00");
+            return dt.getMonth() === mesSelecionado && dt.getFullYear() === anoSelecionado;
+          }
+          if (dataInicial && dataStr < dataInicial) return false;
+          if (dataFinal && dataStr > dataFinal) return false;
+          return true;
+        });
+
+        const kmEstimado = despesasCombustivel.reduce((s, d) => {
+          return s + (d.litros_abastecidos! * d.frota!.km_media_litro!);
+        }, 0);
+
+        if (kmApontado === 0 && kmEstimado === 0) return null;
+
+        const pct = kmEstimado > 0 ? Math.round((kmApontado / kmEstimado) * 100) : null;
+
+        return {
+          id: p.id,
+          nome: p.nome.split(" ").slice(0, 2).join(" "),
+          kmApontado: Math.round(kmApontado),
+          kmEstimado: Math.round(kmEstimado),
+          pct,
+        };
+      })
+      .filter(Boolean)
+      .filter((item) => item!.kmApontado > 0 || item!.kmEstimado > 0)
+      .sort((a, b) => b!.kmEstimado - a!.kmEstimado) as {
+        id: string; nome: string; kmApontado: number; kmEstimado: number; pct: number | null;
+      }[];
+  }, [profiles, registrosKmFiltrados, despesas, isGestorOuAdmin, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
 
   const filtroFuncionarioNome = filtroFuncionario ? profiles.find((p) => p.id === filtroFuncionario)?.nome : null;
   const filtroTipoNome = filtroTipo ? tiposDespesa.find((t) => t.id === filtroTipo)?.nome : null;
@@ -1425,6 +1475,118 @@ export default function RelatoriosPageSupabase() {
           </div>
         )}
       </div>
+
+      {/* ── Estimativa KM vs Apontado por Funcionário ── */}
+      {isGestorOuAdmin && estimativaKmFuncionario.length > 0 && (
+        <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Estimativa KM vs Apontado por Funcionário</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Estimativa baseada nos litros abastecidos × média KM/L do veículo. Apontado = KM registrado no Controle de KM.
+              </p>
+            </div>
+            <div className="flex items-center gap-4 shrink-0">
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="w-3 h-3 rounded-sm bg-muted-foreground/20 inline-block" />
+                Estimado
+              </span>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="w-3 h-3 rounded-sm bg-primary inline-block" />
+                Apontado
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {estimativaKmFuncionario.map((item) => {
+              const max = Math.max(item.kmEstimado, item.kmApontado, 1);
+              const barEstPct = (item.kmEstimado / max) * 100;
+              const barAptPct = (item.kmApontado / max) * 100;
+
+              // Cor da barra apontada: verde (85-115%), laranja (>115%), vermelho (<70%), azul (sem estimativa)
+              const barColor =
+                item.pct === null
+                  ? "bg-primary"
+                  : item.pct >= 85 && item.pct <= 115
+                  ? "bg-success"
+                  : item.pct > 115
+                  ? "bg-warning"
+                  : "bg-destructive";
+
+              const pctLabel =
+                item.pct !== null
+                  ? item.pct >= 85 && item.pct <= 115
+                    ? `${item.pct}% — dentro do estimado`
+                    : item.pct > 115
+                    ? `${item.pct}% — acima do estimado`
+                    : `${item.pct}% — abaixo do estimado`
+                  : null;
+
+              return (
+                <div key={item.id} className="grid grid-cols-[140px_1fr_auto] items-center gap-3">
+                  {/* Nome */}
+                  <span className="text-xs font-medium text-foreground truncate" title={item.nome}>
+                    {item.nome}
+                  </span>
+
+                  {/* Barras sobrepostas */}
+                  <div className="relative h-5 rounded-md overflow-hidden bg-muted/20">
+                    {/* Barra de fundo: estimada (cinza) */}
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-md bg-muted-foreground/15 transition-all"
+                      style={{ width: `${barEstPct}%` }}
+                    />
+                    {/* Barra de frente: apontado (colorida) */}
+                    <div
+                      className={`absolute inset-y-0 left-0 rounded-md opacity-80 transition-all ${barColor}`}
+                      style={{ width: `${barAptPct}%` }}
+                    />
+                    {/* Valores inline */}
+                    <div className="absolute inset-0 flex items-center justify-between px-2">
+                      <span className="text-[10px] font-semibold text-white drop-shadow-sm leading-none">
+                        {item.kmApontado > 0 ? `${item.kmApontado.toLocaleString("pt-BR")} km` : ""}
+                      </span>
+                      {item.kmEstimado > 0 && (
+                        <span className="text-[10px] text-muted-foreground leading-none">
+                          /{item.kmEstimado.toLocaleString("pt-BR")} km est.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* % */}
+                  <div className="flex flex-col items-end min-w-[90px]">
+                    {pctLabel ? (
+                      <span
+                        className={`text-[10px] font-semibold leading-none ${
+                          item.pct! >= 85 && item.pct! <= 115
+                            ? "text-success"
+                            : item.pct! > 115
+                            ? "text-warning"
+                            : "text-destructive"
+                        }`}
+                      >
+                        {pctLabel}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground leading-none">sem estimativa</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Legenda de cores */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-4 pt-3 border-t border-border">
+            <span className="text-[10px] text-muted-foreground">Interpretação:</span>
+            <span className="flex items-center gap-1 text-[10px] text-success"><span className="w-2 h-2 rounded-full bg-success inline-block" />85–115% — dentro do esperado</span>
+            <span className="flex items-center gap-1 text-[10px] text-warning"><span className="w-2 h-2 rounded-full bg-warning inline-block" />{">"}115% — acima do estimado</span>
+            <span className="flex items-center gap-1 text-[10px] text-destructive"><span className="w-2 h-2 rounded-full bg-destructive inline-block" />{"<"}85% — abaixo do estimado</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -61,6 +61,8 @@ export interface Despesa {
   erp_resposta: Record<string, unknown> | null;
   frota_id: string | null;
   km_atual: number | null;
+  litros_abastecidos: number | null;
+  valor_litro: number | null;
   // Parcelamento
   parcelado: boolean;
   numero_parcelas: number;
@@ -106,6 +108,7 @@ export interface Frota {
   tipo: string | null;
   quilometragem: number;
   km_atualizado_em: string | null;
+  km_media_litro: number | null;
   observacao: string | null;
   ativo: boolean;
   created_at: string;
