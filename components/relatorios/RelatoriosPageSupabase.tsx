@@ -394,7 +394,7 @@ export default function RelatoriosPageSupabase() {
       pdf.setTextColor(17, 24, 39);
       y += cardH + 8;
 
-      // ═══���������═════════════��════════════════════���═
+      // ═══���������═════════════��═══════════════���════���═
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
       // ══���═══����══════════��══════════════════���══��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
@@ -935,9 +935,6 @@ export default function RelatoriosPageSupabase() {
           .filter((r) => r.usuario_id === p.id)
           .reduce((s, r) => s + kmPercorrido(r), 0);
 
-        // Só inclui funcionários que tiveram KM apontado no período
-        if (kmApontado === 0) return null;
-
         // Despesas de combustível do funcionário no período filtrado com litros e km/L preenchidos
         const despesasCombustivel = despesas.filter((d) => {
           if (d.tecnico_id !== p.id) return false;
@@ -985,7 +982,7 @@ export default function RelatoriosPageSupabase() {
           memorial: memorialItens,
         };
       })
-      .filter(Boolean)
+      .filter((item) => item !== null && (item.kmApontado > 0 || item.totalLitros > 0))
       .sort((a, b) => b!.kmApontado - a!.kmApontado) as {
         id: string; nome: string; kmApontado: number; kmEstimado: number;
         totalLitros: number; pct: number | null;
