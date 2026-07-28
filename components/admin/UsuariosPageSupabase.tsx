@@ -40,12 +40,7 @@ interface UsuarioForm {
   gestor_id: string | null;
   frota_padrao_id: string | null;
   senha?: string;
-  empresaId?: string;
-  fornecedorId?: string;
-  condicaoPagamentoId?: string;
-  operacaoFinanceiraId?: string;
-  moedaId?: string;
-  centroCustoId?: string;
+  pessoaId?: string;
 }
 
 const initialForm: UsuarioForm = {
@@ -58,12 +53,7 @@ const initialForm: UsuarioForm = {
   gestor_id: null,
   frota_padrao_id: null,
   senha: "",
-  empresaId: "",
-  fornecedorId: "",
-  condicaoPagamentoId: "",
-  operacaoFinanceiraId: "",
-  moedaId: "",
-  centroCustoId: "",
+  pessoaId: "",
 };
 
 export default function UsuariosPageSupabase() {
@@ -73,6 +63,17 @@ export default function UsuariosPageSupabase() {
   const [filterPerfil, setFilterPerfil] = useState<string>("todos");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [migrationNeeded, setMigrationNeeded] = useState<string | null>(null);
+
+  // Verifica se a coluna pessoa_id já existe no banco
+  useEffect(() => {
+    if (currentUser?.perfil !== "administrador") return;
+    fetch("/api/setup-pessoa-id")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.needsMigration) setMigrationNeeded(data.sql);
+      })
+      .catch(() => {});
+  }, [currentUser]);
 
   // Verifica se a coluna frota_padrao_id já existe no banco
   useEffect(() => {
@@ -137,12 +138,7 @@ export default function UsuariosPageSupabase() {
         gestor_id: user.gestor_id || null,
         frota_padrao_id: user.frota_padrao_id || null,
         senha: "",
-        empresaId: user.empresaId || "",
-        fornecedorId: user.fornecedorId || "",
-        condicaoPagamentoId: user.condicaoPagamentoId || "",
-        operacaoFinanceiraId: user.operacaoFinanceiraId || "",
-        moedaId: user.moedaId || "",
-        centroCustoId: user.centroCustoId || "",
+        pessoaId: user.pessoa_id ? String(user.pessoa_id) : "",
       });
     } else {
       setEditingUser(null);
@@ -189,12 +185,7 @@ export default function UsuariosPageSupabase() {
             telefone: form.telefone || null,
             gestor_id: form.gestor_id || null,
             frota_padrao_id: form.frota_padrao_id || null,
-            empresa_id: form.empresaId || null,
-            fornecedor_id: form.fornecedorId || null,
-            condicao_pagamento_id: form.condicaoPagamentoId || null,
-            operacao_financeira_id: form.operacaoFinanceiraId || null,
-            moeda_id: form.moedaId || null,
-            centro_custo_id: form.centroCustoId || null,
+            pessoa_id: form.pessoaId ? Number(form.pessoaId) : null,
           })
           .eq("id", editingUser.id);
 
@@ -246,12 +237,7 @@ export default function UsuariosPageSupabase() {
             senha: form.senha,
             area: form.area && form.area.trim() ? form.area : null,
             telefone: form.telefone && form.telefone.trim() ? form.telefone : null,
-            empresa_id: form.empresaId && form.empresaId.trim() ? form.empresaId : null,
-            fornecedor_id: form.fornecedorId && form.fornecedorId.trim() ? form.fornecedorId : null,
-            condicao_pagamento_id: form.condicaoPagamentoId && form.condicaoPagamentoId.trim() ? form.condicaoPagamentoId : null,
-            operacao_financeira_id: form.operacaoFinanceiraId && form.operacaoFinanceiraId.trim() ? form.operacaoFinanceiraId : null,
-            moeda_id: form.moedaId && form.moedaId.trim() ? form.moedaId : null,
-            centro_custo_id: form.centroCustoId && form.centroCustoId.trim() ? form.centroCustoId : null,
+            pessoa_id: form.pessoaId && form.pessoaId.trim() ? Number(form.pessoaId) : null,
           })
           .eq("id", userId);
 
@@ -1001,79 +987,20 @@ export default function UsuariosPageSupabase() {
                 </div>
               )}
               {activeTab === "erp" && (
-                <>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Empresa ID</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={form.empresaId || ""}
-                      onChange={(e) => setForm({ ...form, empresaId: e.target.value.replace(/[^0-9]/g, '') })}
-                      placeholder="Ex: 1"
-                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Fornecedor ID</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={form.fornecedorId || ""}
-                      onChange={(e) => setForm({ ...form, fornecedorId: e.target.value.replace(/[^0-9]/g, '') })}
-                      placeholder="Ex: 101"
-                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Condição de Pagamento ID</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={form.condicaoPagamentoId || ""}
-                      onChange={(e) => setForm({ ...form, condicaoPagamentoId: e.target.value.replace(/[^0-9]/g, '') })}
-                      placeholder="Ex: 1"
-                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Operação Financeira ID</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={form.operacaoFinanceiraId || ""}
-                      onChange={(e) => setForm({ ...form, operacaoFinanceiraId: e.target.value.replace(/[^0-9]/g, '') })}
-                      placeholder="Ex: 5"
-                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Moeda ID</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={form.moedaId || ""}
-                      onChange={(e) => setForm({ ...form, moedaId: e.target.value.replace(/[^0-9]/g, '') })}
-                      placeholder="Ex: 1"
-                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-foreground">Centro de Custo ID</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={form.centroCustoId || ""}
-                      onChange={(e) => setForm({ ...form, centroCustoId: e.target.value.replace(/[^0-9]/g, '') })}
-                      placeholder="Ex: 1"
-                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-                </>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">Pessoa ID</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={form.pessoaId || ""}
+                    onChange={(e) => setForm({ ...form, pessoaId: e.target.value.replace(/[^0-9]/g, "") })}
+                    placeholder="Ex: 27977"
+                    className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Identificador da pessoa no ERP M8. Usado na integração de despesas.
+                  </p>
+                </div>
               )}
 
               {/* Erro */}

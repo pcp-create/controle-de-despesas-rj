@@ -522,9 +522,14 @@ export async function POST(request: Request) {
         numeroDocumentoErp
       );
 
+      const pessoaId = tecnico?.pessoa_id ? Number(tecnico.pessoa_id) : null;
+      if (!pessoaId) {
+        throw new IntegracaoError(2, "Pessoa ID não configurado para este funcionário. Configure em Administração → Usuários → Configurações ERP.", {});
+      }
+
       const bodyEtapa2 = {
         empresaId: 1,
-        pessoaId: 27977,
+        pessoaId,
         tipoCompraId: 1,
         emissao: paraIso(despesa.data_despesa, "Data da despesa"),
         lancamento: agora,
