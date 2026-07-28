@@ -175,7 +175,7 @@ function montarResumoDespesa(
     `Valor: ${formatarValorBR(Number(despesa.valor || 0))}`,
     `Observação: ${valorTexto(despesa.observacao)}`,
     `Data aprovação: ${dataAprovacao}`,
-    `Aprovado por: ${valorTexto(aprovador?.nome || aprovador?.full_name)}`,
+    `Aprovado por: ${aprovador?.nome || aprovador?.full_name || "Aprovação Automática"}`,
   ].join(" | ");
 }
 
