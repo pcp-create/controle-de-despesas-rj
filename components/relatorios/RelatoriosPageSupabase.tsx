@@ -395,7 +395,7 @@ export default function RelatoriosPageSupabase() {
       pdf.setTextColor(17, 24, 39);
       y += cardH + 8;
 
-      // ═══���═════════════��══════════════════════
+      // ═══�����═════════════��══════════════════════
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
       // ══���═══����══════════��══════════════════���══��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
@@ -1608,41 +1608,45 @@ export default function RelatoriosPageSupabase() {
                   : "sem estimativa";
 
               return (
-                <div key={item.id} className="py-3 first:pt-0 last:pb-0 flex flex-col gap-2">
-                  {/* Linha principal: nome + barra + % */}
-                  <div className="grid grid-cols-[140px_1fr_auto] items-center gap-3">
-                    <span className="text-xs font-semibold text-foreground truncate" title={item.nome}>
+                <div key={item.id} className="py-4 first:pt-0 last:pb-0 flex flex-col gap-2">
+
+                  {/* Cabeçalho: nome à esquerda, % à direita */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-foreground" title={item.nome}>
                       {item.nome}
                     </span>
-
-                    {/* Barra */}
-                    <div className="relative h-6 rounded-md overflow-hidden bg-muted/30">
-                      {/* Fundo estimado */}
-                      <div
-                        className="absolute inset-y-0 left-0 rounded-md bg-muted-foreground/20 transition-all"
-                        style={{ width: `${barEstPct}%` }}
-                      />
-                      {/* Frente apontado */}
-                      <div
-                        className={`absolute inset-y-0 left-0 rounded-md opacity-80 transition-all ${barColor}`}
-                        style={{ width: `${barAptPct}%` }}
-                      />
-                      {/* KM apontado dentro da barra (branco, sempre legível) */}
-                      <div className="absolute inset-0 flex items-center px-2">
-                        <span className="text-[10px] font-bold text-white drop-shadow leading-none">
-                          {item.kmApontado > 0 ? `${item.kmApontado.toLocaleString("pt-BR")} km` : ""}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* % */}
-                    <span className={`text-[11px] font-semibold whitespace-nowrap min-w-[130px] text-right ${pctColor}`}>
+                    <span className={`text-[11px] font-semibold whitespace-nowrap ${pctColor}`}>
                       {pctLabel}
                     </span>
                   </div>
 
+                  {/* Barra — largura total */}
+                  <div className="relative h-7 rounded-md overflow-hidden bg-muted/30">
+                    {/* Fundo estimado */}
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-md bg-muted-foreground/20 transition-all"
+                      style={{ width: `${barEstPct}%` }}
+                    />
+                    {/* Frente apontado */}
+                    <div
+                      className={`absolute inset-y-0 left-0 rounded-md opacity-80 transition-all ${barColor}`}
+                      style={{ width: `${barAptPct}%` }}
+                    />
+                    {/* KM apontado + estimado dentro da barra */}
+                    <div className="absolute inset-0 flex items-center justify-between px-2.5">
+                      <span className="text-[11px] font-bold text-white drop-shadow leading-none">
+                        {item.kmApontado > 0 ? `${item.kmApontado.toLocaleString("pt-BR")} km apontado` : ""}
+                      </span>
+                      {item.kmEstimado > 0 && (
+                        <span className="text-[10px] font-medium text-white/70 leading-none">
+                          {item.kmEstimado.toLocaleString("pt-BR")} km est.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Subtexto: estimativa e memorial de cálculo */}
-                  <div className="pl-[152px] flex flex-col gap-1">
+                  <div className="flex flex-col gap-1">
                     {item.kmEstimado > 0 ? (
                       <>
                         {/* Linha resumo estimativa */}
