@@ -76,6 +76,8 @@ interface Props {
   parcelado?: boolean;
   numeroParcelas?: number;
   profiles: Profile[];
+  /** Exibe a seção de Lançamentos (interno, ERP, reembolso). Padrão: true */
+  showLancamentos?: boolean;
   /** Ações renderizadas no rodapé (botões de enviar, editar etc.) */
   acoes?: React.ReactNode;
 }
@@ -86,6 +88,7 @@ export default function DespesaExpandida({
   parcelado = false,
   numeroParcelas = 1,
   profiles,
+  showLancamentos = true,
   acoes,
 }: Props) {
   const tecnico    = profiles.find((p) => p.id === d.tecnico_id);
@@ -122,6 +125,9 @@ export default function DespesaExpandida({
               <InfoRow label="Observação" value={d.observacao} />
             </div>
           )}
+          <div className="col-span-2 sm:col-span-3">
+            <InfoRow label="ID Interno" value={<span className="font-mono text-xs text-muted-foreground">{d.id}</span>} />
+          </div>
         </div>
       </div>
 
@@ -280,7 +286,7 @@ export default function DespesaExpandida({
       </div>
 
       {/* ── SEÇÃO 8: LANÇAMENTOS ──────────────────────────────────── */}
-      <div>
+      {showLancamentos && <div>
         <SectionTitle icon={<Building2 className="w-3.5 h-3.5" />} label="Lançamentos" />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <StatusChip
@@ -325,14 +331,15 @@ export default function DespesaExpandida({
         )}
       </div>
 
+      }
+
       {/* ── SEÇÃO 9: DATAS SISTEMA ────────────────────────────────── */}
       <div>
         <SectionTitle icon={<Hash className="w-3.5 h-3.5" />} label="Registro" />
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
-          <InfoRow label="Criado em"      value={fmt(d.created_at)} />
-          <InfoRow label="Atualizado em"  value={fmt(d.updated_at)} />
+          <InfoRow label="Criado em"     value={fmt(d.created_at)} />
+          <InfoRow label="Atualizado em" value={fmt(d.updated_at)} />
           {d.data_envio && <InfoRow label="Enviado em" value={fmt(d.data_envio)} />}
-          <InfoRow label="ID interno" value={<span className="font-mono text-xs text-muted-foreground">{d.id}</span>} />
         </div>
       </div>
 

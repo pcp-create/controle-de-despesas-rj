@@ -279,6 +279,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                     parcelado={grupo.parcelado}
                     numeroParcelas={grupo.numeroParcelas}
                     profiles={profiles}
+                    showLancamentos={false}
                     acoes={
                       <>
                         {d.status_erp === "Rascunho" && (
