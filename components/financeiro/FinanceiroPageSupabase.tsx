@@ -1017,25 +1017,15 @@ export default function FinanceiroPageSupabase() {
                                 })()}
                               </div>
                             ) : aprovado ? (
-                              d.pagamento_tipo === "faturado" ? (
-                                <span
-                                  title="Despesas com pagamento Faturado não são enviadas ao ERP M8"
-                                  className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-muted text-muted-foreground bg-muted/20 cursor-not-allowed opacity-60"
-                                >
-                                  <SendHorizonal className="w-2.5 h-2.5" />
-                                  Faturado
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled={lancando[d.id]}
-                                  onClick={() => setConfirmLancar(d.id)}
-                                  className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-primary/30 text-primary bg-primary/10 hover:bg-primary hover:text-white transition disabled:opacity-50"
-                                >
-                                  <SendHorizonal className="w-2.5 h-2.5" />
-                                  Lançar
-                                </button>
-                              )
+                              <button
+                                type="button"
+                                disabled={lancando[d.id]}
+                                onClick={() => setConfirmLancar(d.id)}
+                                className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-primary/30 text-primary bg-primary/10 hover:bg-primary hover:text-white transition disabled:opacity-50"
+                              >
+                                <SendHorizonal className="w-2.5 h-2.5" />
+                                Lançar
+                              </button>
                             ) : (
                               <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded-full bg-muted/30 border border-border cursor-not-allowed opacity-50">
                                 Aguardando aprovação
@@ -1099,8 +1089,15 @@ export default function FinanceiroPageSupabase() {
                                 );
                               }
 
-                              // pendente: aguardando envio ao ERP
-                              if (d.pagamento_tipo === "faturado") return null;
+                              // pendente: faturado não vai ao ERP M8 — exibe aviso informativo
+                              if (d.pagamento_tipo === "faturado") return (
+                                <span
+                                  title="Pagamento Faturado não é enviado ao ERP M8"
+                                  className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/60 px-1.5 py-0.5 italic"
+                                >
+                                  ERP N/A (Faturado)
+                                </span>
+                              );
                               const isNFDireto = /^nf$/i.test((d.documento || "").trim()) || /nota\s*fiscal/i.test((d.documento || "").trim());
                               return (
                                 <button
