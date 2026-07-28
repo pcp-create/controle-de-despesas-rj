@@ -114,7 +114,7 @@ export default function RelatoriosPageSupabase() {
   const { despesas, isLoading } = useDespesas(isFuncionario ? currentUser?.id : undefined);
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
-  const { registros: registrosKm } = useControleKm();
+  const { registros: registrosKm } = useControleKm(isFuncionario ? currentUser?.id : undefined);
   const { frotas } = useFrotas();
 
   const now = new Date();
@@ -395,9 +395,9 @@ export default function RelatoriosPageSupabase() {
       pdf.setTextColor(17, 24, 39);
       y += cardH + 8;
 
-      // ════════════════════════════════════════
+      // ═════════════════��══════════════════════
       // 3. TOP FUNCIONÁRIOS + POR TIPO (2 colunas)
-      // ══���═══����══════════��═════════════════════��
+      // ══���═══����══════════��══════════════════���══��
       const COL2W = CW / 2 - 3; // largura de cada coluna com gap
 
       const yStart2col = y;

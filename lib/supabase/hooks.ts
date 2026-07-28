@@ -1077,18 +1077,21 @@ export interface ControleKm {
   updated_at: string;
 }
 
-async function fetchControleKm() {
+async function fetchControleKm(userId?: string) {
   const supabase = getSupabase();
   if (!supabase) return [];
-  const { data } = await supabase
+  let query = supabase
     .from("controle_km")
     .select("*")
     .order("data_inicio", { ascending: false });
+  if (userId) query = query.eq("usuario_id", userId);
+  const { data } = await query;
   return data || [];
 }
 
-export function useControleKm() {
-  const { data, error, isLoading, mutate } = useSWR("controle_km", fetchControleKm, {
+export function useControleKm(userId?: string) {
+  const key = userId ? `controle_km_${userId}` : "controle_km";
+  const { data, error, isLoading, mutate } = useSWR(key, () => fetchControleKm(userId), {
     revalidateOnFocus: false,
     refreshInterval: 30000,
   });

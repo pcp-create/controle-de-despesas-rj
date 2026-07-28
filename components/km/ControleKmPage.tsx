@@ -78,14 +78,17 @@ const EMPTY_FIN = {
 };
 
 export default function ControleKmPage() {
-  const { registros, isLoading, iniciarKm, finalizarKm, deleteControleKm } = useControleKm();
-  const { frotas } = useFrotas();
-  const { profiles } = useProfiles();
   const { currentUser } = useAppStore();
 
   // Controle de perfil
   // Somente administrador e gestor podem ver viagens de todos os funcionários
   const isGestorOuAdmin = currentUser?.perfil === "administrador" || currentUser?.perfil === "gestor";
+
+  const { registros, isLoading, iniciarKm, finalizarKm, deleteControleKm } = useControleKm(
+    isGestorOuAdmin ? undefined : currentUser?.id
+  );
+  const { frotas } = useFrotas();
+  const { profiles } = useProfiles();
 
   // Filtros
   const [search, setSearch] = useState("");
