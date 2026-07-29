@@ -206,6 +206,8 @@ export default function FinanceiroPageSupabase() {
     return despesas.filter((d) => {
       // Despesas em dinheiro vão para a aba Reembolso, não aparecem aqui
       if (d.pagamento_tipo === "dinheiro") return false;
+      // "Não enviado" (Rascunho ou sem status_erp) não aparece na aba Financeiro/ERP
+      if (!d.status_erp || d.status_erp === "Rascunho") return false;
       const dataStr = (d.data_vencimento || d.data_despesa || d.created_at || "").slice(0, 10);
       if (modoFiltro === "mes") {
         const dt = new Date(dataStr + "T00:00:00");
