@@ -22,15 +22,10 @@ export function formatDateTime(dateStr: string): string {
 export type StatusGeral = "nao_enviado" | "enviado" | "aguardando_aprovacao" | "aprovado" | "reprovado";
 
 export function getStatusGeral(statusErp: string, statusAprovacao: string): StatusGeral {
-  if (statusAprovacao === "Reprovado" || statusErp === "ReprovadoGestor" || statusErp === "ReprovadoERPAtualizado") return "reprovado";
-  if (statusAprovacao === "AprovadoGestor" || statusErp === "AprovadoGestorERPAtualizado") return "aprovado";
-  // Qualquer estado em que a despesa já foi enviada pelo funcionário (inclusive erros de ERP)
-  // ainda está aguardando ação do gestor
-  if (
-    statusErp === "EnviadoAguardandoGestor" ||
-    statusErp === "ErroEnvioERP" ||
-    statusErp === "ErroAtualizarERP"
-  ) return "aguardando_aprovacao";
+  if (statusAprovacao === "Reprovado") return "reprovado";
+  if (statusAprovacao === "AprovadoGestor") return "aprovado";
+  if (statusErp === "EnviadoAguardandoGestor" && statusAprovacao === "AguardandoGestor") return "aguardando_aprovacao";
+  if (statusErp === "EnviadoAguardandoGestor") return "enviado";
   return "nao_enviado";
 }
 
