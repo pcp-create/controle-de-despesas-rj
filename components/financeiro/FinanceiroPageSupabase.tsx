@@ -36,7 +36,7 @@ export default function FinanceiroPageSupabase() {
   const { user: authUser } = useAuth();
 
   // Ordenação
-  type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status" | "documento" | "cartao";
+  type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status" | "documento" | "cartao" | "lancado";
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   // Filtros por coluna — cada chave armazena um conjunto de valores selecionados
@@ -239,6 +239,7 @@ export default function FinanceiroPageSupabase() {
         case "valor":       cellVal = formatCurrency(Number(d.valor)); break;
         case "status":      cellVal = statusGeralConfig[sg]?.label || "—"; break;
         case "documento":   cellVal = d.documento || "—"; break;
+        case "lancado":     cellVal = d.lancado_sistema ? "Lançado" : "Pendente"; break;
         case "cartao": {
           const c = d.cartao;
           cellVal = c ? `${c.banco} — ${c.bandeira} — **** ${c.ultimos_digitos}` : "—";
@@ -351,6 +352,7 @@ export default function FinanceiroPageSupabase() {
           case "valor":       cellVal = formatCurrency(Number(d.valor)); break;
           case "status":      cellVal = statusGeralConfig[sg]?.label || "—"; break;
           case "documento":   cellVal = d.documento || "—"; break;
+          case "lancado":     cellVal = d.lancado_sistema ? "Lançado" : "Pendente"; break;
           case "cartao": {
             const c = d.cartao;
             cellVal = c ? `${c.banco} — ${c.bandeira} — **** ${c.ultimos_digitos}` : "—";
@@ -382,6 +384,7 @@ export default function FinanceiroPageSupabase() {
           case "valor":       va = Number(a.valor); vb = Number(b.valor); break;
           case "status":      va = getStatusGeral(a.status_erp ?? "", a.status_aprovacao); vb = getStatusGeral(b.status_erp ?? "", b.status_aprovacao); break;
           case "documento":   va = a.documento || ""; vb = b.documento || ""; break;
+          case "lancado":     va = a.lancado_sistema ? 1 : 0; vb = b.lancado_sistema ? 1 : 0; break;
           case "cartao": {
             const ca = a.cartao; const cb = b.cartao;
             va = ca ? `${ca.banco} ${ca.bandeira} ${ca.ultimos_digitos}` : "";
@@ -828,7 +831,7 @@ export default function FinanceiroPageSupabase() {
               <tr>
                 {(
                   [
-                    { key: null,          label: "Lançar",      align: "left"  },
+                    { key: "lancado",     label: "Lançar",      align: "left"  },
                     { key: "data",        label: "Data",        align: "left"  },
                     { key: "vencimento",  label: "Vencimento",  align: "left"  },
                     { key: "funcionario", label: "Funcionário",  align: "left"  },
