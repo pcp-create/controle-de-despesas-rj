@@ -194,7 +194,9 @@ export default function DashboardSupabase({ onNavigate }: Props) {
     ? despesas.filter((d) => {
         if (filtroFuncionario && d.tecnico_id !== filtroFuncionario) return false;
         if (filtroTipo && d.tipo_despesa_id !== filtroTipo) return false;
-        return getStatusGeral(d.status_erp ?? "", d.status_aprovacao) === "aguardando_aprovacao";
+        const s = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
+        console.log("[v0] despesa", d.id, "status_erp:", d.status_erp, "status_aprovacao:", d.status_aprovacao, "→", s);
+        return s === "aguardando_aprovacao";
       }).length
     : despesasCruzadas.filter((d) => getStatusGeral(d.status_erp ?? "", d.status_aprovacao) === "aguardando_aprovacao").length;
 
