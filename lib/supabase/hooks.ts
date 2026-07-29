@@ -452,7 +452,9 @@ export function useDespesas(userId?: string, perfil?: string) {
   // Isso evita a race condition onde o SWR busca antes do cookie de sessão ser gravado
   const sessionReady = !!profile?.id;
   const effectivePerfil = perfil || profile?.perfil || "funcionario";
-  const effectiveUserId = userId || (effectivePerfil === "funcionario" ? profile?.id : undefined);
+  // gestor e administrador veem todas as despesas — nunca filtra por userId
+  const isPrivilegiado = effectivePerfil === "administrador" || effectivePerfil === "gestor" || effectivePerfil === "financeiro";
+  const effectiveUserId = isPrivilegiado ? undefined : (userId || profile?.id);
   const swrKey = sessionReady ? `despesas_${effectiveUserId || "all"}_${effectivePerfil}` : null;
 
   const { data, error, isLoading, mutate } = useSWR(
