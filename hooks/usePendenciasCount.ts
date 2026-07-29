@@ -28,13 +28,15 @@ export function usePendenciasCount(): PendenciasCount {
       ? despesas.filter((d) => d.status_erp === "EnviadoAguardandoGestor").length
       : 0;
 
-    // Financeiro/ERP: aprovadas ainda não lançadas (exclui dinheiro — esses vão para Reembolso)
+    // Financeiro/ERP: aprovadas ainda não lançadas, excluindo "Não enviado" (Rascunho) e dinheiro
     const financeiro = isFinanceiroOuAdmin
       ? despesas.filter(
           (d) =>
             d.status_aprovacao === "AprovadoGestor" &&
             !d.lancado_sistema &&
-            d.pagamento_tipo !== "dinheiro"
+            d.pagamento_tipo !== "dinheiro" &&
+            d.status_erp !== "Rascunho" &&
+            d.status_erp != null
         ).length
       : 0;
 
