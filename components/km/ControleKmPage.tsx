@@ -323,6 +323,11 @@ export default function ControleKmPage() {
 
   const handleDelete = async () => {
     if (!targetRegistro) return;
+    // Somente gestor ou administrador podem excluir apontamentos de KM
+    if (!isGestorOuAdmin) {
+      closeModal();
+      return;
+    }
     setLoading(true);
     await deleteControleKm(targetRegistro.id);
     setLoading(false);
@@ -761,7 +766,7 @@ export default function ControleKmPage() {
                       Finalizar
                     </button>
                   )}
-                  {(currentUser?.perfil === "administrador" || currentUser?.perfil === "gestor") && (
+                  {isGestorOuAdmin && (
                     <button
                       onClick={() => openDelete(r)}
                       className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
