@@ -110,6 +110,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   );
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
+  const { registros: apontamentosKm } = useControleKm();
   const perfil = currentUser?.perfil;
 
   const now = new Date();
@@ -258,7 +259,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   // os alertas cujo abastecimento está dentro do período selecionado.
   const alertasConsumo = useMemo(() => {
     if (perfil !== "gestor" && perfil !== "administrador") return [];
-    return gerarAlertasConsumo(despesas).filter((a) => {
+    return gerarAlertasConsumo(despesas, apontamentosKm).filter((a) => {
       const dataStr = (a.data || "").slice(0, 10);
       if (modoFiltro === "mes") {
         const dt = new Date(dataStr + "T00:00:00");
@@ -396,9 +397,9 @@ export default function DashboardSupabase({ onNavigate }: Props) {
             Abastecimentos cujos apontamentos de KM ficaram abaixo de 80% da média esperada. Verifique os casos abaixo.
           </p>
           <div className="flex flex-col divide-y divide-border p-2">
-            {alertasConsumo.map((a) => (
+            {alertasConsumo.map((a, i) => (
               <button
-                key={a.despesaId}
+                key={`${a.frotaId}-${i}`}
                 onClick={() => onNavigate("todas-despesas")}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/60 transition text-left"
               >
@@ -410,15 +411,15 @@ export default function DashboardSupabase({ onNavigate }: Props) {
                     {a.placa}{a.modelo ? ` — ${a.modelo}` : ""}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    {(a.data || "").slice(0, 10).split("-").reverse().join("/")} · {a.kmRodado.toLocaleString("pt-BR")} km · {a.litros.toLocaleString("pt-BR")} L
+                    {(a.data || "").slice(0, 10).split("-").reverse().join("/")} · {a.litros.toLocaleString("pt-BR")} L · apontado {a.kmApontado.toLocaleString("pt-BR")} km
                   </span>
                 </div>
                 <div className="flex flex-col items-end shrink-0">
                   <span className="text-sm font-semibold text-warning">
-                    {a.consumoReal.toFixed(1)} km/l
+                    {Math.round(a.percentual * 100)}%
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    esperado {a.consumoEsperado.toFixed(1)} ({Math.round(a.percentual * 100)}%)
+                    esperado {Math.round(a.kmEsperado).toLocaleString("pt-BR")} km
                   </span>
                 </div>
               </button>
