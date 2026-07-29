@@ -170,6 +170,18 @@ const fetchCartoes = async (userId: string): Promise<Cartao[]> => {
 };
 
 const fetchDespesas = async (userId?: string, perfil?: string): Promise<Despesa[]> => {
+  // Perfis privilegiados buscam via API route com service key (ignora RLS)
+  const isPrivilegiado = perfil === "administrador" || perfil === "gestor" || perfil === "financeiro";
+  if (isPrivilegiado || !userId) {
+    try {
+      const res = await fetch("/api/despesas-relatorio");
+      if (res.ok) {
+        const json = await res.json();
+        return json.data || [];
+      }
+    } catch { /* cai no fallback abaixo */ }
+  }
+
   const supabase = getSupabase();
   if (!supabase) return [];
   
@@ -184,11 +196,9 @@ const fetchDespesas = async (userId?: string, perfil?: string): Promise<Despesa[
     `)
     .order("created_at", { ascending: false });
 
-  // Filtrar por perfil
-  if (perfil === "funcionario" && userId) {
+  if (userId) {
     query = query.eq("tecnico_id", userId);
   }
-  // Gestores, financeiros e admins veem tudo (RLS cuida da permissão)
 
   const { data, error } = await query;
   if (error) throw error;
@@ -1107,6 +1117,17 @@ export interface ControleKm {
 }
 
 async function fetchControleKm(userId?: string) {
+  // Sem userId = perfil privilegiado: busca via API route com service key (ignora RLS)
+  if (!userId) {
+    try {
+      const res = await fetch("/api/controle-km-admin");
+      if (res.ok) {
+        const json = await res.json();
+        return json.data || [];
+      }
+    } catch { /* cai no fallback abaixo */ }
+  }
+
   const supabase = getSupabase();
   if (!supabase) return [];
   let query = supabase
