@@ -64,9 +64,10 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Gestão",
     visibleFor: ["administrador","gestor"],
     items: [
-      { key: "aprovacao",    label: "Aprovações",      icon: <CheckSquare className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
-      { key: "frotas",       label: "Frotas",          icon: <Car         className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
-      { key: "tipos-despesa",label: "Tipos de Despesa",icon: <Tag         className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
+      { key: "aprovacao",    label: "Aprovações",       icon: <CheckSquare className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
+      { key: "frotas",       label: "Frotas",           icon: <Car         className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
+      { key: "tipos-despesa",label: "Tipos de Despesa", icon: <Tag         className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
+      { key: "integracoes-erp", label: "Integrações ERP", icon: <TrendingUp className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
     ],
   },
   {

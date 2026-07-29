@@ -170,6 +170,18 @@ const fetchCartoes = async (userId: string): Promise<Cartao[]> => {
 };
 
 const fetchDespesas = async (userId?: string, perfil?: string): Promise<Despesa[]> => {
+  // Perfis privilegiados buscam via API route com service key (ignora RLS)
+  const isPrivilegiado = perfil === "administrador" || perfil === "gestor" || perfil === "financeiro";
+  if (isPrivilegiado || !userId) {
+    try {
+      const res = await fetch("/api/despesas-relatorio");
+      if (res.ok) {
+        const json = await res.json();
+        return json.data || [];
+      }
+    } catch { /* cai no fallback abaixo */ }
+  }
+
   const supabase = getSupabase();
   if (!supabase) return [];
   
@@ -184,11 +196,9 @@ const fetchDespesas = async (userId?: string, perfil?: string): Promise<Despesa[
     `)
     .order("created_at", { ascending: false });
 
-  // Filtrar por perfil
-  if (perfil === "funcionario" && userId) {
+  if (userId) {
     query = query.eq("tecnico_id", userId);
   }
-  // Gestores, financeiros e admins veem tudo (RLS cuida da permissão)
 
   const { data, error } = await query;
   if (error) throw error;
@@ -452,7 +462,9 @@ export function useDespesas(userId?: string, perfil?: string) {
   // Isso evita a race condition onde o SWR busca antes do cookie de sessão ser gravado
   const sessionReady = !!profile?.id;
   const effectivePerfil = perfil || profile?.perfil || "funcionario";
-  const effectiveUserId = userId || (effectivePerfil === "funcionario" ? profile?.id : undefined);
+  // gestor e administrador veem todas as despesas — nunca filtra por userId
+  const isPrivilegiado = effectivePerfil === "administrador" || effectivePerfil === "gestor" || effectivePerfil === "financeiro";
+  const effectiveUserId = isPrivilegiado ? undefined : (userId || profile?.id);
   const swrKey = sessionReady ? `despesas_${effectiveUserId || "all"}_${effectivePerfil}` : null;
 
   const { data, error, isLoading, mutate } = useSWR(
@@ -1105,6 +1117,17 @@ export interface ControleKm {
 }
 
 async function fetchControleKm(userId?: string) {
+  // Sem userId = perfil privilegiado: busca via API route com service key (ignora RLS)
+  if (!userId) {
+    try {
+      const res = await fetch("/api/controle-km-admin");
+      if (res.ok) {
+        const json = await res.json();
+        return json.data || [];
+      }
+    } catch { /* cai no fallback abaixo */ }
+  }
+
   const supabase = getSupabase();
   if (!supabase) return [];
   let query = supabase
