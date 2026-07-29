@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useFrotas, type Frota } from "@/lib/supabase/hooks";
+import { useState, useEffect, useMemo } from "react";
+import { useFrotas, useDespesas, type Frota } from "@/lib/supabase/hooks";
+import { gerarAlertasConsumo } from "@/lib/consumo-frota";
 import {
   Car,
   Plus,
@@ -35,6 +36,16 @@ const EMPTY_FORM = {
 
 export default function FrotasPageSupabase() {
   const { frotas, isLoading, addFrota, updateFrota, deleteFrota } = useFrotas();
+  const { despesas } = useDespesas();
+
+  // Quantidade de alertas de consumo por frota (apontamentos insuficientes)
+  const alertasPorFrota = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const a of gerarAlertasConsumo(despesas)) {
+      mapa.set(a.frotaId, (mapa.get(a.frotaId) ?? 0) + 1);
+    }
+    return mapa;
+  }, [despesas]);
 
   const [search, setSearch] = useState("");
   const [showAtivos, setShowAtivos] = useState(true);
@@ -280,9 +291,20 @@ export default function FrotasPageSupabase() {
                     <p className="text-xs text-muted-foreground">{frota.marca} {frota.modelo}</p>
                   </div>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${frota.ativo ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
-                  {frota.ativo ? "Ativo" : "Inativo"}
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {(alertasPorFrota.get(frota.id) ?? 0) > 0 && (
+                    <span
+                      className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-warning/10 text-warning"
+                      title="Abastecimentos com apontamentos de KM insuficientes"
+                    >
+                      <AlertTriangle className="w-3 h-3" />
+                      {alertasPorFrota.get(frota.id)}
+                    </span>
+                  )}
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${frota.ativo ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
+                    {frota.ativo ? "Ativo" : "Inativo"}
+                  </span>
+                </div>
               </div>
 
               {/* Info */}
