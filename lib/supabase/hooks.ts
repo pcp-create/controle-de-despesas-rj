@@ -1116,6 +1116,23 @@ async function fetchControleKm(userId?: string) {
   return data || [];
 }
 
+/**
+ * Atualiza a quilometragem da frota via rota server-side (service role),
+ * ignorando o RLS. Necessário porque funcionários comuns não têm permissão
+ * de UPDATE direto na tabela `frotas`.
+ */
+async function atualizarKmFrota(frota_id: string, quilometragem: number) {
+  try {
+    await fetch("/api/atualizar-km-frota", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ frota_id, quilometragem }),
+    });
+  } catch {
+    // Falha silenciosa: não impede o registro da viagem.
+  }
+}
+
 export function useControleKm(userId?: string) {
   const key = userId ? `controle_km_${userId}` : "controle_km";
   const { data, error, isLoading, mutate } = useSWR(key, () => fetchControleKm(userId), {
@@ -1146,15 +1163,10 @@ export function useControleKm(userId?: string) {
 
     if (error) return { error: error.message };
 
-    // Atualiza KM do veículo no cadastro da frota com o km_inicial informado
-    await supabase
-      .from("frotas")
-      .update({
-        quilometragem: payload.km_inicial,
-        km_atualizado_em: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", payload.frota_id);
+    // Atualiza KM do veículo no cadastro da frota com o km_inicial informado.
+    // Usa rota server-side (service role) para funcionar mesmo sem permissão
+    // direta de UPDATE na tabela frotas (RLS).
+    await atualizarKmFrota(payload.frota_id, payload.km_inicial);
 
     mutate();
     return { data: inserted, error: null };
@@ -1193,16 +1205,11 @@ export function useControleKm(userId?: string) {
 
     if (error) return { error: error.message };
 
-    // Atualiza KM do veículo no cadastro da frota com o km_final (valor mais recente)
+    // Atualiza KM do veículo no cadastro da frota com o km_final (valor mais recente).
+    // Usa rota server-side (service role) para funcionar mesmo sem permissão
+    // direta de UPDATE na tabela frotas (RLS).
     if (frota_id) {
-      await supabase
-        .from("frotas")
-        .update({
-          quilometragem: km_final,
-          km_atualizado_em: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", frota_id);
+      await atualizarKmFrota(frota_id, km_final);
     }
 
     mutate();
