@@ -11,6 +11,7 @@ import type { Despesa, ControleKm } from "@/lib/supabase/hooks";
 export const LIMITE_CONSUMO = 0.8;
 
 export interface AlertaConsumo {
+  id: string;        // chave única: `${frotaId}_${data.slice(0,10)}`
   frotaId: string;
   placa: string;
   modelo: string;
@@ -70,11 +71,13 @@ export function avaliarAbastecimento(
 
   if (percentual >= LIMITE_CONSUMO) return null;
 
+  const data = despesa.data_despesa ?? despesa.created_at;
   return {
+    id: `${despesa.frota_id}_${data.slice(0, 10)}`,
     frotaId: despesa.frota_id as string,
     placa: despesa.frota?.placa ?? "—",
     modelo: despesa.frota?.modelo ?? "",
-    data: despesa.data_despesa ?? despesa.created_at,
+    data,
     litros,
     kmApontado,
     kmEsperado,

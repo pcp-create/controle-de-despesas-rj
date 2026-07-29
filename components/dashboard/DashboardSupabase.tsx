@@ -19,6 +19,7 @@ import {
   X,
   Fuel,
   AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
 import { formatCurrency, getStatusGeral } from "@/lib/helpers";
 import { gerarAlertasConsumo } from "@/lib/consumo-frota";
@@ -116,6 +117,14 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   const now = new Date();
   const { filtrosSalvos, carregado, salvar } = useFiltrosPersistidos<FiltrosDashboard>(currentUser?.id, "dashboard");
   const aplicado = useRef(false);
+
+  // Alertas de consumo tratados: { id → justificativa }
+  const STORAGE_KEY = `alertas_consumo_tratados_${currentUser?.id ?? ""}`;
+  const [tratados, setTratados] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}"); } catch { return {}; }
+  });
+  const [modalTratar, setModalTratar] = useState<{ id: string; label: string } | null>(null);
+  const [justificativa, setJustificativa] = useState("");
 
   const [modoFiltro, setModoFiltro] = useState<ModoFiltro>("mes");
   const [mesSelecionado, setMesSelecionado] = useState(now.getMonth());
@@ -260,6 +269,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   const alertasConsumo = useMemo(() => {
     if (perfil !== "gestor" && perfil !== "administrador") return [];
     return gerarAlertasConsumo(despesas, apontamentosKm).filter((a) => {
+      if (tratados[a.id]) return false; // oculta alertas já tratados
       const dataStr = (a.data || "").slice(0, 10);
       if (modoFiltro === "mes") {
         const dt = new Date(dataStr + "T00:00:00");
@@ -269,7 +279,16 @@ export default function DashboardSupabase({ onNavigate }: Props) {
       if (dataFinal && dataStr > dataFinal) return false;
       return true;
     });
-  }, [despesas, perfil, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
+  }, [despesas, apontamentosKm, tratados, perfil, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
+
+  function confirmarTratamento() {
+    if (!modalTratar || !justificativa.trim()) return;
+    const novos = { ...tratados, [modalTratar.id]: justificativa.trim() };
+    setTratados(novos);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(novos)); } catch { /* ignore */ }
+    setModalTratar(null);
+    setJustificativa("");
+  }
 
   if (loadingDespesas) {
     return (
@@ -381,6 +400,48 @@ export default function DashboardSupabase({ onNavigate }: Props) {
         ))}
       </div>
 
+      {/* Modal de tratamento de alerta */}
+      {modalTratar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
+              <CheckCircle2 className="w-5 h-5 text-success shrink-0" />
+              <h2 className="text-base font-semibold text-foreground flex-1">Tratar alerta de consumo</h2>
+              <button onClick={() => { setModalTratar(null); setJustificativa(""); }} className="p-1 rounded-lg hover:bg-muted transition">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="px-5 py-4 flex flex-col gap-3">
+              <p className="text-sm text-muted-foreground">
+                Informe a justificativa para tratar o alerta de <strong className="text-foreground">{modalTratar.label}</strong>. O alerta será removido da lista e não contará mais nos indicadores.
+              </p>
+              <textarea
+                value={justificativa}
+                onChange={(e) => setJustificativa(e.target.value)}
+                placeholder="Ex: Veículo utilizou rota alternativa com trânsito intenso..."
+                rows={3}
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
+              <button
+                onClick={() => { setModalTratar(null); setJustificativa(""); }}
+                className="px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:bg-muted transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarTratamento}
+                disabled={!justificativa.trim()}
+                className="px-4 py-2 rounded-lg bg-success text-white text-sm font-medium hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Confirmar tratamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Alertas de consumo de combustível */}
       {alertasConsumo.length > 0 && (
         <div className="bg-white rounded-xl border border-warning/30 shadow-sm overflow-hidden">
@@ -394,15 +455,11 @@ export default function DashboardSupabase({ onNavigate }: Props) {
             </span>
           </div>
           <p className="px-5 pt-3 text-xs text-muted-foreground">
-            Abastecimentos cujos apontamentos de KM ficaram abaixo de 80% da média esperada. Verifique os casos abaixo.
+            Abastecimentos cujos apontamentos de KM ficaram abaixo de 80% da média esperada. Verifique e trate os casos abaixo.
           </p>
           <div className="flex flex-col divide-y divide-border p-2">
-            {alertasConsumo.map((a, i) => (
-              <button
-                key={`${a.frotaId}-${i}`}
-                onClick={() => onNavigate("todas-despesas")}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/60 transition text-left"
-              >
+            {alertasConsumo.map((a) => (
+              <div key={a.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/30 transition">
                 <div className="w-9 h-9 rounded-lg bg-warning/10 text-warning flex items-center justify-center shrink-0">
                   <Fuel className="w-4 h-4" />
                 </div>
@@ -414,15 +471,25 @@ export default function DashboardSupabase({ onNavigate }: Props) {
                     {(a.data || "").slice(0, 10).split("-").reverse().join("/")} · {a.litros.toLocaleString("pt-BR")} L · apontado {a.kmApontado.toLocaleString("pt-BR")} km
                   </span>
                 </div>
-                <div className="flex flex-col items-end shrink-0">
-                  <span className="text-sm font-semibold text-warning">
-                    {Math.round(a.percentual * 100)}%
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    esperado {Math.round(a.kmEsperado).toLocaleString("pt-BR")} km
-                  </span>
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex flex-col items-end">
+                    <span className="text-sm font-semibold text-warning">
+                      {Math.round(a.percentual * 100)}%
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      esperado {Math.round(a.kmEsperado).toLocaleString("pt-BR")} km
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setModalTratar({ id: a.id, label: `${a.placa} em ${(a.data || "").slice(0, 10).split("-").reverse().join("/")}` })}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-success/10 text-success text-xs font-medium hover:bg-success/20 transition"
+                    title="Tratar este alerta"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Tratar
+                  </button>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         </div>

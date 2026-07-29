@@ -53,12 +53,19 @@ export function usePendenciasCount(): PendenciasCount {
       : 0;
 
     // Consumo: abastecimentos com apontamentos de KM insuficientes (só gestor/admin)
-    const consumo = isGestorOuAdmin
-      ? gerarAlertasConsumo(despesas, apontamentosKm).length
-      : 0;
+    // Exclui alertas já tratados (salvos em localStorage pelo Dashboard)
+    let consumo = 0;
+    if (isGestorOuAdmin) {
+      let tratados: Record<string, string> = {};
+      try {
+        const raw = localStorage.getItem(`alertas_consumo_tratados_${currentUser?.id ?? ""}`);
+        tratados = JSON.parse(raw ?? "{}");
+      } catch { /* ignore */ }
+      consumo = gerarAlertasConsumo(despesas, apontamentosKm).filter((a) => !tratados[a.id]).length;
+    }
 
     return { aprovacao, financeiro, reembolso, consumo, total: aprovacao + financeiro + reembolso + consumo };
-  }, [despesas, apontamentosKm, isGestorOuAdmin, isFinanceiroOuAdmin]);
+  }, [despesas, apontamentosKm, isGestorOuAdmin, isFinanceiroOuAdmin, currentUser?.id]);
 
   return counts;
 }
