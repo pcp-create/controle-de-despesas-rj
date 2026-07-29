@@ -185,9 +185,18 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   const total       = despesasCruzadas.reduce((s, d) => s + Number(d.valor), 0);
   const naoEnviadas = despesasCruzadas.filter((d) => getStatusGeral(d.status_erp ?? "", d.status_aprovacao) === "nao_enviado").length;
   const enviadas    = despesasCruzadas.filter((d) => getStatusGeral(d.status_erp ?? "", d.status_aprovacao) === "enviado").length;
-  const aguardando  = despesasCruzadas.filter((d) => getStatusGeral(d.status_erp ?? "", d.status_aprovacao) === "aguardando_aprovacao").length;
   const aprovadas   = despesasCruzadas.filter((d) => getStatusGeral(d.status_erp ?? "", d.status_aprovacao) === "aprovado").length;
   const reprovadas  = despesasCruzadas.filter((d) => getStatusGeral(d.status_erp ?? "", d.status_aprovacao) === "reprovado").length;
+
+  // Para gestor/admin: aprovações pendentes ignoram o filtro de período,
+  // pois uma despesa aguardando pode ter sido enviada em qualquer mês.
+  const aguardando = (perfil === "gestor" || perfil === "administrador")
+    ? despesas.filter((d) => {
+        if (filtroFuncionario && d.tecnico_id !== filtroFuncionario) return false;
+        if (filtroTipo && d.tipo_despesa_id !== filtroTipo) return false;
+        return getStatusGeral(d.status_erp ?? "", d.status_aprovacao) === "aguardando_aprovacao";
+      }).length
+    : despesasCruzadas.filter((d) => getStatusGeral(d.status_erp ?? "", d.status_aprovacao) === "aguardando_aprovacao").length;
 
   const handleCardClick = (statusKey: string) => {
     if (statusKey === "aguardando_aprovacao" && (perfil === "administrador" || perfil === "gestor")) {
