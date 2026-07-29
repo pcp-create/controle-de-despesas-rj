@@ -22,10 +22,9 @@ export function formatDateTime(dateStr: string): string {
 export type StatusGeral = "nao_enviado" | "enviado" | "aguardando_aprovacao" | "aprovado" | "reprovado";
 
 export function getStatusGeral(statusErp: string, statusAprovacao: string): StatusGeral {
-  if (statusAprovacao === "Reprovado") return "reprovado";
-  if (statusAprovacao === "AprovadoGestor") return "aprovado";
-  if (statusErp === "EnviadoAguardandoGestor" && statusAprovacao === "AguardandoGestor") return "aguardando_aprovacao";
-  if (statusErp === "EnviadoAguardandoGestor") return "enviado";
+  if (statusAprovacao === "Reprovado" || statusErp === "ReprovadoGestor" || statusErp === "ReprovadoERPAtualizado") return "reprovado";
+  if (statusAprovacao === "AprovadoGestor" || statusErp === "AprovadoGestor" || statusErp === "AprovadoGestorERPAtualizado") return "aprovado";
+  if (statusErp === "EnviadoAguardandoGestor") return "aguardando_aprovacao";
   return "nao_enviado";
 }
 
