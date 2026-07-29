@@ -36,36 +36,46 @@ export function isAbastecimento(d: Despesa): boolean {
 }
 
 /**
- * Avalia um único abastecimento contra o abastecimento imediatamente
- * anterior da mesma frota. Retorna um alerta quando o consumo real
- * (km rodado entre abastecimentos ÷ litros) fica abaixo do limite
- * em relação à média km/l cadastrada. Retorna null se não houver base
- * suficiente para comparação ou se o consumo estiver adequado.
+ * Avalia um único abastecimento comparando o km rodado esperado
+ * (litros × km_media_litro da frota) com o km informado entre o
+ * abastecimento anterior e o atual. Usa o km_atual da frota (último
+ * registrado) como base quando não há abastecimento anterior.
+ * Retorna alerta se o consumo real ficar abaixo de 80% do esperado.
  */
 export function avaliarAbastecimento(
   atual: Despesa,
   anteriores: Despesa[],
+  frotaKmAtual?: number, // km_atual cadastrado na frota antes deste abastecimento
 ): AlertaConsumo | null {
   if (!isAbastecimento(atual)) return null;
 
   const media = atual.frota?.km_media_litro ?? null;
   if (!media || media <= 0) return null; // frota sem média cadastrada
 
-  // Abastecimento anterior da MESMA frota, com odômetro menor e data anterior
+  const litros = atual.litros_abastecidos as number;
+  const kmOdometroAtual = atual.km_atual as number;
+
+  // Tenta obter o km do abastecimento anterior da mesma frota
   const anterior = anteriores
     .filter(
       (d) =>
         d.id !== atual.id &&
         d.frota_id === atual.frota_id &&
         isAbastecimento(d) &&
-        (d.km_atual as number) < (atual.km_atual as number),
+        (d.km_atual as number) < kmOdometroAtual,
     )
     .sort((a, b) => (b.km_atual as number) - (a.km_atual as number))[0];
 
-  if (!anterior) return null; // sem base de comparação
+  // Usa km do anterior, ou km atual da frota no cadastro, ou nenhum
+  const kmBase = anterior
+    ? (anterior.km_atual as number)
+    : frotaKmAtual && frotaKmAtual < kmOdometroAtual
+    ? frotaKmAtual
+    : null;
 
-  const kmRodado = (atual.km_atual as number) - (anterior.km_atual as number);
-  const litros = atual.litros_abastecidos as number;
+  if (!kmBase) return null; // sem base de comparação
+
+  const kmRodado = kmOdometroAtual - kmBase;
   if (kmRodado <= 0 || litros <= 0) return null;
 
   const consumoReal = kmRodado / litros;
@@ -98,7 +108,8 @@ export function gerarAlertasConsumo(despesas: Despesa[]): AlertaConsumo[] {
   const alertas: AlertaConsumo[] = [];
 
   for (const abast of abastecimentos) {
-    const alerta = avaliarAbastecimento(abast, abastecimentos);
+    const frotaKm = (abast.frota as any)?.quilometragem ?? undefined;
+    const alerta = avaliarAbastecimento(abast, abastecimentos, frotaKm);
     if (alerta) alertas.push(alerta);
   }
 

@@ -271,18 +271,23 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         setFeedback({ type: "error", msg: result.error });
       } else {
         // Verifica se os apontamentos de KM são suficientes para o total abastecido
+        const frotaSelecionada = frotas.find((f) => f.id === form.frotaId);
+        const despesaAvaliada: Despesa = {
+          ...(baseData as unknown as Despesa),
+          id: result.data?.id ?? "novo",
+          valor: Number(form.valor),
+          created_at: new Date().toISOString(),
+          frota: frotaSelecionada,
+        };
+        console.log("[v0] avaliarAbastecimento — isCombustivel:", isCombustivel, "frotaSelecionada:", frotaSelecionada, "km_atual:", form.kmAtual, "litros:", form.litrosAbastecidos, "km_media_litro:", frotaSelecionada?.km_media_litro);
         const alerta = isCombustivel
           ? avaliarAbastecimento(
-              {
-                ...(baseData as unknown as Despesa),
-                id: result.data?.id ?? "novo",
-                valor: Number(form.valor),
-                created_at: new Date().toISOString(),
-                frota: frotas.find((f) => f.id === form.frotaId),
-              } as Despesa,
+              despesaAvaliada,
               despesas,
+              frotaSelecionada?.quilometragem ?? undefined,
             )
           : null;
+        console.log("[v0] alerta gerado:", alerta);
 
         if (alerta) {
           // Abre o popup de alerta; o redirecionamento só ocorre ao clicar em OK
