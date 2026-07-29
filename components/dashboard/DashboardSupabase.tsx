@@ -105,9 +105,10 @@ function PieLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }:
 
 export default function DashboardSupabase({ onNavigate }: Props) {
   const { currentUser } = useAppStore();
+  const isFuncionario = currentUser?.perfil === "funcionario";
   const { despesas, isLoading: loadingDespesas } = useDespesas(
-    currentUser?.perfil === "funcionario" ? currentUser.id : undefined,
-    currentUser?.perfil
+    isFuncionario ? currentUser?.id : undefined,
+    currentUser?.perfil ?? "funcionario"
   );
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
@@ -268,9 +269,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   // os alertas cujo abastecimento está dentro do período selecionado.
   const alertasConsumo = useMemo(() => {
     if (perfil !== "gestor" && perfil !== "administrador") return [];
-    console.log("[v0] alertas — perfil:", perfil, "despesas:", despesas.length, "apontamentosKm:", apontamentosKm.length);
     const todos = gerarAlertasConsumo(despesas, apontamentosKm);
-    console.log("[v0] alertas gerados:", todos.length, todos);
     return todos.filter((a) => {
       if (tratados[a.id]) return false;
       const dataStr = (a.data || "").slice(0, 10);
