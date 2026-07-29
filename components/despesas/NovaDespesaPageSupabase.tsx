@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useAppStore } from "@/lib/store";
-import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useCartoes, useFrotas, useControleKm, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
 import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2, Receipt, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/helpers";
@@ -32,6 +32,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   const { cartoes } = useCartoes(currentUser?.id);
   const { addDespesa, updateDespesa, despesas } = useDespesas(currentUser?.id);
   const { frotas } = useFrotas();
+  const { registros: apontamentosKm } = useControleKm();
 
   const [form, setForm] = useState({
     tipoDespesaId: editDespesa?.tipo_despesa_id || "",
@@ -271,25 +272,44 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         setFeedback({ type: "error", msg: result.error });
       } else {
         // Verifica se os apontamentos de KM são suficientes para o total abastecido
+        const frotaSelecionada = frotas.find((f) => f.id === form.frotaId);
+        const despesaAvaliada: Despesa = {
+          ...(baseData as unknown as Despesa),
+          id: result.data?.id ?? "novo",
+          valor: Number(form.valor),
+          created_at: new Date().toISOString(),
+          frota: frotaSelecionada,
+        };
+        // Abastecimento anterior da mesma frota para definir o corte de data
+        const ultimoAbastecimento = despesas
+          .filter(
+            (d) =>
+              d.frota_id === form.frotaId &&
+              d.id !== despesaAvaliada.id &&
+              typeof d.litros_abastecidos === "number" &&
+              d.litros_abastecidos > 0,
+          )
+          .sort(
+            (a, b) =>
+              new Date(b.data_despesa ?? b.created_at).getTime() -
+              new Date(a.data_despesa ?? a.created_at).getTime(),
+          )[0];
+        const dataCorte = ultimoAbastecimento
+          ? (ultimoAbastecimento.data_despesa ?? ultimoAbastecimento.created_at)
+          : null;
+
         const alerta = isCombustivel
-          ? avaliarAbastecimento(
-              {
-                ...(baseData as unknown as Despesa),
-                id: result.data?.id ?? "novo",
-                valor: Number(form.valor),
-                created_at: new Date().toISOString(),
-                frota: frotas.find((f) => f.id === form.frotaId),
-              } as Despesa,
-              despesas,
-            )
+          ? avaliarAbastecimento(despesaAvaliada, apontamentosKm, dataCorte)
           : null;
 
         if (alerta) {
           // Abre o popup de alerta; o redirecionamento só ocorre ao clicar em OK
           setAlertaConsumo(
-            `Os apontamentos de KM parecem insuficientes para o total abastecido. ` +
-              `Rodou ${alerta.kmRodado.toLocaleString("pt-BR")} km com ${alerta.litros.toLocaleString("pt-BR")} L ` +
-              `(${alerta.consumoReal.toFixed(1)} km/l), abaixo da média esperada de ${alerta.consumoEsperado.toFixed(1)} km/l. ` +
+            `Os apontamentos de KM são insuficientes para o total abastecido. ` +
+              `Foram apontados ${alerta.kmApontado.toLocaleString("pt-BR")} km, mas o esperado ` +
+              `para ${alerta.litros.toLocaleString("pt-BR")} L abastecidos é de ` +
+              `${Math.round(alerta.kmEsperado).toLocaleString("pt-BR")} km ` +
+              `(${(alerta.percentual * 100).toFixed(0)}% do esperado). ` +
               `A despesa foi registrada e os gestores serão notificados para verificação.`,
           );
         } else {

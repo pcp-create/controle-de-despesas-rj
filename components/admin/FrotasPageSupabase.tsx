@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useFrotas, useDespesas, type Frota } from "@/lib/supabase/hooks";
+import { useFrotas, useDespesas, useControleKm, type Frota } from "@/lib/supabase/hooks";
 import { gerarAlertasConsumo } from "@/lib/consumo-frota";
 import {
   Car,
@@ -37,15 +37,16 @@ const EMPTY_FORM = {
 export default function FrotasPageSupabase() {
   const { frotas, isLoading, addFrota, updateFrota, deleteFrota } = useFrotas();
   const { despesas } = useDespesas();
+  const { registros: apontamentosKm } = useControleKm();
 
   // Quantidade de alertas de consumo por frota (apontamentos insuficientes)
   const alertasPorFrota = useMemo(() => {
     const mapa = new Map<string, number>();
-    for (const a of gerarAlertasConsumo(despesas)) {
+    for (const a of gerarAlertasConsumo(despesas, apontamentosKm)) {
       mapa.set(a.frotaId, (mapa.get(a.frotaId) ?? 0) + 1);
     }
     return mapa;
-  }, [despesas]);
+  }, [despesas, apontamentosKm]);
 
   const [search, setSearch] = useState("");
   const [showAtivos, setShowAtivos] = useState(true);
