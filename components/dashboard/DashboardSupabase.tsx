@@ -268,8 +268,11 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   // os alertas cujo abastecimento está dentro do período selecionado.
   const alertasConsumo = useMemo(() => {
     if (perfil !== "gestor" && perfil !== "administrador") return [];
-    return gerarAlertasConsumo(despesas, apontamentosKm).filter((a) => {
-      if (tratados[a.id]) return false; // oculta alertas já tratados
+    console.log("[v0] alertas — perfil:", perfil, "despesas:", despesas.length, "apontamentosKm:", apontamentosKm.length);
+    const todos = gerarAlertasConsumo(despesas, apontamentosKm);
+    console.log("[v0] alertas gerados:", todos.length, todos);
+    return todos.filter((a) => {
+      if (tratados[a.id]) return false;
       const dataStr = (a.data || "").slice(0, 10);
       if (modoFiltro === "mes") {
         const dt = new Date(dataStr + "T00:00:00");
