@@ -84,6 +84,7 @@ const BADGE_MAP: Record<string, keyof Omit<PendenciasCount, "total">> = {
   financeiro: "financeiro",
   reembolso:  "reembolso",
   aprovacao:  "aprovacao",
+  frotas:     "consumo",
 };
 
 function NavBadge({ count, collapsed }: { count: number; collapsed: boolean }) {

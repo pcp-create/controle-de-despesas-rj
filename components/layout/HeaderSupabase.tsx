@@ -2,7 +2,7 @@
 
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
-import { Menu, Bell, ChevronDown, LogOut, Lock, TrendingUp, Banknote, CheckSquare } from "lucide-react";
+import { Menu, Bell, ChevronDown, LogOut, Lock, TrendingUp, Banknote, CheckSquare, Fuel } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import type { PendenciasCount } from "@/hooks/usePendenciasCount";
 interface Props {
@@ -49,6 +49,12 @@ export default function HeaderSupabase({ onMenuClick, onAlterarSenha, totalPende
       icon: <Banknote className="w-4 h-4 text-success" />,
       label: "Reembolsos pendentes",
       count: pendencias?.reembolso ?? 0,
+    },
+    {
+      key: "frotas",
+      icon: <Fuel className="w-4 h-4 text-warning" />,
+      label: "Alertas de consumo de combustível",
+      count: pendencias?.consumo ?? 0,
     },
   ].filter((i) => i.count > 0);
 

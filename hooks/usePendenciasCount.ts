@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo } from "react";
-import { useDespesas } from "@/lib/supabase/hooks";
+import { useDespesas, useControleKm } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
+import { gerarAlertasConsumo } from "@/lib/consumo-frota";
 
 export interface PendenciasCount {
   aprovacao: number;   // grupos aguardando aprovação do gestor
   financeiro: number;  // despesas aprovadas pendentes de lançamento ERP
   reembolso: number;   // despesas em dinheiro aguardando reembolso
+  consumo: number;     // abastecimentos com apontamentos de KM insuficientes
   total: number;
 }
 
@@ -18,6 +20,7 @@ export function usePendenciasCount(): PendenciasCount {
   const isFinanceiroOuAdmin = perfil === "administrador" || perfil === "financeiro" || perfil === "gestor";
 
   const { despesas } = useDespesas(undefined, perfil);
+  const { registros: apontamentosKm } = useControleKm();
 
   const counts = useMemo(() => {
     // Aprovações: grupos únicos de funcionário aguardando aprovação
@@ -49,8 +52,13 @@ export function usePendenciasCount(): PendenciasCount {
         ).length
       : 0;
 
-    return { aprovacao, financeiro, reembolso, total: aprovacao + financeiro + reembolso };
-  }, [despesas, isGestorOuAdmin, isFinanceiroOuAdmin]);
+    // Consumo: abastecimentos com apontamentos de KM insuficientes (só gestor/admin)
+    const consumo = isGestorOuAdmin
+      ? gerarAlertasConsumo(despesas, apontamentosKm).length
+      : 0;
+
+    return { aprovacao, financeiro, reembolso, consumo, total: aprovacao + financeiro + reembolso + consumo };
+  }, [despesas, apontamentosKm, isGestorOuAdmin, isFinanceiroOuAdmin]);
 
   return counts;
 }
