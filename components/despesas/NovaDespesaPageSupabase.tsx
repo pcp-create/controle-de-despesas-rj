@@ -67,6 +67,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "warning"; msg: string } | null>(null);
+  const [alertaConsumo, setAlertaConsumo] = useState<string | null>(null);
   const [migrationSql, setMigrationSql] = useState<string | null>(null);
 
   useEffect(() => {
@@ -284,15 +285,13 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           : null;
 
         if (alerta) {
-          setFeedback({
-            type: "warning",
-            msg:
-              `Atenção: os apontamentos de KM parecem insuficientes para o total abastecido. ` +
+          // Abre o popup de alerta; o redirecionamento só ocorre ao clicar em OK
+          setAlertaConsumo(
+            `Os apontamentos de KM parecem insuficientes para o total abastecido. ` +
               `Rodou ${alerta.kmRodado.toLocaleString("pt-BR")} km com ${alerta.litros.toLocaleString("pt-BR")} L ` +
               `(${alerta.consumoReal.toFixed(1)} km/l), abaixo da média esperada de ${alerta.consumoEsperado.toFixed(1)} km/l. ` +
               `A despesa foi registrada e os gestores serão notificados para verificação.`,
-          });
-          setTimeout(() => onBack(), 5000);
+          );
         } else {
           setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
           setTimeout(() => onBack(), 1500);
@@ -331,6 +330,36 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
   return (
     <div className="max-w-2xl mx-auto">
+
+      {/* Popup de alerta de consumo (fecha somente ao clicar em OK) */}
+      {alertaConsumo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="alerta-consumo-titulo"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-4 bg-warning/10 border-b border-warning/20">
+              <AlertTriangle className="w-5 h-5 text-warning shrink-0" />
+              <h2 id="alerta-consumo-titulo" className="text-base font-semibold text-warning">
+                Apontamentos insuficientes
+              </h2>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-foreground leading-relaxed">{alertaConsumo}</p>
+            </div>
+            <div className="flex justify-end px-5 py-4 border-t border-border">
+              <button
+                onClick={() => { setAlertaConsumo(null); onBack(); }}
+                className="px-5 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Banner: migration pendente para campos de abastecimento */}
       {migrationSql && (
