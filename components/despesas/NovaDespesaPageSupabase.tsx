@@ -6,6 +6,7 @@ import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } fro
 import { uploadComprovante } from "@/lib/supabase/storage";
 import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2, Receipt, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/helpers";
+import { avaliarAbastecimento } from "@/lib/consumo-frota";
 
 interface Props {
   onBack: () => void;
@@ -29,7 +30,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   const { currentUser } = useAppStore();
   const { tiposDespesa } = useTiposDespesa();
   const { cartoes } = useCartoes(currentUser?.id);
-  const { addDespesa, updateDespesa } = useDespesas(currentUser?.id);
+  const { addDespesa, updateDespesa, despesas } = useDespesas(currentUser?.id);
   const { frotas } = useFrotas();
 
   const [form, setForm] = useState({
@@ -65,7 +66,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     editDespesa?.comprovante_nome ? { nome: editDespesa.comprovante_nome, url: editDespesa.comprovante_url || "" } : null
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error" | "warning"; msg: string } | null>(null);
   const [migrationSql, setMigrationSql] = useState<string | null>(null);
 
   useEffect(() => {
@@ -268,8 +269,34 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
       } else {
-        setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
-        setTimeout(() => onBack(), 1500);
+        // Verifica se os apontamentos de KM são suficientes para o total abastecido
+        const alerta = isCombustivel
+          ? avaliarAbastecimento(
+              {
+                ...(baseData as unknown as Despesa),
+                id: result.data?.id ?? "novo",
+                valor: Number(form.valor),
+                created_at: new Date().toISOString(),
+                frota: frotas.find((f) => f.id === form.frotaId),
+              } as Despesa,
+              despesas,
+            )
+          : null;
+
+        if (alerta) {
+          setFeedback({
+            type: "warning",
+            msg:
+              `Atenção: os apontamentos de KM parecem insuficientes para o total abastecido. ` +
+              `Rodou ${alerta.kmRodado.toLocaleString("pt-BR")} km com ${alerta.litros.toLocaleString("pt-BR")} L ` +
+              `(${alerta.consumoReal.toFixed(1)} km/l), abaixo da média esperada de ${alerta.consumoEsperado.toFixed(1)} km/l. ` +
+              `A despesa foi registrada e os gestores serão notificados para verificação.`,
+          });
+          setTimeout(() => onBack(), 5000);
+        } else {
+          setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
+          setTimeout(() => onBack(), 1500);
+        }
       }
     }
 
@@ -360,12 +387,15 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
       {/* Feedback */}
       {feedback && (
-        <div className={`mb-4 rounded-lg px-4 py-3 text-sm ${
+        <div className={`mb-4 rounded-lg px-4 py-3 text-sm flex items-start gap-2 ${
           feedback.type === "success"
             ? "bg-success/10 border border-success/20 text-success"
+            : feedback.type === "warning"
+            ? "bg-warning/10 border border-warning/30 text-warning"
             : "bg-destructive/10 border border-destructive/20 text-destructive"
         }`}>
-          {feedback.msg}
+          {feedback.type === "warning" && <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />}
+          <span>{feedback.msg}</span>
         </div>
       )}
 

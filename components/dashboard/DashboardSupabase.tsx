@@ -17,8 +17,11 @@ import {
   CircleX,
   FileClock,
   X,
+  Fuel,
+  AlertTriangle,
 } from "lucide-react";
 import { formatCurrency, getStatusGeral } from "@/lib/helpers";
+import { gerarAlertasConsumo } from "@/lib/consumo-frota";
 import type { PageKey, NavigateFn } from "@/components/layout/AppShellSupabase";
 import {
   BarChart,
@@ -250,6 +253,23 @@ export default function DashboardSupabase({ onNavigate }: Props) {
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 5);
 
+  // Alertas de consumo de combustível (apenas gestor/administrador).
+  // Usa a lista completa de despesas como base de comparação e filtra
+  // os alertas cujo abastecimento está dentro do período selecionado.
+  const alertasConsumo = useMemo(() => {
+    if (perfil !== "gestor" && perfil !== "administrador") return [];
+    return gerarAlertasConsumo(despesas).filter((a) => {
+      const dataStr = (a.data || "").slice(0, 10);
+      if (modoFiltro === "mes") {
+        const dt = new Date(dataStr + "T00:00:00");
+        return dt.getMonth() === mesSelecionado && dt.getFullYear() === anoSelecionado;
+      }
+      if (dataInicial && dataStr < dataInicial) return false;
+      if (dataFinal && dataStr > dataFinal) return false;
+      return true;
+    });
+  }, [despesas, perfil, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
+
   if (loadingDespesas) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -359,6 +379,53 @@ export default function DashboardSupabase({ onNavigate }: Props) {
           </button>
         ))}
       </div>
+
+      {/* Alertas de consumo de combustível */}
+      {alertasConsumo.length > 0 && (
+        <div className="bg-white rounded-xl border border-warning/30 shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-3 bg-warning/10 border-b border-warning/20">
+            <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
+            <h2 className="text-sm font-semibold text-warning flex-1">
+              Alertas de Consumo &mdash; Apontamentos Insuficientes
+            </h2>
+            <span className="text-xs font-semibold bg-warning/20 text-warning px-2 py-0.5 rounded-full">
+              {alertasConsumo.length}
+            </span>
+          </div>
+          <p className="px-5 pt-3 text-xs text-muted-foreground">
+            Abastecimentos cujos apontamentos de KM ficaram abaixo de 80% da média esperada. Verifique os casos abaixo.
+          </p>
+          <div className="flex flex-col divide-y divide-border p-2">
+            {alertasConsumo.map((a) => (
+              <button
+                key={a.despesaId}
+                onClick={() => onNavigate("todas-despesas")}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/60 transition text-left"
+              >
+                <div className="w-9 h-9 rounded-lg bg-warning/10 text-warning flex items-center justify-center shrink-0">
+                  <Fuel className="w-4 h-4" />
+                </div>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-sm font-medium text-foreground truncate">
+                    {a.placa}{a.modelo ? ` — ${a.modelo}` : ""}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {(a.data || "").slice(0, 10).split("-").reverse().join("/")} · {a.kmRodado.toLocaleString("pt-BR")} km · {a.litros.toLocaleString("pt-BR")} L
+                  </span>
+                </div>
+                <div className="flex flex-col items-end shrink-0">
+                  <span className="text-sm font-semibold text-warning">
+                    {a.consumoReal.toFixed(1)} km/l
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    esperado {a.consumoEsperado.toFixed(1)} ({Math.round(a.percentual * 100)}%)
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Gráfico de tipos */}
