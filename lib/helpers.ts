@@ -23,8 +23,14 @@ export type StatusGeral = "nao_enviado" | "enviado" | "aguardando_aprovacao" | "
 
 export function getStatusGeral(statusErp: string, statusAprovacao: string): StatusGeral {
   if (statusAprovacao === "Reprovado" || statusErp === "ReprovadoGestor" || statusErp === "ReprovadoERPAtualizado") return "reprovado";
-  if (statusAprovacao === "AprovadoGestor" || statusErp === "AprovadoGestor" || statusErp === "AprovadoGestorERPAtualizado") return "aprovado";
-  if (statusErp === "EnviadoAguardandoGestor") return "aguardando_aprovacao";
+  if (statusAprovacao === "AprovadoGestor" || statusErp === "AprovadoGestorERPAtualizado") return "aprovado";
+  // Qualquer estado em que a despesa já foi enviada pelo funcionário (inclusive erros de ERP)
+  // ainda está aguardando ação do gestor
+  if (
+    statusErp === "EnviadoAguardandoGestor" ||
+    statusErp === "ErroEnvioERP" ||
+    statusErp === "ErroAtualizarERP"
+  ) return "aguardando_aprovacao";
   return "nao_enviado";
 }
 
