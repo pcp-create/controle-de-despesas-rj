@@ -1241,7 +1241,7 @@ export default function FinanceiroPageSupabase() {
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
-                          {!d.lancado_sistema && (currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro") && (
+                          {!d.lancado_sistema && (currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro" || currentUser?.perfil === "gestor") && (
                             <button
                               onClick={() => handleEditarDocumento(d.id, d.documento)}
                               title="Editar documento"
