@@ -23,9 +23,13 @@ export function usePendenciasCount(): PendenciasCount {
   const { registros: apontamentosKm } = useControleKm();
 
   const counts = useMemo(() => {
-    // Aprovações: total de despesas com status_aprovacao "AguardandoGestor"
+    // Aprovações: total de despesas enviadas ao gestor aguardando aprovação
     const aprovacao = isGestorOuAdmin
-      ? despesas.filter((d) => d.status_aprovacao === "AguardandoGestor").length
+      ? despesas.filter(
+          (d) =>
+            d.status_erp === "EnviadoAguardandoGestor" ||
+            d.status_aprovacao === "AguardandoGestor"
+        ).length
       : 0;
 
     // Financeiro/ERP: aprovadas ainda não lançadas (exclui dinheiro — esses vão para Reembolso)
