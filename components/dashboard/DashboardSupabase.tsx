@@ -5,7 +5,7 @@ import type React from "react";
 import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosDashboard } from "@/lib/supabase/use-filtros-persistidos";
 import { useAppStore } from "@/lib/store";
-import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useProfiles, useControleKm } from "@/lib/supabase/hooks";
 import {
   DollarSign,
   ArrowRight,

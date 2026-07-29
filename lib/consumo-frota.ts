@@ -1,115 +1,126 @@
-import type { Despesa } from "@/lib/supabase/hooks";
-
 /**
- * Percentual mínimo do consumo esperado. Se o consumo real (km/l) ficar
- * abaixo de 80% da média cadastrada da frota, os apontamentos de KM são
- * considerados insuficientes para o total abastecido e um alerta é gerado.
+ * consumo-frota.ts
+ * Compara os apontamentos de KM (controle_km) com o total esperado
+ * para o combustível abastecido. Retorna alerta quando o km apontado
+ * fica abaixo de 80% do km esperado (litros × km_media_litro da frota).
  */
+
+import type { Despesa, ControleKm } from "@/lib/supabase/hooks";
+
+/** Tolerância: abaixo de 80% do esperado gera alerta */
 export const LIMITE_CONSUMO = 0.8;
 
 export interface AlertaConsumo {
-  despesaId: string;
   frotaId: string;
   placa: string;
   modelo: string;
   data: string;
   litros: number;
-  kmRodado: number;
-  consumoReal: number; // km por litro efetivamente rodado
-  consumoEsperado: number; // km/l cadastrado na frota
-  percentual: number; // consumoReal / consumoEsperado
+  kmApontado: number;
+  kmEsperado: number;
+  percentual: number; // kmApontado / kmEsperado
   valor: number;
 }
 
-/**
- * Retorna true se a despesa é um abastecimento válido para análise
- * (possui frota, odômetro e litros informados).
- */
+/** Verifica se a despesa é um abastecimento com dados suficientes */
 export function isAbastecimento(d: Despesa): boolean {
   return (
     !!d.frota_id &&
-    typeof d.km_atual === "number" &&
-    d.km_atual > 0 &&
     typeof d.litros_abastecidos === "number" &&
     d.litros_abastecidos > 0
   );
 }
 
 /**
- * Avalia um único abastecimento comparando o km rodado esperado
- * (litros × km_media_litro da frota) com o km informado entre o
- * abastecimento anterior e o atual. Usa o km_atual da frota (último
- * registrado) como base quando não há abastecimento anterior.
- * Retorna alerta se o consumo real ficar abaixo de 80% do esperado.
+ * Avalia um abastecimento comparando:
+ *   kmEsperado = litros × km_media_litro  (o que a frota deveria ter rodado)
+ *   kmApontado = soma de km_percorrido nos apontamentos de controle_km
+ *                da mesma frota, finalizados após o último abastecimento anterior.
+ *
+ * Se não houver apontamentos, kmApontado = 0 → sempre gera alerta.
+ * Retorna null se a frota não tiver km_media_litro cadastrado.
  */
 export function avaliarAbastecimento(
-  atual: Despesa,
-  anteriores: Despesa[],
-  frotaKmAtual?: number, // km_atual cadastrado na frota antes deste abastecimento
+  despesa: Despesa,
+  apontamentos: ControleKm[],
+  dataUltimoAbastecimento?: string | null,
 ): AlertaConsumo | null {
-  if (!isAbastecimento(atual)) return null;
+  if (!isAbastecimento(despesa)) return null;
 
-  const media = atual.frota?.km_media_litro ?? null;
-  if (!media || media <= 0) return null; // frota sem média cadastrada
+  const media = despesa.frota?.km_media_litro ?? null;
+  if (!media || media <= 0) return null;
 
-  const litros = atual.litros_abastecidos as number;
-  const kmOdometroAtual = atual.km_atual as number;
+  const litros = despesa.litros_abastecidos as number;
+  const kmEsperado = litros * media;
 
-  // Tenta obter o km do abastecimento anterior da mesma frota
-  const anterior = anteriores
+  // Apontamentos da mesma frota finalizados após o último abastecimento
+  const dataCorte = dataUltimoAbastecimento ?? "1970-01-01T00:00:00";
+  const kmApontado = apontamentos
     .filter(
-      (d) =>
-        d.id !== atual.id &&
-        d.frota_id === atual.frota_id &&
-        isAbastecimento(d) &&
-        (d.km_atual as number) < kmOdometroAtual,
+      (a) =>
+        a.frota_id === despesa.frota_id &&
+        a.status === "finalizado" &&
+        typeof a.km_percorrido === "number" &&
+        a.km_percorrido > 0 &&
+        (a.data_fim ?? a.data_inicio) > dataCorte,
     )
-    .sort((a, b) => (b.km_atual as number) - (a.km_atual as number))[0];
+    .reduce((sum, a) => sum + (a.km_percorrido ?? 0), 0);
 
-  // Usa km do anterior, ou km atual da frota no cadastro, ou nenhum
-  const kmBase = anterior
-    ? (anterior.km_atual as number)
-    : frotaKmAtual && frotaKmAtual < kmOdometroAtual
-    ? frotaKmAtual
-    : null;
+  const percentual = kmEsperado > 0 ? kmApontado / kmEsperado : 0;
 
-  if (!kmBase) return null; // sem base de comparação
-
-  const kmRodado = kmOdometroAtual - kmBase;
-  if (kmRodado <= 0 || litros <= 0) return null;
-
-  const consumoReal = kmRodado / litros;
-  const percentual = consumoReal / media;
-
-  if (percentual >= LIMITE_CONSUMO) return null; // consumo adequado
+  if (percentual >= LIMITE_CONSUMO) return null;
 
   return {
-    despesaId: atual.id,
-    frotaId: atual.frota_id as string,
-    placa: atual.frota?.placa ?? "—",
-    modelo: atual.frota?.modelo ?? "",
-    data: atual.data_despesa ?? atual.created_at,
+    frotaId: despesa.frota_id as string,
+    placa: despesa.frota?.placa ?? "—",
+    modelo: despesa.frota?.modelo ?? "",
+    data: despesa.data_despesa ?? despesa.created_at,
     litros,
-    kmRodado,
-    consumoReal,
-    consumoEsperado: media,
+    kmApontado,
+    kmEsperado,
     percentual,
-    valor: atual.valor,
+    valor: despesa.valor,
   };
 }
 
 /**
- * Analisa todas as despesas e retorna a lista de alertas de consumo,
- * calculados na hora (sem persistência). Ordenado do desvio mais grave
- * para o menos grave.
+ * Gera todos os alertas de consumo a partir da lista completa de despesas
+ * e apontamentos. Usado no Dashboard e na página de Frotas.
  */
-export function gerarAlertasConsumo(despesas: Despesa[]): AlertaConsumo[] {
-  const abastecimentos = despesas.filter(isAbastecimento);
+export function gerarAlertasConsumo(
+  despesas: Despesa[],
+  apontamentos: ControleKm[],
+): AlertaConsumo[] {
+  const abastecimentos = despesas
+    .filter(isAbastecimento)
+    .sort(
+      (a, b) =>
+        new Date(a.data_despesa ?? a.created_at).getTime() -
+        new Date(b.data_despesa ?? b.created_at).getTime(),
+    );
+
   const alertas: AlertaConsumo[] = [];
 
   for (const abast of abastecimentos) {
-    const frotaKm = (abast.frota as any)?.quilometragem ?? undefined;
-    const alerta = avaliarAbastecimento(abast, abastecimentos, frotaKm);
+    const anterior = abastecimentos
+      .filter(
+        (d) =>
+          d.id !== abast.id &&
+          d.frota_id === abast.frota_id &&
+          new Date(d.data_despesa ?? d.created_at) <
+            new Date(abast.data_despesa ?? abast.created_at),
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.data_despesa ?? b.created_at).getTime() -
+          new Date(a.data_despesa ?? a.created_at).getTime(),
+      )[0];
+
+    const dataUltimo = anterior
+      ? (anterior.data_despesa ?? anterior.created_at)
+      : null;
+
+    const alerta = avaliarAbastecimento(abast, apontamentos, dataUltimo);
     if (alerta) alertas.push(alerta);
   }
 
