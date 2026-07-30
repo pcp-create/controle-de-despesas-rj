@@ -17,7 +17,7 @@ const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
 type ModoFiltro = "mes" | "periodo";
 
 export default function FinanceiroPageSupabase() {
-  const { despesas, isLoading, updateDespesaDocumento, updateDespesaVencimento, lancarSistema, lancarERP, tentarNovamenteERP, estornarLancamento, cancelarLancamento } = useDespesas();
+  const { despesas, isLoading, updateDespesaDocumento, updateDespesaVencimento, lancarSistema, lancarERP, tentarNovamenteERP, estornarLancamento, cancelarLancamento, estornarCancelamento } = useDespesas();
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
 
@@ -1078,6 +1078,16 @@ export default function FinanceiroPageSupabase() {
                                 <div className="flex items-center gap-1">
                                   <Ban className="w-2.5 h-2.5 text-destructive" />
                                   <span className="text-[10px] font-semibold text-destructive leading-none">Cancelado</span>
+                                  {(currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro") && (
+                                    <button
+                                      type="button"
+                                      title="Estornar cancelamento"
+                                      onClick={() => estornarCancelamento(d.id)}
+                                      className="p-0.5 rounded text-muted-foreground hover:text-success hover:bg-success/10 transition"
+                                    >
+                                      <RotateCcw className="w-2.5 h-2.5" />
+                                    </button>
+                                  )}
                                 </div>
                                 {d.lancamento_cancelado_motivo && (
                                   <span className="text-[10px] text-destructive/70 leading-tight pl-3.5 italic truncate max-w-[120px]" title={d.lancamento_cancelado_motivo}>

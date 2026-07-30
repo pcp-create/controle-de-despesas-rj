@@ -972,7 +972,27 @@ export function useDespesas(userId?: string, perfil?: string) {
     tentarNovamenteERP,
     estornarLancamento,
     cancelarLancamento,
+    estornarCancelamento,
   };
+
+  async function estornarCancelamento(id: string) {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        lancamento_cancelado: false,
+        lancamento_cancelado_em: null,
+        lancamento_cancelado_por: null,
+        lancamento_cancelado_motivo: null,
+        erp_status: "pendente",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) return { error: error.message };
+    mutate();
+    return { success: true };
+  }
 
   async function cancelarLancamento(id: string, motivo: string, userId: string) {
     const supabase = getSupabase();
@@ -1122,7 +1142,7 @@ export function useProfiles() {
   };
 }
 
-// ─────────────────────────────────────────────
+// ────────────────────────────��────────────────
 // Controle de KM
 // ───────────────��─────────────────────���───────
 
