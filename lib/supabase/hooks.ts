@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR from "swr";
+import useSWR, { mutate as swrMutate } from "swr";
 import { createClient } from "@/lib/supabase/client";
 import { registrarAuditoria } from "@/lib/supabase/audit";
 import { useAuth } from "@/lib/supabase/auth-context";
@@ -1209,8 +1209,9 @@ async function atualizarKmFrota(frota_id: string, quilometragem: number) {
 export function useControleKm(userId?: string) {
   const key = userId ? `controle_km_${userId}` : "controle_km";
   const { data, error, isLoading, mutate } = useSWR(key, () => fetchControleKm(userId), {
-    revalidateOnFocus: false,
-    refreshInterval: 30000,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
+    refreshInterval: 15000,
   });
 
   const iniciarKm = async (payload: {
@@ -1242,6 +1243,7 @@ export function useControleKm(userId?: string) {
     await atualizarKmFrota(payload.frota_id, payload.km_inicial);
 
     mutate();
+    swrMutate("controle_km"); // invalida a chave global usada pelo FrotasPage
     return { data: inserted, error: null };
   };
 
