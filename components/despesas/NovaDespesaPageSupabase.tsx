@@ -486,7 +486,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               setForm((f) => {
                 const tipoAtual = tiposDespesa.find((t) => t.id === f.tipoDespesaId);
                 const isCombust = tipoAtual?.nome?.toLowerCase().includes("combust");
-                return { ...f, cartaoId: "", tipoDespesaId: isCombust ? f.tipoDespesaId : "" };
+                return { ...f, cartaoId: "", tipoDespesaId: isCombust ? f.tipoDespesaId : "", documento: "Nota Fiscal (NF)" };
               });
             }}
               className={`flex items-center justify-center gap-1.5 py-3 text-xs sm:text-sm font-medium transition-colors border-t sm:border-t-0 border-l sm:border-l border-input ${
@@ -1070,12 +1070,16 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           <select
             value={form.documento}
             onChange={(e) => setForm({ ...form, documento: e.target.value })}
-            className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            disabled={pagamentoTipo === "faturado"}
+            className={`px-3 py-2.5 rounded-lg border border-input text-sm focus:outline-none focus:ring-2 focus:ring-ring ${pagamentoTipo === "faturado" ? "bg-muted text-muted-foreground cursor-not-allowed" : "bg-background"}`}
           >
             <option value="">Selecione o tipo de documento...</option>
             <option value="Nota Fiscal (NF)">Nota Fiscal (NF)</option>
             <option value="Cupom">Cupom</option>
           </select>
+          {pagamentoTipo === "faturado" && (
+            <span className="text-xs text-muted-foreground">Preenchido automaticamente para pagamentos faturados.</span>
+          )}
           {errors.documento && <span className="text-xs text-destructive">{errors.documento}</span>}
         </div>
 
