@@ -32,7 +32,7 @@ export function usePendenciasCount(): PendenciasCount {
         ).size
       : 0;
 
-    // Financeiro/ERP: aprovadas ainda não lançadas, excluindo "Não enviado" (Rascunho) e dinheiro
+    // Financeiro/ERP: aprovadas ainda não lançadas, excluindo "Não enviado" (Rascunho), dinheiro e canceladas
     const financeiro = isFinanceiroOuAdmin
       ? despesas.filter(
           (d) =>
@@ -40,7 +40,8 @@ export function usePendenciasCount(): PendenciasCount {
             !d.lancado_sistema &&
             d.pagamento_tipo !== "dinheiro" &&
             d.status_erp !== "Rascunho" &&
-            d.status_erp != null
+            d.status_erp != null &&
+            !d.lancamento_cancelado
         ).length
       : 0;
 
