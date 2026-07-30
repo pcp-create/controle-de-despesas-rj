@@ -755,7 +755,7 @@ export function useDespesas(userId?: string, perfil?: string) {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
-    // Tenta com os campos extras de observação/anexo
+    // Tenta com os campos extras de observaç��o/anexo
     let { error } = await supabase
       .from("despesas")
       .update({
@@ -1288,6 +1288,7 @@ export function useControleKm(userId?: string) {
     }
 
     mutate();
+    swrMutate("controle_km"); // invalida a chave global usada pelo FrotasPage
     return { error: null };
   };
 
@@ -1297,6 +1298,7 @@ export function useControleKm(userId?: string) {
     const { error } = await supabase.from("controle_km").delete().eq("id", id);
     if (error) return { error: error.message };
     mutate();
+    swrMutate("controle_km"); // invalida a chave global usada pelo FrotasPage
     return { error: null };
   };
 
