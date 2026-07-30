@@ -7,7 +7,7 @@ import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks"
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
 import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
-import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle, AlertTriangle, Clock, Send, CheckCircle, RefreshCw } from "lucide-react";
+import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle, AlertTriangle, Clock, Send, CheckCircle, RefreshCw, Ban } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -17,13 +17,17 @@ const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
 type ModoFiltro = "mes" | "periodo";
 
 export default function FinanceiroPageSupabase() {
-  const { despesas, isLoading, updateDespesaDocumento, updateDespesaVencimento, lancarSistema, lancarERP, tentarNovamenteERP, estornarLancamento } = useDespesas();
+  const { despesas, isLoading, updateDespesaDocumento, updateDespesaVencimento, lancarSistema, lancarERP, tentarNovamenteERP, estornarLancamento, cancelarLancamento } = useDespesas();
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
 
   const [search, setSearch] = useState("");
   // Lançamento ERP
-  const [filtroLancamento, setFiltroLancamento] = useState<"todos" | "pendente" | "lancado" | "integrado">("todos");
+  const [filtroLancamento, setFiltroLancamento] = useState<"todos" | "pendente" | "lancado" | "integrado" | "cancelado">("todos");
+  // Modal cancelamento
+  const [modalCancelar, setModalCancelar] = useState<string | null>(null); // id da despesa
+  const [motivoCancelamento, setMotivoCancelamento] = useState("");
+  const [cancelando, setCancelando] = useState(false);
   const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
   const [confirmNFERP, setConfirmNFERP] = useState(false); // alerta NF antes de enviar ao ERP (modal lançar)
   const [confirmNFERPDireto, setConfirmNFERPDireto] = useState<string | null>(null); // id da despesa aguardando confirmação NF no envio direto
@@ -69,6 +73,17 @@ export default function FinanceiroPageSupabase() {
     if (result?.error) setErroLancar("Erro ao lançar: " + result.error);
     setLancando((prev) => ({ ...prev, [id]: false }));
     setConfirmLancar(null);
+  };
+
+  const handleCancelarLancamento = async () => {
+    if (!modalCancelar || !motivoCancelamento.trim()) return;
+    const userId = authUser?.id ?? currentUser?.id;
+    if (!userId) return;
+    setCancelando(true);
+    await cancelarLancamento(modalCancelar, motivoCancelamento.trim(), userId);
+    setCancelando(false);
+    setModalCancelar(null);
+    setMotivoCancelamento("");
   };
 
   const mostrarFeedbackERP = (result: { error?: string | null; erp_id?: string; simulado?: boolean; etapa?: number | null; campos?: string[] | null }) => {
@@ -319,16 +334,20 @@ export default function FinanceiroPageSupabase() {
     );
   });
 
-  // Contadores dos 3 status ERP (sobre todas as despesas do período filtrado)
-  const qtdErpPendente  = despesasFiltradas.filter((d) => !d.lancado_sistema).length;
-  const qtdErpLancado   = despesasFiltradas.filter((d) => d.lancado_sistema && d.erp_status !== "integrado").length;
-  const qtdErpIntegrado = despesasFiltradas.filter((d) => d.erp_status === "integrado").length;
+  // Contadores dos status ERP (sobre todas as despesas do período filtrado, excluindo cancelados por padrão)
+  const despesasNaoCanceladas = despesasFiltradas.filter((d) => !d.lancamento_cancelado);
+  const qtdErpPendente  = despesasNaoCanceladas.filter((d) => !d.lancado_sistema).length;
+  const qtdErpLancado   = despesasNaoCanceladas.filter((d) => d.lancado_sistema && d.erp_status !== "integrado").length;
+  const qtdErpIntegrado = despesasNaoCanceladas.filter((d) => d.erp_status === "integrado").length;
+  const qtdCancelado    = despesasFiltradas.filter((d) => d.lancamento_cancelado).length;
 
   // Aplica filtros por coluna e ordenação
   const despesasExibidas = useMemo(() => {
     let list = despesasFiltradas;
 
-    // Filtro lançamento — 3 status
+    // Filtro lançamento — 4 status
+    if (filtroLancamento === "cancelado")  list = list.filter((d) => d.lancamento_cancelado);
+    else list = list.filter((d) => !d.lancamento_cancelado); // oculta cancelados nos demais filtros
     if (filtroLancamento === "pendente")  list = list.filter((d) => !d.lancado_sistema);
     if (filtroLancamento === "lancado")   list = list.filter((d) => d.lancado_sistema && d.erp_status !== "integrado");
     if (filtroLancamento === "integrado") list = list.filter((d) => d.erp_status === "integrado");
@@ -403,7 +422,7 @@ export default function FinanceiroPageSupabase() {
   const totalFiltrado = despesasExibidas.reduce((s, d) => s + Number(d.valor), 0);
 
   const handleExportarXLSX = () => {
-    const dados = despesasFiltradas.map((d) => {
+    const dados = despesasFiltradas.filter((d) => !d.lancamento_cancelado).map((d) => {
       const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
       const tecnico = profiles.find((p) => p.id === d.tecnico_id);
       const cartao = d.cartao;
@@ -460,7 +479,7 @@ export default function FinanceiroPageSupabase() {
     doc.text(`Total aprovado: ${formatCurrency(totalAprovado)}   Lançamentos: ${qtdLancamentos}`, 14, 32);
     doc.setTextColor(0);
 
-    const rows = despesasFiltradas.map((d) => {
+    const rows = despesasFiltradas.filter((d) => !d.lancamento_cancelado).map((d) => {
       const tipo    = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
       const tecnico = profiles.find((p) => p.id === d.tecnico_id);
       const cartao  = d.cartao;
@@ -561,6 +580,52 @@ export default function FinanceiroPageSupabase() {
 
   return (
     <>
+    {/* ── Modal de cancelamento de lançamento ── */}
+    {modalCancelar && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+        <div className="w-full max-w-md rounded-2xl bg-white shadow-xl overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
+            <Ban className="w-5 h-5 text-destructive shrink-0" />
+            <h2 className="text-base font-semibold text-foreground flex-1">Cancelar lançamento</h2>
+            <button
+              onClick={() => { setModalCancelar(null); setMotivoCancelamento(""); }}
+              className="p-1 rounded-lg hover:bg-muted transition"
+            >
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
+          <div className="px-5 py-4 flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              Informe o motivo do cancelamento. A despesa permanecerá visível apenas no filtro <strong className="text-foreground">Cancelado</strong> e não aparecerá nos relatórios gerados.
+            </p>
+            <textarea
+              value={motivoCancelamento}
+              onChange={(e) => setMotivoCancelamento(e.target.value)}
+              placeholder="Ex: Lançamento duplicado, erro no valor..."
+              rows={3}
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2 px-5 py-4 border-t border-border">
+            <button
+              onClick={() => { setModalCancelar(null); setMotivoCancelamento(""); }}
+              className="px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:bg-muted transition"
+            >
+              Voltar
+            </button>
+            <button
+              onClick={handleCancelarLancamento}
+              disabled={!motivoCancelamento.trim() || cancelando}
+              className="px-4 py-2 rounded-lg bg-destructive text-white text-sm font-medium hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {cancelando ? "Cancelando..." : "Confirmar cancelamento"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     <div className="flex flex-col gap-5">
 
       {/* ── Erro de lançamento ── */}
@@ -738,7 +803,7 @@ export default function FinanceiroPageSupabase() {
             </div>
           </div>
           {/* Cards de status ERP */}
-          <div className="grid grid-cols-3 gap-3 mb-2">
+          <div className="grid grid-cols-4 gap-3 mb-2">
             <button
               type="button"
               onClick={() => setFiltroLancamento(filtroLancamento === "pendente" ? "todos" : "pendente")}
@@ -772,6 +837,17 @@ export default function FinanceiroPageSupabase() {
               <p className="text-xl font-bold text-foreground">{qtdErpIntegrado}</p>
               <p className="text-xs text-muted-foreground">Enviado ERP</p>
             </button>
+            <button
+              type="button"
+              onClick={() => setFiltroLancamento(filtroLancamento === "cancelado" ? "todos" : "cancelado")}
+              className={`rounded-xl border p-3 text-left transition ${filtroLancamento === "cancelado" ? "border-destructive ring-1 ring-destructive/30 bg-destructive/5" : "border-border bg-white hover:border-destructive/40"}`}
+            >
+              <div className="w-7 h-7 rounded-lg bg-destructive/10 text-destructive flex items-center justify-center mb-1.5">
+                <Ban className="w-4 h-4" />
+              </div>
+              <p className="text-xl font-bold text-foreground">{qtdCancelado}</p>
+              <p className="text-xs text-muted-foreground">Cancelado</p>
+            </button>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -789,13 +865,14 @@ export default function FinanceiroPageSupabase() {
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               <select
                 value={filtroLancamento}
-                onChange={(e) => setFiltroLancamento(e.target.value as "todos" | "pendente" | "lancado" | "integrado")}
+                onChange={(e) => setFiltroLancamento(e.target.value as "todos" | "pendente" | "lancado" | "integrado" | "cancelado")}
                 className="pl-9 pr-8 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring appearance-none"
               >
                 <option value="todos">Todos</option>
                 <option value="pendente">Pendente</option>
                 <option value="lancado">Lançado</option>
                 <option value="integrado">Enviado ERP</option>
+                <option value="cancelado">Cancelado</option>
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             </div>
@@ -996,11 +1073,23 @@ export default function FinanceiroPageSupabase() {
                           <div className="flex flex-col gap-1.5 min-w-[130px]">
 
                             {/* ── Linha 1: Lançamento no sistema ── */}
-                            {d.lancado_sistema ? (
+                            {d.lancamento_cancelado ? (
+                              <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center gap-1">
+                                  <Ban className="w-2.5 h-2.5 text-destructive" />
+                                  <span className="text-[10px] font-semibold text-destructive leading-none">Cancelado</span>
+                                </div>
+                                {d.lancamento_cancelado_motivo && (
+                                  <span className="text-[10px] text-destructive/70 leading-tight pl-3.5 italic truncate max-w-[120px]" title={d.lancamento_cancelado_motivo}>
+                                    {d.lancamento_cancelado_motivo}
+                                  </span>
+                                )}
+                              </div>
+                            ) : d.lancado_sistema ? (
                               <div className="flex flex-col gap-0.5">
                                 <div className="flex items-center gap-1">
                                   <span className="text-[10px] font-semibold text-success leading-none">✓ Lançado</span>
-                                  {d.erp_status !== "integrado" && (
+                                  {d.erp_status !== "integrado" && (currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro") && (
                                     <button
                                       type="button"
                                       title="Estornar lançamento"
@@ -1008,6 +1097,16 @@ export default function FinanceiroPageSupabase() {
                                       className="ml-0.5 p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
                                     >
                                       <RotateCcw className="w-2.5 h-2.5" />
+                                    </button>
+                                  )}
+                                  {(currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro") && (
+                                    <button
+                                      type="button"
+                                      title="Cancelar lançamento"
+                                      onClick={() => setModalCancelar(d.id)}
+                                      className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+                                    >
+                                      <Ban className="w-2.5 h-2.5" />
                                     </button>
                                   )}
                                 </div>

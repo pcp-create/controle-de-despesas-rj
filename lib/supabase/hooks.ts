@@ -91,8 +91,13 @@ export interface Despesa {
   lancado_erp: boolean;
   lancado_erp_em: string | null;
   lancado_erp_por: string | null;
-  // Status integração ERP: pendente | processando | integrado | erro
+  // Status integração ERP: pendente | processando | integrado | erro | cancelado
   erp_status: string;
+  // Cancelamento de lançamento
+  lancamento_cancelado: boolean;
+  lancamento_cancelado_em: string | null;
+  lancamento_cancelado_por: string | null;
+  lancamento_cancelado_motivo: string | null;
   erp_etapa_erro: number | null;
   erp_erro: string | null;
   created_at: string;
@@ -966,7 +971,27 @@ export function useDespesas(userId?: string, perfil?: string) {
     lancarERP,
     tentarNovamenteERP,
     estornarLancamento,
+    cancelarLancamento,
   };
+
+  async function cancelarLancamento(id: string, motivo: string, userId: string) {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        lancamento_cancelado: true,
+        lancamento_cancelado_em: new Date().toISOString(),
+        lancamento_cancelado_por: userId,
+        lancamento_cancelado_motivo: motivo,
+        erp_status: "cancelado",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) return { error: error.message };
+    mutate();
+    return { success: true };
+  }
 }
 
 const fetchFrotas = async (): Promise<Frota[]> => {
