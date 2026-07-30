@@ -951,6 +951,64 @@ export function useDespesas(userId?: string, perfil?: string) {
     return { error: null };
   };
 
+  const estornarCancelamento = async (id: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        lancamento_cancelado: false,
+        lancamento_cancelado_em: null,
+        lancamento_cancelado_por: null,
+        lancamento_cancelado_motivo: null,
+        erp_status: "pendente",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) return { error: error.message };
+    mutate();
+    return { success: true };
+  };
+
+  const cancelarLancamento = async (id: string, motivo: string, userId: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+
+    // Verifica se a despesa já está lançada para anular o lançamento junto
+    const { data: despesa } = await supabase
+      .from("despesas")
+      .select("lancado_sistema")
+      .eq("id", id)
+      .single();
+
+    const jaLancada = despesa?.lancado_sistema === true;
+
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        lancamento_cancelado: true,
+        lancamento_cancelado_em: new Date().toISOString(),
+        lancamento_cancelado_por: userId,
+        lancamento_cancelado_motivo: motivo,
+        erp_status: "cancelado",
+        ...(jaLancada && {
+          lancado_sistema: false,
+          lancado_sistema_em: null,
+          lancado_sistema_por: null,
+          lancado_erp: false,
+          lancado_erp_em: null,
+          lancado_erp_por: null,
+          erp_etapa_erro: null,
+          erp_erro: null,
+        }),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) return { error: error.message };
+    mutate();
+    return { success: true };
+  };
+
   return {
     despesas: data || [],
     isLoading,
@@ -974,66 +1032,6 @@ export function useDespesas(userId?: string, perfil?: string) {
     cancelarLancamento,
     estornarCancelamento,
   };
-
-  async function estornarCancelamento(id: string) {
-    const supabase = getSupabase();
-    if (!supabase) return { error: "Supabase não disponível" };
-    const { error } = await supabase
-      .from("despesas")
-      .update({
-        lancamento_cancelado: false,
-        lancamento_cancelado_em: null,
-        lancamento_cancelado_por: null,
-        lancamento_cancelado_motivo: null,
-        erp_status: "pendente",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id);
-    if (error) return { error: error.message };
-    mutate();
-    return { success: true };
-  }
-
-  async function cancelarLancamento(id: string, motivo: string, userId: string) {
-    const supabase = getSupabase();
-    if (!supabase) return { error: "Supabase não disponível" };
-
-    // Verifica se a despesa já está lançada para anular o lançamento junto
-    const { data: despesa } = await supabase
-      .from("despesas")
-      .select("lancado_sistema")
-      .eq("id", id)
-      .single();
-
-    const jaLancada = despesa?.lancado_sistema === true;
-
-    const { error } = await supabase
-      .from("despesas")
-      .update({
-        // Cancelamento
-        lancamento_cancelado: true,
-        lancamento_cancelado_em: new Date().toISOString(),
-        lancamento_cancelado_por: userId,
-        lancamento_cancelado_motivo: motivo,
-        erp_status: "cancelado",
-        // Anula o lançamento se já estava lançado
-        ...(jaLancada && {
-          lancado_sistema: false,
-          lancado_sistema_em: null,
-          lancado_sistema_por: null,
-          lancado_erp: false,
-          lancado_erp_em: null,
-          lancado_erp_por: null,
-          erp_etapa_erro: null,
-          erp_erro: null,
-        }),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id);
-    if (error) return { error: error.message };
-    mutate();
-    return { success: true };
-  }
 }
 
 const fetchFrotas = async (): Promise<Frota[]> => {
