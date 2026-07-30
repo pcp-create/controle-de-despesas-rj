@@ -1,6 +1,6 @@
 "use client";
 
-import useSWR from "swr";
+import useSWR, { mutate as swrMutate } from "swr";
 import { createClient } from "@/lib/supabase/client";
 import { registrarAuditoria } from "@/lib/supabase/audit";
 import { useAuth } from "@/lib/supabase/auth-context";
@@ -755,7 +755,7 @@ export function useDespesas(userId?: string, perfil?: string) {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
-    // Tenta com os campos extras de observação/anexo
+    // Tenta com os campos extras de observaç��o/anexo
     let { error } = await supabase
       .from("despesas")
       .update({
@@ -1209,8 +1209,9 @@ async function atualizarKmFrota(frota_id: string, quilometragem: number) {
 export function useControleKm(userId?: string) {
   const key = userId ? `controle_km_${userId}` : "controle_km";
   const { data, error, isLoading, mutate } = useSWR(key, () => fetchControleKm(userId), {
-    revalidateOnFocus: false,
-    refreshInterval: 30000,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
+    refreshInterval: 15000,
   });
 
   const iniciarKm = async (payload: {
@@ -1242,6 +1243,7 @@ export function useControleKm(userId?: string) {
     await atualizarKmFrota(payload.frota_id, payload.km_inicial);
 
     mutate();
+    swrMutate("controle_km"); // invalida a chave global usada pelo FrotasPage
     return { data: inserted, error: null };
   };
 
@@ -1286,6 +1288,7 @@ export function useControleKm(userId?: string) {
     }
 
     mutate();
+    swrMutate("controle_km"); // invalida a chave global usada pelo FrotasPage
     return { error: null };
   };
 
@@ -1295,6 +1298,7 @@ export function useControleKm(userId?: string) {
     const { error } = await supabase.from("controle_km").delete().eq("id", id);
     if (error) return { error: error.message };
     mutate();
+    swrMutate("controle_km"); // invalida a chave global usada pelo FrotasPage
     return { error: null };
   };
 

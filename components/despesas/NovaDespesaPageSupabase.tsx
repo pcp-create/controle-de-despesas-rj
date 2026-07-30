@@ -96,19 +96,27 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     : tiposDespesa;
 
   // Calcula número de diárias em tempo real
+  // Ex: checkin 17/05 → checkout 19/05 = 2 noites (diferença em dias), não 3.
+  // A fórmula correta para hospedagem é checkout - checkin em dias (número de noites).
   const numeroDiarias = useMemo(() => {
     if (!calculaDiarias || !form.dataCheckin || !form.dataCheckout) return null;
-    const checkin  = new Date(form.dataCheckin);
-    const checkout = new Date(form.dataCheckout);
-    const diff = Math.floor((checkout.getTime() - checkin.getTime()) / (1000 * 60 * 60 * 24));
+    // Forçar meia-noite UTC para evitar variação de fuso horário
+    const checkin  = new Date(form.dataCheckin  + "T00:00:00Z");
+    const checkout = new Date(form.dataCheckout + "T00:00:00Z");
+    const diff = Math.round((checkout.getTime() - checkin.getTime()) / (1000 * 60 * 60 * 24));
     return diff > 0 ? diff : null;
   }, [calculaDiarias, form.dataCheckin, form.dataCheckout]);
 
-  // Valor por diária
+  // Valor por diária: usa o valor TOTAL da despesa (todas as parcelas),
+  // não o valor de uma parcela individual.
   const valorPorDiaria = useMemo(() => {
-    if (!numeroDiarias || !form.valor || isNaN(Number(form.valor))) return null;
-    return Number(form.valor) / numeroDiarias;
-  }, [numeroDiarias, form.valor]);
+    if (!numeroDiarias) return null;
+    // valorTotal já é form.valor * qtdParcelas (calculado abaixo),
+    // mas como depende de qtdParcelas precisamos calculá-lo aqui inline.
+    const vTotal = (Number(form.valor) || 0) * (parcelado ? Math.max(2, numeroParcelas) : 1);
+    if (!vTotal) return null;
+    return vTotal / numeroDiarias;
+  }, [numeroDiarias, form.valor, parcelado, numeroParcelas]);
 
   // Status do valor em relação ao limite
   const statusLimite = useMemo(() => {

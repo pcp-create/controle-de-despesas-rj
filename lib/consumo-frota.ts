@@ -54,17 +54,24 @@ export function avaliarAbastecimento(
   const litros = despesa.litros_abastecidos as number;
   const kmEsperado = litros * media;
 
-  // Apontamentos da mesma frota finalizados após o último abastecimento
-  const dataCorte = dataUltimoAbastecimento ?? "1970-01-01T00:00:00";
+  // Normaliza datas para timestamps comparáveis
+  const dataCorteMs = dataUltimoAbastecimento
+    ? new Date(dataUltimoAbastecimento).getTime()
+    : 0;
+  const dataAbastMs = new Date(despesa.data_despesa ?? despesa.created_at).getTime();
+
+  // Apontamentos da mesma frota finalizados dentro da janela:
+  // - após o abastecimento anterior (dataCorte)
+  // - até o dia do abastecimento atual (inclusive — usa data_inicio para não perder apontamentos em andamento no dia)
   const kmApontado = apontamentos
-    .filter(
-      (a) =>
-        a.frota_id === despesa.frota_id &&
-        a.status === "finalizado" &&
-        typeof a.km_percorrido === "number" &&
-        a.km_percorrido > 0 &&
-        (a.data_fim ?? a.data_inicio) > dataCorte,
-    )
+    .filter((a) => {
+      if (a.frota_id !== despesa.frota_id) return false;
+      if (a.status !== "finalizado") return false;
+      if (typeof a.km_percorrido !== "number" || a.km_percorrido <= 0) return false;
+      // Usa data_fim se disponível, senão data_inicio
+      const dataApontMs = new Date(a.data_fim ?? a.data_inicio).getTime();
+      return dataApontMs > dataCorteMs && dataApontMs <= dataAbastMs + 86400000; // +1 dia de tolerância
+    })
     .reduce((sum, a) => sum + (a.km_percorrido ?? 0), 0);
 
   const percentual = kmEsperado > 0 ? kmApontado / kmEsperado : 0;

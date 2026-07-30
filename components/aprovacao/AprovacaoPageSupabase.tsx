@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Layers,
   CreditCard,
+  Undo2,
 } from "lucide-react";
 
 const statusAprovacaoConfig = {
@@ -68,6 +69,7 @@ export default function AprovacaoPageSupabase() {
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [reprovandoChave, setReprovandoChave] = useState<string | null>(null);
   const [justificativa, setJustificativa] = useState("");
+  const [revogandoChave, setRevogandoChave] = useState<string | null>(null);
 
   // ─── Agrupa despesas parceladas pelo grupo_parcela_id ────────────────────────
   const grupos = useMemo<GrupoDespesa[]>(() => {
@@ -218,6 +220,43 @@ export default function AprovacaoPageSupabase() {
     setFeedback({ type: "success", msg });
     setReprovandoChave(null);
     setJustificativa("");
+    await mutate();
+    setTimeout(() => setFeedback(null), 3000);
+  };
+
+  // Revoga a despesa de volta ao criador para edição
+  const handleRevogar = async (grupo: GrupoDespesa) => {
+    const supabase = createClient();
+    if (!supabase) { setFeedback({ type: "error", msg: "Supabase não disponível" }); return; }
+
+    for (const parcela of grupo.parcelas) {
+      const { error } = await supabase
+        .from("despesas")
+        .update({
+          status_aprovacao: "AguardandoGestor",
+          status_erp: "Rascunho",
+          gestor_aprovador_id: null,
+          data_aprovacao: null,
+          justificativa_reprovacao: null,
+        })
+        .eq("id", parcela.id);
+
+      if (error) { setFeedback({ type: "error", msg: error.message }); return; }
+    }
+
+    await registrarAuditoria({
+      acao: "REVOKE",
+      entidade: "despesa",
+      entidadeId: grupo.chave,
+      usuarioId: currentUser?.id || "sistema",
+      detalhes: grupo.parcelado
+        ? `Grupo de ${grupo.numeroParcelas} parcelas revogado ao criador`
+        : "Despesa revogada ao criador para edição",
+    });
+
+    setRevogandoChave(null);
+    const msg = grupo.parcelado ? `${grupo.numeroParcelas} parcelas revogadas ao criador` : "Despesa revogada ao criador";
+    setFeedback({ type: "success", msg });
     await mutate();
     setTimeout(() => setFeedback(null), 3000);
   };
@@ -558,6 +597,34 @@ export default function AprovacaoPageSupabase() {
                             {grupo.parcelado ? `Aprovar ${grupo.numeroParcelas} Parcelas` : "Aprovar"}
                           </button>
                         </>
+                      )}
+                      {/* Revogar — disponível para gestor/admin em qualquer status exceto Rascunho */}
+                      {isGestorOuAdmin && (d.status_aprovacao === "AguardandoGestor" || d.status_aprovacao === "AprovadoGestor" || d.status_aprovacao === "Reprovado") && !isReprovando && (
+                        revogandoChave === grupo.chave ? (
+                          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-warning/10 border border-warning/30 text-sm">
+                            <span className="text-warning font-medium">Confirmar revogação?</span>
+                            <button
+                              onClick={() => handleRevogar(grupo)}
+                              className="px-2 py-0.5 rounded bg-warning text-white text-xs font-medium hover:opacity-90 transition"
+                            >
+                              Sim
+                            </button>
+                            <button
+                              onClick={() => setRevogandoChave(null)}
+                              className="px-2 py-0.5 rounded border border-input text-xs text-muted-foreground hover:bg-muted transition"
+                            >
+                              Não
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setRevogandoChave(grupo.chave)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-warning/30 text-warning text-sm hover:bg-warning/10 transition"
+                          >
+                            <Undo2 className="w-4 h-4" />
+                            {grupo.parcelado ? `Revogar ${grupo.numeroParcelas} Parcelas` : "Revogar ao Criador"}
+                          </button>
+                        )
                       )}
                     </div>
                   </div>
