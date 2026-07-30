@@ -926,7 +926,9 @@ export function useDespesas(userId?: string, perfil?: string) {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
-    const { error } = await supabase
+    console.log("[v0] estornarLancamento chamado para id:", id);
+
+    const { error, data } = await supabase
       .from("despesas")
       .update({
         lancado_erp: false,
@@ -938,13 +940,13 @@ export function useDespesas(userId?: string, perfil?: string) {
         erp_status: "pendente",
         erp_etapa_erro: null,
         erp_erro: null,
-        // Volta para AprovadoGestor: a despesa permanece visível na aba
-        // Financeiro/ERP com status "Aprovado" e lançamento Pendente.
-        // Não regride para Rascunho pois já passou pela aprovação.
         status_erp: "AprovadoGestor",
         updated_at: new Date().toISOString(),
       })
-      .eq("id", id);
+      .eq("id", id)
+      .select();
+
+    console.log("[v0] estornarLancamento resultado:", { error, data });
 
     if (error) return { error: error.message };
     mutate();
