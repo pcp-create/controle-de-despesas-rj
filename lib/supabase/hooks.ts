@@ -682,12 +682,25 @@ export function useDespesas(userId?: string, perfil?: string) {
       updateData.gestor_aprovador_id = null;
     }
 
-    const { error } = await supabase
-      .from("despesas")
-      .update(updateData)
-      .eq("id", id);
+    // Se a despesa pertence a um grupo de parcelas, atualiza TODAS as parcelas do grupo
+    const grupoParcelaId = despesaData?.grupo_parcela_id;
+    let updateError = null;
 
-    if (error) return { ok: false, msg: error.message };
+    if (grupoParcelaId) {
+      const { error } = await supabase
+        .from("despesas")
+        .update(updateData)
+        .eq("grupo_parcela_id", grupoParcelaId);
+      updateError = error;
+    } else {
+      const { error } = await supabase
+        .from("despesas")
+        .update(updateData)
+        .eq("id", id);
+      updateError = error;
+    }
+
+    if (updateError) return { ok: false, msg: updateError.message };
     mutate();
 
     if (aprovacaoAutomatica) {
