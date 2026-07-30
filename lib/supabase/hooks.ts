@@ -932,7 +932,6 @@ export function useDespesas(userId?: string, perfil?: string) {
         lancado_sistema: false,
         lancado_sistema_em: null,
         lancado_sistema_por: null,
-        status_erp: "AprovadoGestor",
       })
       .eq("id", id);
 
