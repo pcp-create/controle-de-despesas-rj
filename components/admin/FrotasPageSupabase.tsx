@@ -39,11 +39,24 @@ export default function FrotasPageSupabase() {
   const { despesas } = useDespesas();
   const { registros: apontamentosKm } = useControleKm();
 
-  // Quantidade de alertas de consumo por frota (apontamentos insuficientes)
+  // Indica se a frota possui algum alerta ativo no abastecimento MAIS RECENTE.
+  // Ignora janelas antigas — só sinaliza se o último abastecimento tem KM insuficiente.
   const alertasPorFrota = useMemo(() => {
     const mapa = new Map<string, number>();
-    for (const a of gerarAlertasConsumo(despesas, apontamentosKm)) {
-      mapa.set(a.frotaId, (mapa.get(a.frotaId) ?? 0) + 1);
+    const todos = gerarAlertasConsumo(despesas, apontamentosKm);
+
+    // Agrupa alertas por frota e mantém apenas o mais recente (maior data)
+    const maisRecente = new Map<string, typeof todos[number]>();
+    for (const alerta of todos) {
+      const atual = maisRecente.get(alerta.frotaId);
+      if (!atual || new Date(alerta.data) > new Date(atual.data)) {
+        maisRecente.set(alerta.frotaId, alerta);
+      }
+    }
+
+    // Conta 1 alerta por frota (apenas se o mais recente ainda está abaixo do limite)
+    for (const [frotaId] of maisRecente) {
+      mapa.set(frotaId, 1);
     }
     return mapa;
   }, [despesas, apontamentosKm]);
