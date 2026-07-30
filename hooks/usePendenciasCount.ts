@@ -23,12 +23,11 @@ export function usePendenciasCount(): PendenciasCount {
   const { registros: apontamentosKm } = useControleKm();
 
   const counts = useMemo(() => {
-    // Aprovações: grupos únicos (por grupo_parcela_id ou id) com status_erp "EnviadoAguardandoGestor"
-    // Espelha exatamente o agrupamento exibido na aba de Aprovações
+    // Aprovações: grupos únicos aguardando aprovação do gestor (status_aprovacao === "AguardandoGestor")
     const aprovacao = isGestorOuAdmin
       ? new Set(
           despesas
-            .filter((d) => d.status_erp === "EnviadoAguardandoGestor")
+            .filter((d) => d.status_aprovacao === "AguardandoGestor")
             .map((d) => d.grupo_parcela_id ?? d.id)
         ).size
       : 0;
