@@ -1109,16 +1109,6 @@ export default function FinanceiroPageSupabase() {
                                       <RotateCcw className="w-2.5 h-2.5" />
                                     </button>
                                   )}
-                                  {(currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro") && (
-                                    <button
-                                      type="button"
-                                      title="Cancelar lançamento"
-                                      onClick={() => setModalCancelar(d.id)}
-                                      className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
-                                    >
-                                      <Ban className="w-2.5 h-2.5" />
-                                    </button>
-                                  )}
                                 </div>
                                 {d.lancado_sistema_por && (() => {
                                   const p = profiles.find((x) => x.id === d.lancado_sistema_por);
