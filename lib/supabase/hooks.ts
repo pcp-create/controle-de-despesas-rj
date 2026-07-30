@@ -926,27 +926,16 @@ export function useDespesas(userId?: string, perfil?: string) {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
-    console.log("[v0] estornarLancamento chamado para id:", id);
-
-    const { error, data } = await supabase
+    const { error } = await supabase
       .from("despesas")
       .update({
-        lancado_erp: false,
-        lancado_erp_em: null,
-        lancado_erp_por: null,
         lancado_sistema: false,
         lancado_sistema_em: null,
         lancado_sistema_por: null,
-        erp_status: "pendente",
-        erp_etapa_erro: null,
-        erp_erro: null,
         status_erp: "AprovadoGestor",
         updated_at: new Date().toISOString(),
       })
-      .eq("id", id)
-      .select();
-
-    console.log("[v0] estornarLancamento resultado:", { error, data });
+      .eq("id", id);
 
     if (error) return { error: error.message };
     mutate();
@@ -997,11 +986,6 @@ export function useDespesas(userId?: string, perfil?: string) {
           lancado_sistema: false,
           lancado_sistema_em: null,
           lancado_sistema_por: null,
-          lancado_erp: false,
-          lancado_erp_em: null,
-          lancado_erp_por: null,
-          erp_etapa_erro: null,
-          erp_erro: null,
         }),
         updated_at: new Date().toISOString(),
       })
