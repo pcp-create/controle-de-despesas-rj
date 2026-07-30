@@ -91,8 +91,13 @@ export interface Despesa {
   lancado_erp: boolean;
   lancado_erp_em: string | null;
   lancado_erp_por: string | null;
-  // Status integração ERP: pendente | processando | integrado | erro
+  // Status integração ERP: pendente | processando | integrado | erro | cancelado
   erp_status: string;
+  // Cancelamento de lançamento
+  lancamento_cancelado: boolean;
+  lancamento_cancelado_em: string | null;
+  lancamento_cancelado_por: string | null;
+  lancamento_cancelado_motivo: string | null;
   erp_etapa_erro: number | null;
   erp_erro: string | null;
   created_at: string;
@@ -933,7 +938,10 @@ export function useDespesas(userId?: string, perfil?: string) {
         erp_status: "pendente",
         erp_etapa_erro: null,
         erp_erro: null,
-        status_erp: "Rascunho",
+        // Volta para AprovadoGestor: a despesa permanece visível na aba
+        // Financeiro/ERP com status "Aprovado" e lançamento Pendente.
+        // Não regride para Rascunho pois já passou pela aprovação.
+        status_erp: "AprovadoGestor",
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -963,7 +971,47 @@ export function useDespesas(userId?: string, perfil?: string) {
     lancarERP,
     tentarNovamenteERP,
     estornarLancamento,
+    cancelarLancamento,
+    estornarCancelamento,
   };
+
+  async function estornarCancelamento(id: string) {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        lancamento_cancelado: false,
+        lancamento_cancelado_em: null,
+        lancamento_cancelado_por: null,
+        lancamento_cancelado_motivo: null,
+        erp_status: "pendente",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) return { error: error.message };
+    mutate();
+    return { success: true };
+  }
+
+  async function cancelarLancamento(id: string, motivo: string, userId: string) {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        lancamento_cancelado: true,
+        lancamento_cancelado_em: new Date().toISOString(),
+        lancamento_cancelado_por: userId,
+        lancamento_cancelado_motivo: motivo,
+        erp_status: "cancelado",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) return { error: error.message };
+    mutate();
+    return { success: true };
+  }
 }
 
 const fetchFrotas = async (): Promise<Frota[]> => {
@@ -1094,7 +1142,7 @@ export function useProfiles() {
   };
 }
 
-// ─────────────────────────────────────────────
+// ────────────────────────────��────────────────
 // Controle de KM
 // ───────────────��─────────────────────���───────
 
