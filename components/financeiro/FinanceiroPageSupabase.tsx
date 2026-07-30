@@ -1121,15 +1121,27 @@ export default function FinanceiroPageSupabase() {
                                 })()}
                               </div>
                             ) : aprovado ? (
-                              <button
-                                type="button"
-                                disabled={lancando[d.id]}
-                                onClick={() => setConfirmLancar(d.id)}
-                                className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-primary/30 text-primary bg-primary/10 hover:bg-primary hover:text-white transition disabled:opacity-50"
-                              >
-                                <SendHorizonal className="w-2.5 h-2.5" />
-                                Lançar
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  disabled={lancando[d.id]}
+                                  onClick={() => setConfirmLancar(d.id)}
+                                  className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-primary/30 text-primary bg-primary/10 hover:bg-primary hover:text-white transition disabled:opacity-50"
+                                >
+                                  <SendHorizonal className="w-2.5 h-2.5" />
+                                  Lançar
+                                </button>
+                                {(currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro") && (
+                                  <button
+                                    type="button"
+                                    title="Cancelar lançamento"
+                                    onClick={() => setModalCancelar(d.id)}
+                                    className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+                                  >
+                                    <Ban className="w-2.5 h-2.5" />
+                                  </button>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded-full bg-muted/30 border border-border cursor-not-allowed opacity-50">
                                 Aguardando aprovação
