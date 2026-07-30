@@ -933,7 +933,10 @@ export function useDespesas(userId?: string, perfil?: string) {
         erp_status: "pendente",
         erp_etapa_erro: null,
         erp_erro: null,
-        status_erp: "Rascunho",
+        // Volta para AprovadoGestor: a despesa permanece visível na aba
+        // Financeiro/ERP com status "Aprovado" e lançamento Pendente.
+        // Não regride para Rascunho pois já passou pela aprovação.
+        status_erp: "AprovadoGestor",
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
