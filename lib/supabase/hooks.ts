@@ -933,7 +933,6 @@ export function useDespesas(userId?: string, perfil?: string) {
         lancado_sistema_em: null,
         lancado_sistema_por: null,
         status_erp: "AprovadoGestor",
-        updated_at: new Date().toISOString(),
       })
       .eq("id", id);
 
@@ -953,7 +952,6 @@ export function useDespesas(userId?: string, perfil?: string) {
         lancamento_cancelado_por: null,
         lancamento_cancelado_motivo: null,
         erp_status: "pendente",
-        updated_at: new Date().toISOString(),
       })
       .eq("id", id);
     if (error) return { error: error.message };
@@ -987,7 +985,6 @@ export function useDespesas(userId?: string, perfil?: string) {
           lancado_sistema_em: null,
           lancado_sistema_por: null,
         }),
-        updated_at: new Date().toISOString(),
       })
       .eq("id", id);
     if (error) return { error: error.message };
