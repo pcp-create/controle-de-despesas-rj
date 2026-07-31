@@ -296,15 +296,20 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   async function confirmarTratamento() {
     if (!modalTratar || !justificativa.trim()) return;
     setTratandoId(modalTratar.id);
-    await fetch("/api/alertas-consumo", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: modalTratar.id,
-        resolvido_por: currentUser?.id ?? null,
-        justificativa: justificativa.trim(),
-      }),
-    });
+    try {
+      const res = await fetch("/api/alertas-consumo", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: modalTratar.id,
+          resolvido_por: currentUser?.id ?? null,
+          justificativa: justificativa.trim(),
+        }),
+      });
+      await res.json();
+    } catch {
+      // silencioso
+    }
     await mutateAlertas();
     setTratandoId(null);
     setModalTratar(null);
