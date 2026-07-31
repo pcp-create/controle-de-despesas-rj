@@ -301,16 +301,14 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           const frotaSelecionada = frotas.find((f) => f.id === form.frotaId);
           const novoId = result.data?.id ?? "";
 
-          // Converte "YYYY-MM-DD" + "HH:MM" em ms UTC sem ambiguidade de timezone.
-          // new Date("YYYY-MM-DDTHH:MM:SS") sem Z é interpretado como LOCAL — evitamos isso.
-          const toUtcMs = (dateStr: string, timeStr: string): number => {
-            const [y, m, d] = dateStr.split("-").map(Number);
-            const [h, min, s = 0] = timeStr.split(":").map(Number);
-            return Date.UTC(y, m - 1, d, h, min, s);
-          };
+          // Converte "YYYY-MM-DD" + "HH:MM:SS" em ms usando horário LOCAL do browser.
+          // O usuário digita horário de Brasília — não deve ser tratado como UTC.
+          // "YYYY-MM-DDTHH:MM:SS" sem Z é interpretado pelo JS como horário local.
+          const toLocalMs = (dateStr: string, timeStr: string): number =>
+            new Date(`${dateStr.slice(0, 10)}T${timeStr}`).getTime();
 
-          // Limite superior: data/hora do novo abastecimento
-          const fimJanelaMs = toUtcMs(
+          // Limite superior: data/hora do novo abastecimento (horário local)
+          const fimJanelaMs = toLocalMs(
             form.dataDespesa,
             form.horaDespesa ? `${form.horaDespesa}:00` : "23:59:59",
           );
@@ -331,9 +329,9 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             )[0] ?? null;
 
           if (ultimoAbast && frotaSelecionada?.km_media_litro) {
-            // Início da janela: data + hora do último abastecimento (UTC explícito)
+            // Início da janela: data + hora do último abastecimento (horário local)
             const horaInicio = ultimoAbast.hora_despesa ?? "00:00:00";
-            const inicioJanelaMs = toUtcMs(
+            const inicioJanelaMs = toLocalMs(
               ultimoAbast.data_despesa.slice(0, 10),
               horaInicio,
             );
