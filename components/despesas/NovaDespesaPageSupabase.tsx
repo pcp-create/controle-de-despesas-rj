@@ -6,7 +6,7 @@ import { useDespesas, useTiposDespesa, useCartoes, useFrotas, useControleKm, typ
 import { uploadComprovante } from "@/lib/supabase/storage";
 import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2, Receipt, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/helpers";
-import { avaliarAbastecimento } from "@/lib/consumo-frota";
+import { calcularConsumoFrota } from "@/lib/consumo-frota";
 
 interface Props {
   onBack: () => void;
@@ -286,133 +286,60 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         setFeedback({ type: "error", msg: result.error });
       } else {
         // ─── Regra de alerta de KM ────────────────────────────────────────────
-        // Só avalia quando é despesa de combustível com frota vinculada.
-        // Regra:
-        //   1. Encontra o último abastecimento da frota ANTES do atual (exclui o recém-salvo).
-        //   2. Data/hora de início da janela = data_despesa + hora_despesa do último abastecimento
-        //      (se hora_despesa for null, considera 00:00:00).
-        //   3. Data/hora de fim da janela = data e hora do NOVO abastecimento (agora).
-        //   4. Soma todos os apontamentos finalizados da frota dentro dessa janela.
-        //   5. kmEsperado = litros do último abastecimento × km_media_litro da frota.
-        //   6. percentual = kmApontado / kmEsperado.
-        //   7. Se percentual < 80% → gera alerta. Caso contrário → nenhum alerta.
+        // Avalia o abastecimento anterior usando a função centralizada.
+        // Sempre persiste o resultado no banco (atualiza ultimo_calculo_* da frota).
         // ─────────────────────────────────────────────────────────────────────
         if (isCombustivel && form.frotaId) {
           const frotaSelecionada = frotas.find((f) => f.id === form.frotaId);
           const novoId = result.data?.id ?? "";
 
-          // Converte "YYYY-MM-DD" + "HH:MM:SS" em ms usando horário LOCAL do browser.
-          // O usuário digita horário de Brasília — não deve ser tratado como UTC.
-          // "YYYY-MM-DDTHH:MM:SS" sem Z é interpretado pelo JS como horário local.
-          const toLocalMs = (dateStr: string, timeStr: string): number =>
-            new Date(`${dateStr.slice(0, 10)}T${timeStr}`).getTime();
-
-          // Limite superior: data/hora do novo abastecimento (horário local)
-          const fimJanelaMs = toLocalMs(
-            form.dataDespesa,
-            form.horaDespesa ? `${form.horaDespesa}:00` : "23:59:59",
-          );
-
-          // Último abastecimento da frota anterior ao atual
-          const ultimoAbast = despesas
-            .filter(
-              (d) =>
-                d.frota_id === form.frotaId &&
-                d.id !== novoId &&
-                typeof d.litros_abastecidos === "number" &&
-                d.litros_abastecidos > 0,
-            )
-            .sort(
-              (a, b) =>
-                new Date(b.data_despesa ?? b.created_at).getTime() -
-                new Date(a.data_despesa ?? a.created_at).getTime(),
-            )[0] ?? null;
-
-          if (ultimoAbast && frotaSelecionada?.km_media_litro) {
-            // Início da janela: data + hora do último abastecimento (horário local)
-            const horaInicio = ultimoAbast.hora_despesa ?? "00:00:00";
-            const inicioJanelaMs = toLocalMs(
-              ultimoAbast.data_despesa.slice(0, 10),
-              horaInicio,
-            );
-
-            // Soma KM dos apontamentos finalizados dentro da janela.
-            // Usa km_percorrido se disponível; caso null, calcula km_final - km_inicial.
-            const apontamentosNaJanela = apontamentosKm.filter((a) => {
-              if (a.frota_id !== form.frotaId) return false;
-              if (a.status !== "finalizado") return false;
-              const kmCalc =
-                typeof a.km_percorrido === "number" && a.km_percorrido > 0
-                  ? a.km_percorrido
-                  : typeof a.km_final === "number" && typeof a.km_inicial === "number"
-                  ? a.km_final - a.km_inicial
-                  : 0;
-              if (kmCalc <= 0) return false;
-              const dataApontMs = new Date(a.data_fim ?? a.data_inicio).getTime();
-              return dataApontMs >= inicioJanelaMs && dataApontMs <= fimJanelaMs;
-            });
-
-            const kmApontado = apontamentosNaJanela.reduce((sum, a) => {
-              const km =
-                typeof a.km_percorrido === "number" && a.km_percorrido > 0
-                  ? a.km_percorrido
-                  : typeof a.km_final === "number" && typeof a.km_inicial === "number"
-                  ? a.km_final - a.km_inicial
-                  : 0;
-              return sum + km;
-            }, 0);
-
-            const litros = ultimoAbast.litros_abastecidos as number;
-            const kmEsperado = litros * frotaSelecionada.km_media_litro;
-            const percentual = kmEsperado > 0 ? kmApontado / kmEsperado : 0;
-
-            // Formata os extremos da janela em horário local pt-BR para exibição
-            const fmtInicio = new Date(inicioJanelaMs).toLocaleString("pt-BR");
-            const fmtFim    = new Date(fimJanelaMs).toLocaleString("pt-BR");
-
-            // Lista detalhada dos apontamentos encontrados na janela
-            const listaApontamentos = apontamentosNaJanela
-              .sort((a, b) => new Date(a.data_inicio).getTime() - new Date(b.data_inicio).getTime())
-              .map((a) => {
-                const km =
-                  typeof a.km_percorrido === "number" && a.km_percorrido > 0
-                    ? a.km_percorrido
-                    : (a.km_final ?? 0) - (a.km_inicial ?? 0);
-                const dtInicio = new Date(a.data_inicio).toLocaleString("pt-BR");
-                const dtFim = a.data_fim ? new Date(a.data_fim).toLocaleString("pt-BR") : "em andamento";
-                return `  • ${dtInicio} → ${dtFim}: ${km.toLocaleString("pt-BR")} km`;
+          const consumo = frotaSelecionada?.km_media_litro
+            ? calcularConsumoFrota({
+                frotaId: frotaSelecionada.id,
+                placa: frotaSelecionada.placa,
+                modelo: frotaSelecionada.modelo,
+                kmMediaLitro: frotaSelecionada.km_media_litro,
+                valorAbastecimento: Number(form.valor) || 0,
+                novoAbastecimentoId: novoId,
+                novaDataDespesa: form.dataDespesa,
+                novaHoraDespesa: form.horaDespesa,
+                despesas,
+                apontamentos: apontamentosKm,
               })
-              .join("\n");
+            : null;
 
-            if (percentual < 0.8) {
-              const kmRealPorLitro = litros > 0 ? (kmApontado / litros).toFixed(1) : "0";
+          if (consumo) {
+            // Sempre persiste no banco — atualiza ultimo_calculo_* e alerta_ativo da frota
+            fetch("/api/alertas-consumo", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                alerta: {
+                  id: `${consumo.frotaId}_${new Date(consumo.dataFim).getTime()}`,
+                  frotaId: consumo.frotaId,
+                  placa: consumo.placa,
+                  modelo: consumo.modelo,
+                  data: consumo.dataFim,
+                  litros: consumo.litros,
+                  kmApontado: consumo.kmApontado,
+                  kmEsperado: consumo.kmEsperado,
+                  percentual: consumo.percentual,
+                  valor: consumo.valor,
+                },
+                ativo: consumo.temAlerta,
+              }),
+            }).catch(() => {/* silencioso */});
 
-              // Persiste o alerta no banco para aparecer no Dashboard
-              const alertaId = `${frotaSelecionada.id}_${fimJanelaMs}`;
-              fetch("/api/alertas-consumo", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  alerta: {
-                    id: alertaId,
-                    frotaId: frotaSelecionada.id,
-                    placa: frotaSelecionada.placa,
-                    modelo: frotaSelecionada.modelo,
-                    data: new Date(fimJanelaMs).toISOString(),
-                    litros,
-                    kmApontado,
-                    kmEsperado,
-                    percentual,
-                    valor: ultimoAbast.valor ?? 0,
-                  },
-                  ativo: true,
-                }),
-              }).catch(() => {/* silencioso */});
-
+            if (consumo.temAlerta) {
+              const kmRealPorLitro = consumo.litros > 0
+                ? (consumo.kmApontado / consumo.litros).toFixed(1)
+                : "0";
               setAlertaConsumo(
                 `Os apontamentos de KM parecem insuficientes para o total abastecido. ` +
-                `Rodou ${kmApontado.toLocaleString("pt-BR")} km com ${litros.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L ` +
-                `(${kmRealPorLitro} km/l), abaixo da média esperada de ${frotaSelecionada.km_media_litro} km/l. ` +
+                `Rodou ${consumo.kmApontado.toLocaleString("pt-BR")} km com ` +
+                `${consumo.litros.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L ` +
+                `(${kmRealPorLitro} km/l), abaixo da média esperada de ` +
+                `${frotaSelecionada!.km_media_litro} km/l. ` +
                 `A despesa foi registrada e os gestores serão notificados para verificação.`,
               );
             } else {
@@ -420,7 +347,6 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               setTimeout(() => onBack(), 1500);
             }
           } else {
-            // Sem abastecimento anterior ou sem km_media_litro — sem alerta
             setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
             setTimeout(() => onBack(), 1500);
           }
