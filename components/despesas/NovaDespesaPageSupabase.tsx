@@ -279,36 +279,46 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
       } else {
-        // Verifica se os apontamentos de KM são suficientes para o total abastecido
+        // Verifica se os apontamentos de KM do abastecimento ANTERIOR são suficientes.
+        // O novo abastecimento ainda não tem apontamentos (o funcionário ainda vai rodar),
+        // então avaliamos a janela do tanque anterior: do penúltimo ao último abastecimento.
         const frotaSelecionada = frotas.find((f) => f.id === form.frotaId);
-        const despesaAvaliada: Despesa = {
-          ...(baseData as unknown as Despesa),
-          id: result.data?.id ?? "novo",
-          valor: Number(form.valor),
-          created_at: new Date().toISOString(),
-          frota: frotaSelecionada,
-        };
-        // Abastecimento anterior da mesma frota para definir o corte de data
-        const ultimoAbastecimento = despesas
+        const novoId = result.data?.id ?? "novo";
+        const novaData = (baseData as Partial<Despesa>).data_despesa ?? new Date().toISOString();
+
+        // Todos os abastecimentos da frota, excluindo o recém-salvo, ordenados do mais recente ao mais antigo
+        const abastecimentosAnteriores = despesas
           .filter(
             (d) =>
               d.frota_id === form.frotaId &&
-              d.id !== despesaAvaliada.id &&
+              d.id !== novoId &&
               typeof d.litros_abastecidos === "number" &&
-              d.litros_abastecidos > 0,
+              d.litros_abastecidos > 0 &&
+              new Date(d.data_despesa ?? d.created_at).getTime() <=
+                new Date(novaData).getTime(),
           )
           .sort(
             (a, b) =>
               new Date(b.data_despesa ?? b.created_at).getTime() -
               new Date(a.data_despesa ?? a.created_at).getTime(),
-          )[0];
-        const dataCorte = ultimoAbastecimento
-          ? (ultimoAbastecimento.data_despesa ?? ultimoAbastecimento.created_at)
+          );
+
+        // O "último abastecimento" é o mais recente antes do novo → é o que vamos avaliar
+        const abastAnterior = abastecimentosAnteriores[0];
+        // O "penúltimo" define o corte de data para os apontamentos do tanque anterior
+        const penultimo = abastecimentosAnteriores[1];
+        const dataCorteAnterior = penultimo
+          ? (penultimo.data_despesa ?? penultimo.created_at)
           : null;
 
-        const alerta = isCombustivel
-          ? avaliarAbastecimento(despesaAvaliada, apontamentosKm, dataCorte)
+        const despesaParaAvaliar: Despesa | null = abastAnterior
+          ? { ...abastAnterior, frota: frotaSelecionada }
           : null;
+
+        const alerta =
+          isCombustivel && despesaParaAvaliar
+            ? avaliarAbastecimento(despesaParaAvaliar, apontamentosKm, dataCorteAnterior)
+            : null;
 
         if (alerta) {
           // Abre o popup de alerta; o redirecionamento só ocorre ao clicar em OK
