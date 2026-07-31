@@ -311,8 +311,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           ? (penultimo.data_despesa ?? penultimo.created_at)
           : null;
 
+        // Monta a despesa para avaliar usando a DATA DO NOVO abastecimento como limite
+        // superior da janela — assim apontamentos feitos até hoje são incluídos.
         const despesaParaAvaliar: Despesa | null = abastAnterior
-          ? { ...abastAnterior, frota: frotaSelecionada }
+          ? { ...abastAnterior, data_despesa: novaData, frota: frotaSelecionada }
           : null;
 
         const alerta =
