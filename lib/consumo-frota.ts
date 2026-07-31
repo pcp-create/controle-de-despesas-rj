@@ -95,29 +95,57 @@ export function avaliarAbastecimento(
 
 /**
  * Persiste os alertas calculados no banco via API route.
- * Deve ser chamado após um abastecimento ser salvo.
- * Envia apenas o alerta mais recente de cada frota.
+ * Deve ser chamado após um abastecimento ser salvo, passando o id do
+ * abastecimento recém-criado para excluí-lo da avaliação (ainda não
+ * tem apontamentos — o funcionário ainda vai rodar com esse tanque).
+ *
+ * Para frotas cujo abastecimento anterior ficou acima de 80%, remove
+ * o alerta ativo e atualiza o último cálculo normalmente.
  */
 export async function persistirAlertasConsumo(
   despesas: Despesa[],
   apontamentos: ControleKm[],
+  novoAbastecimentoId?: string,
 ): Promise<void> {
-  const todos = gerarAlertasConsumo(despesas, apontamentos);
+  // Exclui o abastecimento recém-criado — ainda não possui apontamentos e
+  // geraria um falso alerta (0% apontado).
+  const despesasParaAvaliar = novoAbastecimentoId
+    ? despesas.filter((d) => d.id !== novoAbastecimentoId)
+    : despesas;
 
-  // Agrupa por frotaId — persiste o mais recente (índice 0 pois já vem ordenado por percentual)
-  const porFrota = new Map<string, AlertaConsumo>();
-  for (const a of todos) {
-    if (!porFrota.has(a.frotaId)) porFrota.set(a.frotaId, a);
+  const alertas = gerarAlertasConsumo(despesasParaAvaliar, apontamentos);
+
+  // Coleta as frotas dos abastecimentos avaliados (excluindo o novo)
+  const frotasAvaliadas = new Set(
+    despesasParaAvaliar.filter(isAbastecimento).map((d) => d.frota_id as string),
+  );
+
+  // Alertas com problema (abaixo de 80%) — um por frota (o mais recente)
+  const alertasPorFrota = new Map<string, AlertaConsumo>();
+  for (const a of alertas) {
+    if (!alertasPorFrota.has(a.frotaId)) alertasPorFrota.set(a.frotaId, a);
   }
 
+  // Para cada frota avaliada: persiste alerta se houver, ou limpa se estiver OK
   await Promise.all(
-    Array.from(porFrota.values()).map((alerta) =>
-      fetch("/api/alertas-consumo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ alerta, ativo: true }),
-      }),
-    ),
+    Array.from(frotasAvaliadas).map((frotaId) => {
+      const alerta = alertasPorFrota.get(frotaId);
+      if (alerta) {
+        // Frota com problema: persiste alerta ativo
+        return fetch("/api/alertas-consumo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ alerta, ativo: true }),
+        });
+      } else {
+        // Frota OK (acima de 80%): limpa alerta_ativo na frota via API
+        return fetch("/api/alertas-consumo/limpar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ frotaId }),
+        });
+      }
+    }),
   );
 }
 

@@ -512,11 +512,14 @@ export function useDespesas(userId?: string, perfil?: string) {
     
     mutate();
 
-    // Se for um abastecimento, recalcula e persiste os alertas de consumo
+    // Se for um abastecimento, recalcula e persiste os alertas de consumo.
+    // Passa o id do novo abastecimento para excluí-lo da avaliação —
+    // ele ainda não tem apontamentos e geraria um falso alerta.
     if (isAbastecimento(data as Despesa)) {
+      const novoId = (data as Despesa).id;
       const todasDespesas: Despesa[] = await fetchDespesas(undefined, "administrador");
       const kmAdmin = await fetchControleKm();
-      persistirAlertasConsumo(todasDespesas, kmAdmin).catch(() => {/* silencioso */});
+      persistirAlertasConsumo(todasDespesas, kmAdmin, novoId).catch(() => {/* silencioso */});
     }
 
     return { data };
