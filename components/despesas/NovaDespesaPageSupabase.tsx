@@ -301,11 +301,19 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           const frotaSelecionada = frotas.find((f) => f.id === form.frotaId);
           const novoId = result.data?.id ?? "";
 
-          // Data/hora do novo abastecimento (limite superior da janela)
-          const fimJanelaStr = form.horaDespesa
-            ? `${form.dataDespesa}T${form.horaDespesa}:00`
-            : `${form.dataDespesa}T23:59:59`;
-          const fimJanelaMs = new Date(fimJanelaStr).getTime();
+          // Converte "YYYY-MM-DD" + "HH:MM" em ms UTC sem ambiguidade de timezone.
+          // new Date("YYYY-MM-DDTHH:MM:SS") sem Z é interpretado como LOCAL — evitamos isso.
+          const toUtcMs = (dateStr: string, timeStr: string): number => {
+            const [y, m, d] = dateStr.split("-").map(Number);
+            const [h, min, s = 0] = timeStr.split(":").map(Number);
+            return Date.UTC(y, m - 1, d, h, min, s);
+          };
+
+          // Limite superior: data/hora do novo abastecimento
+          const fimJanelaMs = toUtcMs(
+            form.dataDespesa,
+            form.horaDespesa ? `${form.horaDespesa}:00` : "23:59:59",
+          );
 
           // Último abastecimento da frota anterior ao atual
           const ultimoAbast = despesas
@@ -323,19 +331,22 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             )[0] ?? null;
 
           if (ultimoAbast && frotaSelecionada?.km_media_litro) {
-            // Início da janela: data + hora do último abastecimento
+            // Início da janela: data + hora do último abastecimento (UTC explícito)
             const horaInicio = ultimoAbast.hora_despesa ?? "00:00:00";
-            const inicioJanelaStr = `${ultimoAbast.data_despesa}T${horaInicio}`;
-            const inicioJanelaMs = new Date(inicioJanelaStr).getTime();
+            const inicioJanelaMs = toUtcMs(
+              ultimoAbast.data_despesa.slice(0, 10),
+              horaInicio,
+            );
 
-            // Soma KM dos apontamentos finalizados dentro da janela
+            // Soma KM dos apontamentos finalizados dentro da janela.
+            // data_fim/data_inicio do banco são ISO com Z → new Date() já interpreta como UTC.
             const kmApontado = apontamentosKm
               .filter((a) => {
                 if (a.frota_id !== form.frotaId) return false;
                 if (a.status !== "finalizado") return false;
                 if (typeof a.km_percorrido !== "number" || a.km_percorrido <= 0) return false;
                 const dataApontMs = new Date(a.data_fim ?? a.data_inicio).getTime();
-                return dataApontMs > inicioJanelaMs && dataApontMs <= fimJanelaMs;
+                return dataApontMs >= inicioJanelaMs && dataApontMs <= fimJanelaMs;
               })
               .reduce((sum, a) => sum + (a.km_percorrido ?? 0), 0);
 
@@ -343,11 +354,15 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             const kmEsperado = litros * frotaSelecionada.km_media_litro;
             const percentual = kmEsperado > 0 ? kmApontado / kmEsperado : 0;
 
+            // Formata os extremos da janela em horário local pt-BR para exibição
+            const fmtInicio = new Date(inicioJanelaMs).toLocaleString("pt-BR");
+            const fmtFim    = new Date(fimJanelaMs).toLocaleString("pt-BR");
+
             if (percentual < 0.8) {
               setAlertaConsumo(
                 `Apontamentos de KM insuficientes para o abastecimento anterior.\n\n` +
                 `Veículo: ${frotaSelecionada.placa} — ${frotaSelecionada.modelo}\n` +
-                `Período avaliado: ${new Date(inicioJanelaStr).toLocaleString("pt-BR")} até ${new Date(fimJanelaStr).toLocaleString("pt-BR")}\n` +
+                `Período avaliado: ${fmtInicio} até ${fmtFim}\n` +
                 `Último abastecimento: ${litros.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L\n` +
                 `KM/L cadastrado: ${frotaSelecionada.km_media_litro} km/L\n` +
                 `KM esperado: ${Math.round(kmEsperado).toLocaleString("pt-BR")} km\n` +
@@ -798,7 +813,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 <strong className="text-foreground">
                   {new Date(calcularVencimento(form.dataDespesa) + "T12:00:00").toLocaleDateString("pt-BR")}
                 </strong>
-                {" — editável pelo Financeiro após lançamento"}
+                {" — edit��vel pelo Financeiro após lançamento"}
               </span>
             </div>
           )}
