@@ -285,62 +285,85 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
       } else {
-        // Verifica se os apontamentos de KM do abastecimento ANTERIOR são suficientes.
-        // O novo abastecimento ainda não tem apontamentos (o funcionário ainda vai rodar),
-        // então avaliamos a janela do tanque anterior: do penúltimo ao último abastecimento.
-        const frotaSelecionada = frotas.find((f) => f.id === form.frotaId);
-        const novoId = result.data?.id ?? "novo";
-        // Combina data + hora para comparações de janela, mas sem depender do timestamp no data_despesa
-        const novaData = form.horaDespesa
-          ? `${form.dataDespesa}T${form.horaDespesa}:00`
-          : `${form.dataDespesa}T23:59:59`;
+        // ─── Regra de alerta de KM ────────────────────────────────────────────
+        // Só avalia quando é despesa de combustível com frota vinculada.
+        // Regra:
+        //   1. Encontra o último abastecimento da frota ANTES do atual (exclui o recém-salvo).
+        //   2. Data/hora de início da janela = data_despesa + hora_despesa do último abastecimento
+        //      (se hora_despesa for null, considera 00:00:00).
+        //   3. Data/hora de fim da janela = data e hora do NOVO abastecimento (agora).
+        //   4. Soma todos os apontamentos finalizados da frota dentro dessa janela.
+        //   5. kmEsperado = litros do último abastecimento × km_media_litro da frota.
+        //   6. percentual = kmApontado / kmEsperado.
+        //   7. Se percentual < 80% → gera alerta. Caso contrário → nenhum alerta.
+        // ─────────────────────────────────────────────────────────────────────
+        if (isCombustivel && form.frotaId) {
+          const frotaSelecionada = frotas.find((f) => f.id === form.frotaId);
+          const novoId = result.data?.id ?? "";
 
-        // Todos os abastecimentos da frota, excluindo o recém-salvo, ordenados do mais recente ao mais antigo
-        const abastecimentosAnteriores = despesas
-          .filter(
-            (d) =>
-              d.frota_id === form.frotaId &&
-              d.id !== novoId &&
-              typeof d.litros_abastecidos === "number" &&
-              d.litros_abastecidos > 0 &&
-              new Date(d.data_despesa ?? d.created_at).getTime() <=
-                new Date(novaData).getTime(),
-          )
-          .sort(
-            (a, b) =>
-              new Date(b.data_despesa ?? b.created_at).getTime() -
-              new Date(a.data_despesa ?? a.created_at).getTime(),
-          );
+          // Data/hora do novo abastecimento (limite superior da janela)
+          const fimJanelaStr = form.horaDespesa
+            ? `${form.dataDespesa}T${form.horaDespesa}:00`
+            : `${form.dataDespesa}T23:59:59`;
+          const fimJanelaMs = new Date(fimJanelaStr).getTime();
 
-        // O "último abastecimento" é o mais recente antes do novo → é o que vamos avaliar
-        const abastAnterior = abastecimentosAnteriores[0];
-        // O "penúltimo" define o corte de data para os apontamentos do tanque anterior
-        const penultimo = abastecimentosAnteriores[1];
-        const dataCorteAnterior = penultimo
-          ? (penultimo.data_despesa ?? penultimo.created_at)
-          : null;
+          // Último abastecimento da frota anterior ao atual
+          const ultimoAbast = despesas
+            .filter(
+              (d) =>
+                d.frota_id === form.frotaId &&
+                d.id !== novoId &&
+                typeof d.litros_abastecidos === "number" &&
+                d.litros_abastecidos > 0,
+            )
+            .sort(
+              (a, b) =>
+                new Date(b.data_despesa ?? b.created_at).getTime() -
+                new Date(a.data_despesa ?? a.created_at).getTime(),
+            )[0] ?? null;
 
-        // Monta a despesa para avaliar usando a DATA DO NOVO abastecimento como limite
-        // superior da janela — assim apontamentos feitos até hoje são incluídos.
-        const despesaParaAvaliar: Despesa | null = abastAnterior
-          ? { ...abastAnterior, data_despesa: novaData, frota: frotaSelecionada }
-          : null;
+          if (ultimoAbast && frotaSelecionada?.km_media_litro) {
+            // Início da janela: data + hora do último abastecimento
+            const horaInicio = ultimoAbast.hora_despesa ?? "00:00:00";
+            const inicioJanelaStr = `${ultimoAbast.data_despesa}T${horaInicio}`;
+            const inicioJanelaMs = new Date(inicioJanelaStr).getTime();
 
-        const alerta =
-          isCombustivel && despesaParaAvaliar
-            ? avaliarAbastecimento(despesaParaAvaliar, apontamentosKm, dataCorteAnterior)
-            : null;
+            // Soma KM dos apontamentos finalizados dentro da janela
+            const kmApontado = apontamentosKm
+              .filter((a) => {
+                if (a.frota_id !== form.frotaId) return false;
+                if (a.status !== "finalizado") return false;
+                if (typeof a.km_percorrido !== "number" || a.km_percorrido <= 0) return false;
+                const dataApontMs = new Date(a.data_fim ?? a.data_inicio).getTime();
+                return dataApontMs > inicioJanelaMs && dataApontMs <= fimJanelaMs;
+              })
+              .reduce((sum, a) => sum + (a.km_percorrido ?? 0), 0);
 
-        if (alerta) {
-          // Abre o popup de alerta; o redirecionamento só ocorre ao clicar em OK
-          setAlertaConsumo(
-            `Os apontamentos de KM são insuficientes para o total abastecido. ` +
-              `Foram apontados ${alerta.kmApontado.toLocaleString("pt-BR")} km, mas o esperado ` +
-              `para ${alerta.litros.toLocaleString("pt-BR")} L abastecidos é de ` +
-              `${Math.round(alerta.kmEsperado).toLocaleString("pt-BR")} km ` +
-              `(${(alerta.percentual * 100).toFixed(0)}% do esperado). ` +
-              `A despesa foi registrada e os gestores serão notificados para verificação.`,
-          );
+            const litros = ultimoAbast.litros_abastecidos as number;
+            const kmEsperado = litros * frotaSelecionada.km_media_litro;
+            const percentual = kmEsperado > 0 ? kmApontado / kmEsperado : 0;
+
+            if (percentual < 0.8) {
+              setAlertaConsumo(
+                `Apontamentos de KM insuficientes para o abastecimento anterior.\n\n` +
+                `Veículo: ${frotaSelecionada.placa} — ${frotaSelecionada.modelo}\n` +
+                `Período avaliado: ${new Date(inicioJanelaStr).toLocaleString("pt-BR")} até ${new Date(fimJanelaStr).toLocaleString("pt-BR")}\n` +
+                `Último abastecimento: ${litros.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L\n` +
+                `KM/L cadastrado: ${frotaSelecionada.km_media_litro} km/L\n` +
+                `KM esperado: ${Math.round(kmEsperado).toLocaleString("pt-BR")} km\n` +
+                `KM apontado: ${kmApontado.toLocaleString("pt-BR")} km\n` +
+                `Percentual: ${(percentual * 100).toFixed(0)}%\n\n` +
+                `A despesa foi registrada e os gestores serão notificados para verificação.`,
+              );
+            } else {
+              setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
+              setTimeout(() => onBack(), 1500);
+            }
+          } else {
+            // Sem abastecimento anterior ou sem km_media_litro — sem alerta
+            setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
+            setTimeout(() => onBack(), 1500);
+          }
         } else {
           setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
           setTimeout(() => onBack(), 1500);
