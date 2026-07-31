@@ -49,6 +49,7 @@ export interface Despesa {
   comprovante_nome: string | null;
   comprovante_url: string | null;
   data_despesa: string;
+  hora_despesa: string | null;
   data_checkin: string | null;
   data_checkout: string | null;
   numero_diarias: number | null;

@@ -45,8 +45,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     dataDespesa: editDespesa?.data_despesa
       ? editDespesa.data_despesa.slice(0, 10)
       : new Date().toISOString().slice(0, 10),
-    horaDespesa: editDespesa?.data_despesa && editDespesa.data_despesa.length > 10
-      ? editDespesa.data_despesa.slice(11, 16)
+    horaDespesa: editDespesa?.hora_despesa
+      ? editDespesa.hora_despesa.slice(0, 5)
       : new Date().toTimeString().slice(0, 5),
     // Campos de hospedagem
     dataCheckin:  editDespesa?.data_checkin  || "",
@@ -205,9 +205,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       numero_os: form.numeroOS,
       documento: form.documento || null,
       observacao: form.observacao || null,
-        data_despesa: form.horaDespesa
-          ? `${form.dataDespesa}T${form.horaDespesa}:00`
-          : form.dataDespesa,
+        data_despesa: form.dataDespesa,
+        hora_despesa: form.horaDespesa || null,
       data_checkin:  calculaDiarias && form.dataCheckin  ? form.dataCheckin  : null,
       data_checkout: calculaDiarias && form.dataCheckout ? form.dataCheckout : null,
       numero_diarias: numeroDiarias ?? null,
@@ -291,7 +290,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         // então avaliamos a janela do tanque anterior: do penúltimo ao último abastecimento.
         const frotaSelecionada = frotas.find((f) => f.id === form.frotaId);
         const novoId = result.data?.id ?? "novo";
-        const novaData = (baseData as Partial<Despesa>).data_despesa ?? new Date().toISOString();
+        // Combina data + hora para comparações de janela, mas sem depender do timestamp no data_despesa
+        const novaData = form.horaDespesa
+          ? `${form.dataDespesa}T${form.horaDespesa}:00`
+          : `${form.dataDespesa}T23:59:59`;
 
         // Todos os abastecimentos da frota, excluindo o recém-salvo, ordenados do mais recente ao mais antigo
         const abastecimentosAnteriores = despesas
