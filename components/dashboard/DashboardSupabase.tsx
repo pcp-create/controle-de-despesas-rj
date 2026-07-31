@@ -269,10 +269,18 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   // Alertas de consumo do banco — mapeia para o formato usado no JSX
   const alertasConsumo = useMemo(() => {
     if (perfil !== "gestor" && perfil !== "administrador") return [];
-    const rows: Array<{
-      id: string; placa: string; modelo: string; data: string;
-      litros: number; kmApontado: number; kmEsperado: number; percentual: number;
-    }> = alertasData?.data ?? [];
+    const raw: Array<Record<string, unknown>> = alertasData?.data ?? [];
+    // Normaliza snake_case do banco para camelCase usado no JSX
+    const rows = raw.map((r) => ({
+      id: r.id as string,
+      placa: r.placa as string,
+      modelo: r.modelo as string,
+      data: r.data as string,
+      litros: Number(r.litros ?? 0),
+      kmApontado: Number(r.km_apontado ?? r.kmApontado ?? 0),
+      kmEsperado: Number(r.km_esperado ?? r.kmEsperado ?? 0),
+      percentual: Number(r.percentual ?? 0),
+    }));
     return rows.filter((a) => {
       const dataStr = (a.data || "").slice(0, 10);
       if (modoFiltro === "mes") {
