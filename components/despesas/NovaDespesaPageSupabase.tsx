@@ -385,17 +385,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
               .join("\n");
 
             if (percentual < 0.8) {
+              const kmRealPorLitro = litros > 0 ? (kmApontado / litros).toFixed(1) : "0";
               setAlertaConsumo(
-                `Apontamentos de KM insuficientes para o abastecimento anterior.\n\n` +
-                `Veículo: ${frotaSelecionada.placa} — ${frotaSelecionada.modelo}\n` +
-                `Período avaliado: ${fmtInicio} até ${fmtFim}\n` +
-                `Último abastecimento: ${litros.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L\n` +
-                `KM/L cadastrado: ${frotaSelecionada.km_media_litro} km/L\n` +
-                `KM esperado: ${Math.round(kmEsperado).toLocaleString("pt-BR")} km\n` +
-                `KM apontado: ${kmApontado.toLocaleString("pt-BR")} km\n` +
-                `Percentual: ${(percentual * 100).toFixed(0)}%\n\n` +
-                `Apontamentos encontrados na janela (${apontamentosNaJanela.length}):\n` +
-                (listaApontamentos || "  Nenhum apontamento encontrado") + `\n\n` +
+                `Os apontamentos de KM parecem insuficientes para o total abastecido. ` +
+                `Rodou ${kmApontado.toLocaleString("pt-BR")} km com ${litros.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L ` +
+                `(${kmRealPorLitro} km/l), abaixo da média esperada de ${frotaSelecionada.km_media_litro} km/l. ` +
                 `A despesa foi registrada e os gestores serão notificados para verificação.`,
               );
             } else {
