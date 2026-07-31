@@ -23,6 +23,121 @@ export interface AlertaConsumo {
   valor: number;
 }
 
+export interface ResultadoConsumo {
+  frotaId: string;
+  placa: string;
+  modelo: string;
+  dataFim: string;       // ISO — limite superior da janela (data/hora do novo abastecimento)
+  litros: number;
+  kmApontado: number;
+  kmEsperado: number;
+  percentual: number;
+  temAlerta: boolean;    // true se percentual < LIMITE_CONSUMO
+  valor: number;
+}
+
+/**
+ * Calcula o consumo da frota ao registrar um novo abastecimento.
+ * Avalia o abastecimento ANTERIOR (não o atual) comparando:
+ *   - kmEsperado = litros do abastecimento anterior × km_media_litro da frota
+ *   - kmApontado = soma de apontamentos finalizados entre a data/hora do
+ *     abastecimento anterior e a data/hora do novo abastecimento
+ *
+ * Usa horário LOCAL (sem Z) para as datas digitadas pelo usuário.
+ * Aceita km_percorrido ou calcula km_final - km_inicial como fallback.
+ *
+ * Retorna null se não houver abastecimento anterior ou km_media_litro.
+ */
+export function calcularConsumoFrota(opts: {
+  frotaId: string;
+  placa: string;
+  modelo: string;
+  kmMediaLitro: number;
+  valorAbastecimento: number;
+  novoAbastecimentoId: string;
+  /** "YYYY-MM-DD" */
+  novaDataDespesa: string;
+  /** "HH:MM" — horário local digitado pelo usuário */
+  novaHoraDespesa: string | null;
+  despesas: Despesa[];
+  apontamentos: ControleKm[];
+}): ResultadoConsumo | null {
+  const {
+    frotaId, placa, modelo, kmMediaLitro, valorAbastecimento,
+    novoAbastecimentoId, novaDataDespesa, novaHoraDespesa,
+    despesas, apontamentos,
+  } = opts;
+
+  if (!kmMediaLitro || kmMediaLitro <= 0) return null;
+
+  // Converte data+hora LOCAL para ms (sem Z para não tratar como UTC)
+  const toLocalMs = (dateStr: string, timeStr: string) =>
+    new Date(`${dateStr.slice(0, 10)}T${timeStr}`).getTime();
+
+  const fimJanelaMs = toLocalMs(
+    novaDataDespesa,
+    novaHoraDespesa ? `${novaHoraDespesa}:00` : "23:59:59",
+  );
+
+  // Abastecimento anterior (mais recente antes do atual)
+  const ultimoAbast = despesas
+    .filter(
+      (d) =>
+        d.frota_id === frotaId &&
+        d.id !== novoAbastecimentoId &&
+        typeof d.litros_abastecidos === "number" &&
+        d.litros_abastecidos > 0,
+    )
+    .sort(
+      (a, b) =>
+        new Date(b.data_despesa ?? b.created_at).getTime() -
+        new Date(a.data_despesa ?? a.created_at).getTime(),
+    )[0] ?? null;
+
+  if (!ultimoAbast) return null;
+
+  const horaInicio = (ultimoAbast as Despesa & { hora_despesa?: string | null }).hora_despesa ?? "00:00:00";
+  const inicioJanelaMs = toLocalMs(
+    ultimoAbast.data_despesa.slice(0, 10),
+    horaInicio,
+  );
+
+  const litros = ultimoAbast.litros_abastecidos as number;
+  const kmEsperado = litros * kmMediaLitro;
+
+  // Filtra apontamentos dentro da janela com fallback km_final - km_inicial
+  const kmPorApontamento = (a: ControleKm): number => {
+    if (typeof a.km_percorrido === "number" && a.km_percorrido > 0) return a.km_percorrido;
+    if (typeof a.km_final === "number" && typeof a.km_inicial === "number") return a.km_final - a.km_inicial;
+    return 0;
+  };
+
+  const kmApontado = apontamentos
+    .filter((a) => {
+      if (a.frota_id !== frotaId) return false;
+      if (a.status !== "finalizado") return false;
+      if (kmPorApontamento(a) <= 0) return false;
+      const dataApontMs = new Date(a.data_fim ?? a.data_inicio).getTime();
+      return dataApontMs >= inicioJanelaMs && dataApontMs <= fimJanelaMs;
+    })
+    .reduce((sum, a) => sum + kmPorApontamento(a), 0);
+
+  const percentual = kmEsperado > 0 ? kmApontado / kmEsperado : 0;
+
+  return {
+    frotaId,
+    placa,
+    modelo,
+    dataFim: new Date(fimJanelaMs).toISOString(),
+    litros,
+    kmApontado,
+    kmEsperado,
+    percentual,
+    temAlerta: percentual < LIMITE_CONSUMO,
+    valor: valorAbastecimento,
+  };
+}
+
 /** Verifica se a despesa é um abastecimento com dados suficientes */
 export function isAbastecimento(d: Despesa): boolean {
   return (
