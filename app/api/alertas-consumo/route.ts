@@ -75,6 +75,61 @@ export async function POST(req: Request) {
 }
 
 /**
+ * PATCH /api/alertas-consumo
+ * Marca um alerta como tratado (ativo = false) e atualiza a frota.
+ * Body: { id: string, resolvido_por: string, justificativa?: string }
+ */
+export async function PATCH(req: Request) {
+  try {
+    const { id, resolvido_por, justificativa } = await req.json();
+    if (!id) return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
+
+    const supabase = getServiceClient();
+
+    // Busca o alerta para obter frota_id
+    const { data: alerta, error: fetchErr } = await supabase
+      .from("alertas_consumo")
+      .select("frota_id")
+      .eq("id", id)
+      .single();
+
+    if (fetchErr || !alerta) {
+      return NextResponse.json({ error: "Alerta não encontrado" }, { status: 404 });
+    }
+
+    // Marca como resolvido
+    const { error: updateErr } = await supabase
+      .from("alertas_consumo")
+      .update({
+        ativo: false,
+        resolvido_em: new Date().toISOString(),
+        resolvido_por: resolvido_por ?? null,
+        ...(justificativa ? { justificativa } : {}),
+      })
+      .eq("id", id);
+
+    if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
+
+    // Verifica se ainda há alertas ativos para essa frota
+    const { data: ativos } = await supabase
+      .from("alertas_consumo")
+      .select("id")
+      .eq("frota_id", alerta.frota_id)
+      .eq("ativo", true);
+
+    // Atualiza alerta_ativo na frota
+    await supabase
+      .from("frotas")
+      .update({ alerta_ativo: (ativos?.length ?? 0) > 0 })
+      .eq("id", alerta.frota_id);
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
+
+/**
  * GET /api/alertas-consumo?frota_id=xxx&apenas_ativos=true
  * Busca alertas de consumo do banco.
  */

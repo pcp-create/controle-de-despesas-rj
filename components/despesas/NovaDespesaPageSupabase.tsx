@@ -386,6 +386,29 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
             if (percentual < 0.8) {
               const kmRealPorLitro = litros > 0 ? (kmApontado / litros).toFixed(1) : "0";
+
+              // Persiste o alerta no banco para aparecer no Dashboard
+              const alertaId = `${frotaSelecionada.id}_${fimJanelaMs}`;
+              fetch("/api/alertas-consumo", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  alerta: {
+                    id: alertaId,
+                    frotaId: frotaSelecionada.id,
+                    placa: frotaSelecionada.placa,
+                    modelo: frotaSelecionada.modelo,
+                    data: new Date(fimJanelaMs).toISOString(),
+                    litros,
+                    kmApontado,
+                    kmEsperado,
+                    percentual,
+                    valor: ultimoAbast.valor ?? 0,
+                  },
+                  ativo: true,
+                }),
+              }).catch(() => {/* silencioso */});
+
               setAlertaConsumo(
                 `Os apontamentos de KM parecem insuficientes para o total abastecido. ` +
                 `Rodou ${kmApontado.toLocaleString("pt-BR")} km com ${litros.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L ` +
