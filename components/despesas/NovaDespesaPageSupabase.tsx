@@ -42,7 +42,12 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     valor: editDespesa?.valor?.toString() || "",
     documento: editDespesa?.documento || "",
     observacao: editDespesa?.observacao || "",
-    dataDespesa: editDespesa?.data_despesa || new Date().toISOString().slice(0, 10),
+    dataDespesa: editDespesa?.data_despesa
+      ? editDespesa.data_despesa.slice(0, 10)
+      : new Date().toISOString().slice(0, 10),
+    horaDespesa: editDespesa?.data_despesa && editDespesa.data_despesa.length > 10
+      ? editDespesa.data_despesa.slice(11, 16)
+      : new Date().toTimeString().slice(0, 5),
     // Campos de hospedagem
     dataCheckin:  editDespesa?.data_checkin  || "",
     dataCheckout: editDespesa?.data_checkout || "",
@@ -200,7 +205,9 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       numero_os: form.numeroOS,
       documento: form.documento || null,
       observacao: form.observacao || null,
-      data_despesa: form.dataDespesa,
+        data_despesa: form.horaDespesa
+          ? `${form.dataDespesa}T${form.horaDespesa}:00`
+          : form.dataDespesa,
       data_checkin:  calculaDiarias && form.dataCheckin  ? form.dataCheckin  : null,
       data_checkout: calculaDiarias && form.dataCheckout ? form.dataCheckout : null,
       numero_diarias: numeroDiarias ?? null,
@@ -632,15 +639,23 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             {errors.valor && <span className="text-xs text-destructive">{errors.valor}</span>}
           </div>
 
-          {/* Data da despesa — sempre visível, seja hospedagem ou não */}
+          {/* Data e hora da despesa — sempre visíveis */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-foreground">Data da Despesa <span className="text-destructive">*</span></label>
-            <input
-              type="date"
-              value={form.dataDespesa}
-              onChange={(e) => setForm({ ...form, dataDespesa: e.target.value })}
-              className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+            <label className="text-sm font-medium text-foreground">Data e Hora da Despesa <span className="text-destructive">*</span></label>
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={form.dataDespesa}
+                onChange={(e) => setForm({ ...form, dataDespesa: e.target.value })}
+                className="flex-1 px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <input
+                type="time"
+                value={form.horaDespesa}
+                onChange={(e) => setForm({ ...form, horaDespesa: e.target.value })}
+                className="w-32 px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
             {errors.dataDespesa && <span className="text-xs text-destructive">{errors.dataDespesa}</span>}
           </div>
         </div>
