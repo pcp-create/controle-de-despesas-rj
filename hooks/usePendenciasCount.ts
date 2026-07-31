@@ -23,11 +23,17 @@ export function usePendenciasCount(): PendenciasCount {
   const { frotas } = useFrotas();
 
   const counts = useMemo(() => {
-    // Aprovações: grupos únicos aguardando aprovação do gestor (status_aprovacao === "AguardandoGestor")
+    // Aprovações: grupos únicos aguardando aprovação do gestor
+    // Condição: status_aprovacao === "AguardandoGestor" E status_erp !== "Rascunho"
     const aprovacao = isGestorOuAdmin
       ? new Set(
           despesas
-            .filter((d) => d.status_aprovacao === "AguardandoGestor")
+            .filter(
+              (d) =>
+                d.status_aprovacao === "AguardandoGestor" &&
+                d.status_erp !== "Rascunho" &&
+                d.status_erp != null,
+            )
             .map((d) => d.grupo_parcela_id ?? d.id)
         ).size
       : 0;
