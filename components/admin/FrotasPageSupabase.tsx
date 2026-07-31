@@ -306,13 +306,15 @@ export default function FrotasPageSupabase() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  {(alertasPorFrota.get(frota.id) ?? 0) > 0 && (
+                  {frota.alerta_ativo && (
                     <span
                       className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-warning/10 text-warning"
-                      title="Abastecimentos com apontamentos de KM insuficientes"
+                      title={frota.ultimo_calculo_percentual != null
+                        ? `KM apontado: ${Math.round((frota.ultimo_calculo_percentual ?? 0) * 100)}% do esperado`
+                        : "Apontamentos de KM insuficientes"}
                     >
                       <AlertTriangle className="w-3 h-3" />
-                      {alertasPorFrota.get(frota.id)}
+                      Alerta
                     </span>
                   )}
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${frota.ativo ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
@@ -361,6 +363,23 @@ export default function FrotasPageSupabase() {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
+                    </span>
+                  </span>
+                </div>
+              )}
+
+              {/* Último cálculo de consumo */}
+              {frota.ultimo_calculo_em && (
+                <div className={`flex items-center gap-1.5 text-xs rounded-lg px-3 py-1.5 ${frota.alerta_ativo ? "bg-warning/5 border border-warning/20 text-warning" : "bg-success/5 border border-success/20 text-success"}`}>
+                  <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${frota.alerta_ativo ? "text-warning" : "text-success"}`} />
+                  <span>
+                    Último cálculo:{" "}
+                    <span className="font-medium">
+                      {Math.round((frota.ultimo_calculo_percentual ?? 0) * 100)}% apontado
+                    </span>
+                    {" "}({(frota.ultimo_calculo_km_apontado ?? 0).toLocaleString("pt-BR")} / {(frota.ultimo_calculo_km_esperado ?? 0).toLocaleString("pt-BR")} km) em{" "}
+                    <span className="font-medium">
+                      {new Date(frota.ultimo_calculo_em).toLocaleDateString("pt-BR")}
                     </span>
                   </span>
                 </div>

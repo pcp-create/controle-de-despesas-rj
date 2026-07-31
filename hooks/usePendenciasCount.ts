@@ -1,9 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { useDespesas, useControleKm } from "@/lib/supabase/hooks";
+import { useDespesas, useControleKm, useFrotas } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
-import { gerarAlertasConsumo } from "@/lib/consumo-frota";
 
 export interface PendenciasCount {
   aprovacao: number;   // grupos aguardando aprovação do gestor
@@ -21,13 +20,20 @@ export function usePendenciasCount(): PendenciasCount {
 
   const { despesas } = useDespesas(undefined, perfil);
   const { registros: apontamentosKm } = useControleKm();
+  const { frotas } = useFrotas();
 
   const counts = useMemo(() => {
-    // Aprovações: grupos únicos aguardando aprovação do gestor (status_aprovacao === "AguardandoGestor")
+    // Aprovações: grupos únicos aguardando aprovação do gestor
+    // Condição: status_aprovacao === "AguardandoGestor" E status_erp !== "Rascunho"
     const aprovacao = isGestorOuAdmin
       ? new Set(
           despesas
-            .filter((d) => d.status_aprovacao === "AguardandoGestor")
+            .filter(
+              (d) =>
+                d.status_aprovacao === "AguardandoGestor" &&
+                d.status_erp !== "Rascunho" &&
+                d.status_erp != null,
+            )
             .map((d) => d.grupo_parcela_id ?? d.id)
         ).size
       : 0;
@@ -55,20 +61,13 @@ export function usePendenciasCount(): PendenciasCount {
         ).length
       : 0;
 
-    // Consumo: abastecimentos com apontamentos de KM insuficientes (só gestor/admin)
-    // Exclui alertas já tratados (salvos em localStorage pelo Dashboard)
-    let consumo = 0;
-    if (isGestorOuAdmin) {
-      let tratados: Record<string, string> = {};
-      try {
-        const raw = localStorage.getItem(`alertas_consumo_tratados_${currentUser?.id ?? ""}`);
-        tratados = JSON.parse(raw ?? "{}");
-      } catch { /* ignore */ }
-      consumo = gerarAlertasConsumo(despesas, apontamentosKm).filter((a) => !tratados[a.id]).length;
-    }
+    // Consumo: frotas com alerta_ativo === true persistido no banco (só gestor/admin)
+    const consumo = isGestorOuAdmin
+      ? frotas.filter((f) => f.alerta_ativo === true).length
+      : 0;
 
     return { aprovacao, financeiro, reembolso, consumo, total: aprovacao + financeiro + reembolso + consumo };
-  }, [despesas, apontamentosKm, isGestorOuAdmin, isFinanceiroOuAdmin, currentUser?.id]);
+  }, [despesas, frotas, isGestorOuAdmin, isFinanceiroOuAdmin]);
 
   return counts;
 }

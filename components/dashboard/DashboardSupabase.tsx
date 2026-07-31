@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
+import useSWR from "swr";
 import type React from "react";
 import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosDashboard } from "@/lib/supabase/use-filtros-persistidos";
 import { useAppStore } from "@/lib/store";
-import { useDespesas, useTiposDespesa, useProfiles, useControleKm } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import {
   DollarSign,
   ArrowRight,
@@ -22,7 +23,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { formatCurrency, getStatusGeral } from "@/lib/helpers";
-import { gerarAlertasConsumo } from "@/lib/consumo-frota";
+
 import type { PageKey, NavigateFn } from "@/components/layout/AppShellSupabase";
 import {
   BarChart,
@@ -112,20 +113,21 @@ export default function DashboardSupabase({ onNavigate }: Props) {
   );
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
-  const { registros: apontamentosKm } = useControleKm();
   const perfil = currentUser?.perfil;
 
   const now = new Date();
   const { filtrosSalvos, carregado, salvar } = useFiltrosPersistidos<FiltrosDashboard>(currentUser?.id, "dashboard");
   const aplicado = useRef(false);
 
-  // Alertas de consumo tratados: { id → justificativa }
-  const STORAGE_KEY = `alertas_consumo_tratados_${currentUser?.id ?? ""}`;
-  const [tratados, setTratados] = useState<Record<string, string>>(() => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}"); } catch { return {}; }
-  });
+  // Alertas de consumo do banco — apenas ativos (não tratados)
+  const { data: alertasData, mutate: mutateAlertas } = useSWR(
+    perfil === "gestor" || perfil === "administrador" ? "alertas_consumo_ativos" : null,
+    () => fetch("/api/alertas-consumo?apenas_ativos=true").then((r) => r.json()),
+    { revalidateOnFocus: true, refreshInterval: 30000 },
+  );
   const [modalTratar, setModalTratar] = useState<{ id: string; label: string } | null>(null);
   const [justificativa, setJustificativa] = useState("");
+  const [tratandoId, setTratandoId] = useState<string | null>(null);
 
   const [modoFiltro, setModoFiltro] = useState<ModoFiltro>("mes");
   const [mesSelecionado, setMesSelecionado] = useState(now.getMonth());
@@ -264,14 +266,22 @@ export default function DashboardSupabase({ onNavigate }: Props) {
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 5);
 
-  // Alertas de consumo de combustível (apenas gestor/administrador).
-  // Usa a lista completa de despesas como base de comparação e filtra
-  // os alertas cujo abastecimento está dentro do período selecionado.
+  // Alertas de consumo do banco — mapeia para o formato usado no JSX
   const alertasConsumo = useMemo(() => {
     if (perfil !== "gestor" && perfil !== "administrador") return [];
-    const todos = gerarAlertasConsumo(despesas, apontamentosKm);
-    return todos.filter((a) => {
-      if (tratados[a.id]) return false;
+    const raw: Array<Record<string, unknown>> = alertasData?.data ?? [];
+    // Normaliza snake_case do banco para camelCase usado no JSX
+    const rows = raw.map((r) => ({
+      id: r.id as string,
+      placa: r.placa as string,
+      modelo: r.modelo as string,
+      data: r.data as string,
+      litros: Number(r.litros ?? 0),
+      kmApontado: Number(r.km_apontado ?? r.kmApontado ?? 0),
+      kmEsperado: Number(r.km_esperado ?? r.kmEsperado ?? 0),
+      percentual: Number(r.percentual ?? 0),
+    }));
+    return rows.filter((a) => {
       const dataStr = (a.data || "").slice(0, 10);
       if (modoFiltro === "mes") {
         const dt = new Date(dataStr + "T00:00:00");
@@ -281,13 +291,27 @@ export default function DashboardSupabase({ onNavigate }: Props) {
       if (dataFinal && dataStr > dataFinal) return false;
       return true;
     });
-  }, [despesas, apontamentosKm, tratados, perfil, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
+  }, [alertasData, perfil, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
 
-  function confirmarTratamento() {
+  async function confirmarTratamento() {
     if (!modalTratar || !justificativa.trim()) return;
-    const novos = { ...tratados, [modalTratar.id]: justificativa.trim() };
-    setTratados(novos);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(novos)); } catch { /* ignore */ }
+    setTratandoId(modalTratar.id);
+    try {
+      const res = await fetch("/api/alertas-consumo", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: modalTratar.id,
+          resolvido_por: currentUser?.id ?? null,
+          justificativa: justificativa.trim(),
+        }),
+      });
+      await res.json();
+    } catch {
+      // silencioso
+    }
+    await mutateAlertas();
+    setTratandoId(null);
     setModalTratar(null);
     setJustificativa("");
   }

@@ -3,6 +3,7 @@
 import useSWR, { mutate as swrMutate } from "swr";
 import { createClient } from "@/lib/supabase/client";
 import { registrarAuditoria } from "@/lib/supabase/audit";
+import { isAbastecimento, persistirAlertasConsumo } from "@/lib/consumo-frota";
 import { useAuth } from "@/lib/supabase/auth-context";
 
 // Helper to get supabase client - MUST be called inside functions, not at module level
@@ -48,6 +49,7 @@ export interface Despesa {
   comprovante_nome: string | null;
   comprovante_url: string | null;
   data_despesa: string;
+  hora_despesa: string | null;
   data_checkin: string | null;
   data_checkout: string | null;
   numero_diarias: number | null;
@@ -122,6 +124,12 @@ export interface Frota {
   km_media_litro: number | null;
   observacao: string | null;
   ativo: boolean;
+  // Alertas de consumo persistidos
+  alerta_ativo: boolean;
+  ultimo_calculo_em: string | null;
+  ultimo_calculo_km_apontado: number | null;
+  ultimo_calculo_km_esperado: number | null;
+  ultimo_calculo_percentual: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -504,6 +512,17 @@ export function useDespesas(userId?: string, perfil?: string) {
     }
     
     mutate();
+
+    // Se for um abastecimento, recalcula e persiste os alertas de consumo.
+    // Passa o id do novo abastecimento para excluí-lo da avaliação —
+    // ele ainda não tem apontamentos e geraria um falso alerta.
+    if (isAbastecimento(data as Despesa)) {
+      const novoId = (data as Despesa).id;
+      const todasDespesas: Despesa[] = await fetchDespesas(undefined, "administrador");
+      const kmAdmin = await fetchControleKm();
+      persistirAlertasConsumo(todasDespesas, kmAdmin, novoId).catch(() => {/* silencioso */});
+    }
+
     return { data };
   };
 
@@ -1287,7 +1306,6 @@ export function useControleKm(userId?: string) {
         duracao_minutos,
         status: "finalizado",
         observacao: observacao || null,
-        updated_at: dataFim.toISOString(),
       })
       .eq("id", id);
 

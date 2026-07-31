@@ -42,7 +42,12 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     valor: editDespesa?.valor?.toString() || "",
     documento: editDespesa?.documento || "",
     observacao: editDespesa?.observacao || "",
-    dataDespesa: editDespesa?.data_despesa || new Date().toISOString().slice(0, 10),
+    dataDespesa: editDespesa?.data_despesa
+      ? editDespesa.data_despesa.slice(0, 10)
+      : new Date().toISOString().slice(0, 10),
+    horaDespesa: editDespesa?.hora_despesa
+      ? editDespesa.hora_despesa.slice(0, 5)
+      : new Date().toTimeString().slice(0, 5),
     // Campos de hospedagem
     dataCheckin:  editDespesa?.data_checkin  || "",
     dataCheckout: editDespesa?.data_checkout || "",
@@ -200,7 +205,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       numero_os: form.numeroOS,
       documento: form.documento || null,
       observacao: form.observacao || null,
-      data_despesa: form.dataDespesa,
+        data_despesa: form.dataDespesa,
+        hora_despesa: form.horaDespesa || null,
       data_checkin:  calculaDiarias && form.dataCheckin  ? form.dataCheckin  : null,
       data_checkout: calculaDiarias && form.dataCheckout ? form.dataCheckout : null,
       numero_diarias: numeroDiarias ?? null,
@@ -279,47 +285,145 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
       } else {
-        // Verifica se os apontamentos de KM são suficientes para o total abastecido
-        const frotaSelecionada = frotas.find((f) => f.id === form.frotaId);
-        const despesaAvaliada: Despesa = {
-          ...(baseData as unknown as Despesa),
-          id: result.data?.id ?? "novo",
-          valor: Number(form.valor),
-          created_at: new Date().toISOString(),
-          frota: frotaSelecionada,
-        };
-        // Abastecimento anterior da mesma frota para definir o corte de data
-        const ultimoAbastecimento = despesas
-          .filter(
-            (d) =>
-              d.frota_id === form.frotaId &&
-              d.id !== despesaAvaliada.id &&
-              typeof d.litros_abastecidos === "number" &&
-              d.litros_abastecidos > 0,
-          )
-          .sort(
-            (a, b) =>
-              new Date(b.data_despesa ?? b.created_at).getTime() -
-              new Date(a.data_despesa ?? a.created_at).getTime(),
-          )[0];
-        const dataCorte = ultimoAbastecimento
-          ? (ultimoAbastecimento.data_despesa ?? ultimoAbastecimento.created_at)
-          : null;
+        // ─── Regra de alerta de KM ────────────────────────────────────────────
+        // Só avalia quando é despesa de combustível com frota vinculada.
+        // Regra:
+        //   1. Encontra o último abastecimento da frota ANTES do atual (exclui o recém-salvo).
+        //   2. Data/hora de início da janela = data_despesa + hora_despesa do último abastecimento
+        //      (se hora_despesa for null, considera 00:00:00).
+        //   3. Data/hora de fim da janela = data e hora do NOVO abastecimento (agora).
+        //   4. Soma todos os apontamentos finalizados da frota dentro dessa janela.
+        //   5. kmEsperado = litros do último abastecimento × km_media_litro da frota.
+        //   6. percentual = kmApontado / kmEsperado.
+        //   7. Se percentual < 80% → gera alerta. Caso contrário → nenhum alerta.
+        // ─────────────────────────────────────────────────────────────────────
+        if (isCombustivel && form.frotaId) {
+          const frotaSelecionada = frotas.find((f) => f.id === form.frotaId);
+          const novoId = result.data?.id ?? "";
 
-        const alerta = isCombustivel
-          ? avaliarAbastecimento(despesaAvaliada, apontamentosKm, dataCorte)
-          : null;
+          // Converte "YYYY-MM-DD" + "HH:MM:SS" em ms usando horário LOCAL do browser.
+          // O usuário digita horário de Brasília — não deve ser tratado como UTC.
+          // "YYYY-MM-DDTHH:MM:SS" sem Z é interpretado pelo JS como horário local.
+          const toLocalMs = (dateStr: string, timeStr: string): number =>
+            new Date(`${dateStr.slice(0, 10)}T${timeStr}`).getTime();
 
-        if (alerta) {
-          // Abre o popup de alerta; o redirecionamento só ocorre ao clicar em OK
-          setAlertaConsumo(
-            `Os apontamentos de KM são insuficientes para o total abastecido. ` +
-              `Foram apontados ${alerta.kmApontado.toLocaleString("pt-BR")} km, mas o esperado ` +
-              `para ${alerta.litros.toLocaleString("pt-BR")} L abastecidos é de ` +
-              `${Math.round(alerta.kmEsperado).toLocaleString("pt-BR")} km ` +
-              `(${(alerta.percentual * 100).toFixed(0)}% do esperado). ` +
-              `A despesa foi registrada e os gestores serão notificados para verificação.`,
+          // Limite superior: data/hora do novo abastecimento (horário local)
+          const fimJanelaMs = toLocalMs(
+            form.dataDespesa,
+            form.horaDespesa ? `${form.horaDespesa}:00` : "23:59:59",
           );
+
+          // Último abastecimento da frota anterior ao atual
+          const ultimoAbast = despesas
+            .filter(
+              (d) =>
+                d.frota_id === form.frotaId &&
+                d.id !== novoId &&
+                typeof d.litros_abastecidos === "number" &&
+                d.litros_abastecidos > 0,
+            )
+            .sort(
+              (a, b) =>
+                new Date(b.data_despesa ?? b.created_at).getTime() -
+                new Date(a.data_despesa ?? a.created_at).getTime(),
+            )[0] ?? null;
+
+          if (ultimoAbast && frotaSelecionada?.km_media_litro) {
+            // Início da janela: data + hora do último abastecimento (horário local)
+            const horaInicio = ultimoAbast.hora_despesa ?? "00:00:00";
+            const inicioJanelaMs = toLocalMs(
+              ultimoAbast.data_despesa.slice(0, 10),
+              horaInicio,
+            );
+
+            // Soma KM dos apontamentos finalizados dentro da janela.
+            // Usa km_percorrido se disponível; caso null, calcula km_final - km_inicial.
+            const apontamentosNaJanela = apontamentosKm.filter((a) => {
+              if (a.frota_id !== form.frotaId) return false;
+              if (a.status !== "finalizado") return false;
+              const kmCalc =
+                typeof a.km_percorrido === "number" && a.km_percorrido > 0
+                  ? a.km_percorrido
+                  : typeof a.km_final === "number" && typeof a.km_inicial === "number"
+                  ? a.km_final - a.km_inicial
+                  : 0;
+              if (kmCalc <= 0) return false;
+              const dataApontMs = new Date(a.data_fim ?? a.data_inicio).getTime();
+              return dataApontMs >= inicioJanelaMs && dataApontMs <= fimJanelaMs;
+            });
+
+            const kmApontado = apontamentosNaJanela.reduce((sum, a) => {
+              const km =
+                typeof a.km_percorrido === "number" && a.km_percorrido > 0
+                  ? a.km_percorrido
+                  : typeof a.km_final === "number" && typeof a.km_inicial === "number"
+                  ? a.km_final - a.km_inicial
+                  : 0;
+              return sum + km;
+            }, 0);
+
+            const litros = ultimoAbast.litros_abastecidos as number;
+            const kmEsperado = litros * frotaSelecionada.km_media_litro;
+            const percentual = kmEsperado > 0 ? kmApontado / kmEsperado : 0;
+
+            // Formata os extremos da janela em horário local pt-BR para exibição
+            const fmtInicio = new Date(inicioJanelaMs).toLocaleString("pt-BR");
+            const fmtFim    = new Date(fimJanelaMs).toLocaleString("pt-BR");
+
+            // Lista detalhada dos apontamentos encontrados na janela
+            const listaApontamentos = apontamentosNaJanela
+              .sort((a, b) => new Date(a.data_inicio).getTime() - new Date(b.data_inicio).getTime())
+              .map((a) => {
+                const km =
+                  typeof a.km_percorrido === "number" && a.km_percorrido > 0
+                    ? a.km_percorrido
+                    : (a.km_final ?? 0) - (a.km_inicial ?? 0);
+                const dtInicio = new Date(a.data_inicio).toLocaleString("pt-BR");
+                const dtFim = a.data_fim ? new Date(a.data_fim).toLocaleString("pt-BR") : "em andamento";
+                return `  • ${dtInicio} → ${dtFim}: ${km.toLocaleString("pt-BR")} km`;
+              })
+              .join("\n");
+
+            if (percentual < 0.8) {
+              const kmRealPorLitro = litros > 0 ? (kmApontado / litros).toFixed(1) : "0";
+
+              // Persiste o alerta no banco para aparecer no Dashboard
+              const alertaId = `${frotaSelecionada.id}_${fimJanelaMs}`;
+              fetch("/api/alertas-consumo", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  alerta: {
+                    id: alertaId,
+                    frotaId: frotaSelecionada.id,
+                    placa: frotaSelecionada.placa,
+                    modelo: frotaSelecionada.modelo,
+                    data: new Date(fimJanelaMs).toISOString(),
+                    litros,
+                    kmApontado,
+                    kmEsperado,
+                    percentual,
+                    valor: ultimoAbast.valor ?? 0,
+                  },
+                  ativo: true,
+                }),
+              }).catch(() => {/* silencioso */});
+
+              setAlertaConsumo(
+                `Os apontamentos de KM parecem insuficientes para o total abastecido. ` +
+                `Rodou ${kmApontado.toLocaleString("pt-BR")} km com ${litros.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L ` +
+                `(${kmRealPorLitro} km/l), abaixo da média esperada de ${frotaSelecionada.km_media_litro} km/l. ` +
+                `A despesa foi registrada e os gestores serão notificados para verificação.`,
+              );
+            } else {
+              setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
+              setTimeout(() => onBack(), 1500);
+            }
+          } else {
+            // Sem abastecimento anterior ou sem km_media_litro — sem alerta
+            setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
+            setTimeout(() => onBack(), 1500);
+          }
         } else {
           setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
           setTimeout(() => onBack(), 1500);
@@ -620,15 +724,23 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             {errors.valor && <span className="text-xs text-destructive">{errors.valor}</span>}
           </div>
 
-          {/* Data da despesa — sempre visível, seja hospedagem ou não */}
+          {/* Data e hora da despesa — sempre visíveis */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-foreground">Data da Despesa <span className="text-destructive">*</span></label>
-            <input
-              type="date"
-              value={form.dataDespesa}
-              onChange={(e) => setForm({ ...form, dataDespesa: e.target.value })}
-              className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+            <label className="text-sm font-medium text-foreground">Data e Hora da Despesa <span className="text-destructive">*</span></label>
+            <div className="flex gap-2">
+              <input
+                type="date"
+                value={form.dataDespesa}
+                onChange={(e) => setForm({ ...form, dataDespesa: e.target.value })}
+                className="flex-1 px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <input
+                type="time"
+                value={form.horaDespesa}
+                onChange={(e) => setForm({ ...form, horaDespesa: e.target.value })}
+                className="w-32 px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
             {errors.dataDespesa && <span className="text-xs text-destructive">{errors.dataDespesa}</span>}
           </div>
         </div>
@@ -746,7 +858,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 <strong className="text-foreground">
                   {new Date(calcularVencimento(form.dataDespesa) + "T12:00:00").toLocaleDateString("pt-BR")}
                 </strong>
-                {" — editável pelo Financeiro após lançamento"}
+                {" — edit��vel pelo Financeiro após lançamento"}
               </span>
             </div>
           )}
