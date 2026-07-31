@@ -1306,7 +1306,6 @@ export function useControleKm(userId?: string) {
         duracao_minutos,
         status: "finalizado",
         observacao: observacao || null,
-        updated_at: dataFim.toISOString(),
       })
       .eq("id", id);
 

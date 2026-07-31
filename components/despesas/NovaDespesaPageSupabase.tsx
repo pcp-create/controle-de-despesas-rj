@@ -337,16 +337,30 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             );
 
             // Soma KM dos apontamentos finalizados dentro da janela.
-            // data_fim/data_inicio do banco são ISO com Z → new Date() já interpreta como UTC.
-            const kmApontado = apontamentosKm
-              .filter((a) => {
-                if (a.frota_id !== form.frotaId) return false;
-                if (a.status !== "finalizado") return false;
-                if (typeof a.km_percorrido !== "number" || a.km_percorrido <= 0) return false;
-                const dataApontMs = new Date(a.data_fim ?? a.data_inicio).getTime();
-                return dataApontMs >= inicioJanelaMs && dataApontMs <= fimJanelaMs;
-              })
-              .reduce((sum, a) => sum + (a.km_percorrido ?? 0), 0);
+            // Usa km_percorrido se disponível; caso null, calcula km_final - km_inicial.
+            const apontamentosNaJanela = apontamentosKm.filter((a) => {
+              if (a.frota_id !== form.frotaId) return false;
+              if (a.status !== "finalizado") return false;
+              const kmCalc =
+                typeof a.km_percorrido === "number" && a.km_percorrido > 0
+                  ? a.km_percorrido
+                  : typeof a.km_final === "number" && typeof a.km_inicial === "number"
+                  ? a.km_final - a.km_inicial
+                  : 0;
+              if (kmCalc <= 0) return false;
+              const dataApontMs = new Date(a.data_fim ?? a.data_inicio).getTime();
+              return dataApontMs >= inicioJanelaMs && dataApontMs <= fimJanelaMs;
+            });
+
+            const kmApontado = apontamentosNaJanela.reduce((sum, a) => {
+              const km =
+                typeof a.km_percorrido === "number" && a.km_percorrido > 0
+                  ? a.km_percorrido
+                  : typeof a.km_final === "number" && typeof a.km_inicial === "number"
+                  ? a.km_final - a.km_inicial
+                  : 0;
+              return sum + km;
+            }, 0);
 
             const litros = ultimoAbast.litros_abastecidos as number;
             const kmEsperado = litros * frotaSelecionada.km_media_litro;
@@ -355,6 +369,20 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             // Formata os extremos da janela em horário local pt-BR para exibição
             const fmtInicio = new Date(inicioJanelaMs).toLocaleString("pt-BR");
             const fmtFim    = new Date(fimJanelaMs).toLocaleString("pt-BR");
+
+            // Lista detalhada dos apontamentos encontrados na janela
+            const listaApontamentos = apontamentosNaJanela
+              .sort((a, b) => new Date(a.data_inicio).getTime() - new Date(b.data_inicio).getTime())
+              .map((a) => {
+                const km =
+                  typeof a.km_percorrido === "number" && a.km_percorrido > 0
+                    ? a.km_percorrido
+                    : (a.km_final ?? 0) - (a.km_inicial ?? 0);
+                const dtInicio = new Date(a.data_inicio).toLocaleString("pt-BR");
+                const dtFim = a.data_fim ? new Date(a.data_fim).toLocaleString("pt-BR") : "em andamento";
+                return `  • ${dtInicio} → ${dtFim}: ${km.toLocaleString("pt-BR")} km`;
+              })
+              .join("\n");
 
             if (percentual < 0.8) {
               setAlertaConsumo(
@@ -366,6 +394,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 `KM esperado: ${Math.round(kmEsperado).toLocaleString("pt-BR")} km\n` +
                 `KM apontado: ${kmApontado.toLocaleString("pt-BR")} km\n` +
                 `Percentual: ${(percentual * 100).toFixed(0)}%\n\n` +
+                `Apontamentos encontrados na janela (${apontamentosNaJanela.length}):\n` +
+                (listaApontamentos || "  Nenhum apontamento encontrado") + `\n\n` +
                 `A despesa foi registrada e os gestores serão notificados para verificação.`,
               );
             } else {
