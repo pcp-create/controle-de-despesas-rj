@@ -3,6 +3,7 @@
 import useSWR, { mutate as swrMutate } from "swr";
 import { createClient } from "@/lib/supabase/client";
 import { registrarAuditoria } from "@/lib/supabase/audit";
+import { isAbastecimento, persistirAlertasConsumo } from "@/lib/consumo-frota";
 import { useAuth } from "@/lib/supabase/auth-context";
 
 // Helper to get supabase client - MUST be called inside functions, not at module level
@@ -122,6 +123,12 @@ export interface Frota {
   km_media_litro: number | null;
   observacao: string | null;
   ativo: boolean;
+  // Alertas de consumo persistidos
+  alerta_ativo: boolean;
+  ultimo_calculo_em: string | null;
+  ultimo_calculo_km_apontado: number | null;
+  ultimo_calculo_km_esperado: number | null;
+  ultimo_calculo_percentual: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -504,6 +511,14 @@ export function useDespesas(userId?: string, perfil?: string) {
     }
     
     mutate();
+
+    // Se for um abastecimento, recalcula e persiste os alertas de consumo
+    if (isAbastecimento(data as Despesa)) {
+      const todasDespesas: Despesa[] = await fetchDespesas(undefined, "administrador");
+      const kmAdmin = await fetchControleKm();
+      persistirAlertasConsumo(todasDespesas, kmAdmin).catch(() => {/* silencioso */});
+    }
+
     return { data };
   };
 

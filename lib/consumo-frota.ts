@@ -94,6 +94,34 @@ export function avaliarAbastecimento(
 }
 
 /**
+ * Persiste os alertas calculados no banco via API route.
+ * Deve ser chamado após um abastecimento ser salvo.
+ * Envia apenas o alerta mais recente de cada frota.
+ */
+export async function persistirAlertasConsumo(
+  despesas: Despesa[],
+  apontamentos: ControleKm[],
+): Promise<void> {
+  const todos = gerarAlertasConsumo(despesas, apontamentos);
+
+  // Agrupa por frotaId — persiste o mais recente (índice 0 pois já vem ordenado por percentual)
+  const porFrota = new Map<string, AlertaConsumo>();
+  for (const a of todos) {
+    if (!porFrota.has(a.frotaId)) porFrota.set(a.frotaId, a);
+  }
+
+  await Promise.all(
+    Array.from(porFrota.values()).map((alerta) =>
+      fetch("/api/alertas-consumo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ alerta, ativo: true }),
+      }),
+    ),
+  );
+}
+
+/**
  * Gera todos os alertas de consumo a partir da lista completa de despesas
  * e apontamentos. Usado no Dashboard e na página de Frotas.
  */
