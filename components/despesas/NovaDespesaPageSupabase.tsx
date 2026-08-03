@@ -784,7 +784,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 <strong className="text-foreground">
                   {new Date(calcularVencimento(form.dataDespesa) + "T12:00:00").toLocaleDateString("pt-BR")}
                 </strong>
-                {" — edit��vel pelo Financeiro após lançamento"}
+                {" — editável pelo Financeiro após lançamento"}
               </span>
             </div>
           )}
