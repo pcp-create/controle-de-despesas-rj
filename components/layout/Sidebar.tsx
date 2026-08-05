@@ -82,11 +82,12 @@ const NAV_GROUPS: NavGroup[] = [
 
 // Mapeamento de qual chave de pendências corresponde a cada aba
 const BADGE_MAP: Record<string, keyof Omit<PendenciasCount, "total">> = {
-  financeiro:       "financeiro",
-  reembolso:        "reembolso",
-  aprovacao:        "aprovacao",
-  frotas:           "consumo",
+  financeiro:        "financeiro",
+  reembolso:         "reembolso",
+  aprovacao:         "aprovacao",
+  frotas:            "consumo",
   "minhas-despesas": "minhasDespesas",
+  "todas-despesas":  "todasDespesas",
 };
 
 function NavBadge({ count, collapsed }: { count: number; collapsed: boolean }) {
