@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
-import useSWR from "swr";
+import useSWR, { mutate as swrMutate } from "swr";
 import type React from "react";
 import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosDashboard } from "@/lib/supabase/use-filtros-persistidos";
@@ -306,14 +306,28 @@ export default function DashboardSupabase({ onNavigate }: Props) {
           justificativa: justificativa.trim(),
         }),
       });
-      await res.json();
-    } catch {
-      // silencioso
+      const json = await res.json();
+
+      if (!res.ok || json.error) {
+        // Exibe erro sem fechar o modal para o usuário tentar novamente
+        setTratandoId(null);
+        alert(`Erro ao tratar alerta: ${json.error ?? "Tente novamente."}`);
+        return;
+      }
+
+      // Revalida alertas E frotas para atualizar o ícone de alerta em tempo real
+      await Promise.all([
+        mutateAlertas(),
+        swrMutate("frotas"),
+      ]);
+
+      setModalTratar(null);
+      setJustificativa("");
+    } catch (e) {
+      alert("Erro inesperado ao tratar alerta. Tente novamente.");
+    } finally {
+      setTratandoId(null);
     }
-    await mutateAlertas();
-    setTratandoId(null);
-    setModalTratar(null);
-    setJustificativa("");
   }
 
   if (loadingDespesas) {
