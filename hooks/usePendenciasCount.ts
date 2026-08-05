@@ -74,8 +74,9 @@ export function usePendenciasCount(): PendenciasCount {
       d.status_erp === "Rascunho" || d.status_aprovacao === "Reprovado";
 
     // Minhas Despesas: pendentes do usuário logado
+    // A interface Despesa usa tecnico_id como chave do usuário criador
     const minhasDespesas = currentUser?.id
-      ? despesas.filter((d) => d.usuario_id === currentUser.id && isPendente(d)).length
+      ? despesas.filter((d) => d.tecnico_id === currentUser.id && isPendente(d)).length
       : 0;
 
     // Todas as Despesas: pendentes visíveis no menu "Todas as Despesas"
@@ -83,7 +84,7 @@ export function usePendenciasCount(): PendenciasCount {
     const todasDespesas = isGestorOuAdmin
       ? despesas.filter(isPendente).length
       : despesas.filter(
-          (d) => isPendente(d) && (currentUser?.id ? d.usuario_id === currentUser.id : true),
+          (d) => isPendente(d) && (currentUser?.id ? d.tecnico_id === currentUser.id : true),
         ).length;
 
     return {
