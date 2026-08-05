@@ -1193,6 +1193,7 @@ export interface ControleKm {
   destino: string | null;
   motivo: string | null;
   observacao: string | null;
+  ocorrencia: string | null;
   status: "aberto" | "finalizado";
   created_at: string;
   updated_at: string;
@@ -1279,7 +1280,7 @@ export function useControleKm(userId?: string) {
     return { data: inserted, error: null };
   };
 
-  const finalizarKm = async (id: string, km_final: number, observacao?: string, frota_id?: string) => {
+  const finalizarKm = async (id: string, km_final: number, observacao?: string, frota_id?: string, ocorrencia?: string) => {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
@@ -1306,6 +1307,7 @@ export function useControleKm(userId?: string) {
         duracao_minutos,
         status: "finalizado",
         observacao: observacao || null,
+        ocorrencia: ocorrencia || null,
       })
       .eq("id", id);
 

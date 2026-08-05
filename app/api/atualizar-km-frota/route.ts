@@ -32,10 +32,30 @@ export async function POST(request: Request) {
       auth: { persistSession: false },
     });
 
+    // Busca a quilometragem atual para evitar regressão do hodômetro.
+    // Abastecimentos lançados retroativamente não devem reduzir o KM da frota.
+    const { data: frota, error: fetchError } = await supabase
+      .from("frotas")
+      .select("quilometragem")
+      .eq("id", frota_id)
+      .single();
+
+    if (fetchError) {
+      return NextResponse.json({ error: fetchError.message }, { status: 500 });
+    }
+
+    const kmAtual = Number(frota?.quilometragem ?? 0);
+    const kmNovo = Number(quilometragem);
+
+    // Só atualiza se o novo KM for maior que o atual (nunca regride o hodômetro)
+    if (kmNovo <= kmAtual) {
+      return NextResponse.json({ success: true, skipped: true });
+    }
+
     const { error } = await supabase
       .from("frotas")
       .update({
-        quilometragem: Number(quilometragem),
+        quilometragem: kmNovo,
         km_atualizado_em: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
