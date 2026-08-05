@@ -138,6 +138,102 @@ export function calcularConsumoFrota(opts: {
   };
 }
 
+export interface JanelaAutonomia {
+  dataInicio: string;  // ISO — data/hora do abastecimento anterior
+  dataFim: string;     // ISO — data/hora do abastecimento avaliado
+  litros: number;
+  kmApontado: number;
+  kmPorLitro: number;  // kmApontado / litros
+}
+
+export interface AutonomiaFrota {
+  frotaId: string;
+  mediaKmPorLitro: number;  // média das janelas com km > 0
+  totalJanelas: number;     // quantas janelas foram calculadas
+  janelasMedidas: number;   // janelas com km apontado > 0
+  janelas: JanelaAutonomia[];
+}
+
+/**
+ * Calcula a autonomia média real de uma frota com base nos intervalos
+ * entre abastecimentos consecutivos e nos apontamentos de KM.
+ *
+ * Para cada par (abastecimento N-1 → abastecimento N):
+ *   - kmApontado = soma de apontamentos finalizados dentro da janela
+ *   - kmPorLitro = kmApontado / litros do abastecimento N-1
+ *
+ * Retorna null se a frota não tiver pelo menos 2 abastecimentos.
+ */
+export function calcularAutonomiaMedia(
+  frotaId: string,
+  despesas: Despesa[],
+  apontamentos: ControleKm[],
+): AutonomiaFrota | null {
+  const abastecimentos = despesas
+    .filter(
+      (d) =>
+        d.frota_id === frotaId &&
+        typeof d.litros_abastecidos === "number" &&
+        d.litros_abastecidos > 0,
+    )
+    .sort(
+      (a, b) =>
+        new Date(a.data_despesa ?? a.created_at).getTime() -
+        new Date(b.data_despesa ?? b.created_at).getTime(),
+    );
+
+  if (abastecimentos.length < 2) return null;
+
+  const kmPorApontamento = (a: ControleKm): number => {
+    if (typeof a.km_percorrido === "number" && a.km_percorrido > 0) return a.km_percorrido;
+    if (typeof a.km_final === "number" && typeof a.km_inicial === "number") return a.km_final - a.km_inicial;
+    return 0;
+  };
+
+  const janelas: JanelaAutonomia[] = [];
+
+  for (let i = 0; i < abastecimentos.length - 1; i++) {
+    const anterior = abastecimentos[i];
+    const proximo  = abastecimentos[i + 1];
+    const litros   = anterior.litros_abastecidos as number;
+
+    const inicioMs = new Date(anterior.data_despesa ?? anterior.created_at).getTime();
+    const fimMs    = new Date(proximo.data_despesa  ?? proximo.created_at).getTime();
+
+    const kmApontado = apontamentos
+      .filter((a) => {
+        if (a.frota_id !== frotaId) return false;
+        if (a.status !== "finalizado") return false;
+        if (kmPorApontamento(a) <= 0) return false;
+        const dataApontMs = new Date(a.data_fim ?? a.data_inicio).getTime();
+        return dataApontMs >= inicioMs && dataApontMs <= fimMs;
+      })
+      .reduce((sum, a) => sum + kmPorApontamento(a), 0);
+
+    janelas.push({
+      dataInicio: anterior.data_despesa ?? anterior.created_at,
+      dataFim:    proximo.data_despesa  ?? proximo.created_at,
+      litros,
+      kmApontado,
+      kmPorLitro: litros > 0 && kmApontado > 0 ? kmApontado / litros : 0,
+    });
+  }
+
+  const janelasMedidas = janelas.filter((j) => j.kmPorLitro > 0);
+  const mediaKmPorLitro =
+    janelasMedidas.length > 0
+      ? janelasMedidas.reduce((sum, j) => sum + j.kmPorLitro, 0) / janelasMedidas.length
+      : 0;
+
+  return {
+    frotaId,
+    mediaKmPorLitro,
+    totalJanelas: janelas.length,
+    janelasMedidas: janelasMedidas.length,
+    janelas,
+  };
+}
+
 /** Verifica se a despesa é um abastecimento com dados suficientes */
 export function isAbastecimento(d: Despesa): boolean {
   return (
