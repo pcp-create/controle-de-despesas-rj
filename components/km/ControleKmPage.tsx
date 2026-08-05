@@ -81,11 +81,13 @@ export default function ControleKmPage() {
   const { currentUser } = useAppStore();
 
   // Controle de perfil
-  // Somente administrador e gestor podem ver viagens de todos os funcionários
+  // Administrador, gestor e financeiro podem ver viagens de todos os funcionários
   const isGestorOuAdmin = currentUser?.perfil === "administrador" || currentUser?.perfil === "gestor";
+  const isFinanceiro = currentUser?.perfil === "financeiro";
+  const podeVerTodos = isGestorOuAdmin || isFinanceiro;
 
   const { registros, isLoading, iniciarKm, finalizarKm, deleteControleKm } = useControleKm(
-    isGestorOuAdmin ? undefined : currentUser?.id
+    podeVerTodos ? undefined : currentUser?.id
   );
   const { frotas } = useFrotas();
   const { profiles } = useProfiles();
@@ -132,12 +134,13 @@ export default function ControleKmPage() {
 
   const frotasDisponiveis = frotas.filter((f) => f.ativo && !frotasComViagem.has(f.id));
 
-  // Lista filtrada — funcionario/financeiro só veem os próprios registros
+  // Lista filtrada — somente funcionário vê apenas os próprios registros
   const registrosFiltrados = useMemo(() => {
     let list = [...registros];
 
-    // Restrição por perfil — vê as próprias viagens + viagens do veículo padrão
-    if (!isGestorOuAdmin && currentUser?.id) {
+    // Restrição por perfil — funcionário vê as próprias viagens + viagens do veículo padrão
+    // Financeiro, gestor e administrador veem todos sem restrição
+    if (!podeVerTodos && currentUser?.id) {
       const frotaPadraoId = (currentUser as any)?.frota_padrao_id as string | null;
       list = list.filter(
         (r) =>
@@ -148,7 +151,7 @@ export default function ControleKmPage() {
 
     if (filtroStatus !== "todos") list = list.filter((r) => r.status === filtroStatus);
     if (filtroFrota) list = list.filter((r) => r.frota_id === filtroFrota);
-    if (isGestorOuAdmin && filtroFuncionario) {
+    if (podeVerTodos && filtroFuncionario) {
       list = list.filter((r) => r.usuario_id === filtroFuncionario);
     }
     if (search) {
@@ -166,7 +169,7 @@ export default function ControleKmPage() {
       });
     }
     return list;
-  }, [registros, filtroStatus, filtroFrota, filtroFuncionario, search, frotas, profiles, isGestorOuAdmin, currentUser]);
+  }, [registros, filtroStatus, filtroFrota, filtroFuncionario, search, frotas, profiles, podeVerTodos, currentUser]);
 
   // Stats — sempre baseadas na lista com todos os filtros ativos
   const totalKm = useMemo(
@@ -377,13 +380,13 @@ export default function ControleKmPage() {
         <div className="flex-1">
           <h1 className="text-xl font-bold text-foreground">Controle de KM</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {isGestorOuAdmin
+            {podeVerTodos
               ? "Acompanhe e gerencie o uso dos veículos da frota"
               : "Registre e acompanhe suas viagens"}
           </p>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          {isGestorOuAdmin && (
+          {podeVerTodos && (
             <button
               onClick={exportarCSV}
               className="flex items-center gap-2 px-3 py-2 border border-input bg-background text-sm font-medium rounded-lg hover:bg-muted transition"
@@ -608,7 +611,7 @@ export default function ControleKmPage() {
             </div>
           )}
         </div>
-        {isGestorOuAdmin && (
+        {podeVerTodos && (
           <div className="relative">
             <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
             <select
