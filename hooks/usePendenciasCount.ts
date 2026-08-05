@@ -78,18 +78,17 @@ export function usePendenciasCount(): PendenciasCount {
         ).length
       : 0;
 
-    // Todas as Despesas: rascunhos visíveis no menu "Todas as Despesas"
-    // Gestor/Admin → todos os rascunhos de todos os funcionários
-    // Demais perfis → apenas os próprios rascunhos
+    // Todas as Despesas: conta despesas com status_erp "Rascunho" (não enviadas e reprovadas).
+    // Gestor/Admin → todos os rascunhos de qualquer funcionário.
+    // Demais perfis → apenas os próprios rascunhos.
+    // OBS: não usa grupo/parcela deduplication — conta cada registro individualmente.
     const todasDespesas = isGestorOuAdmin
       ? despesas.filter((d) => d.status_erp === "Rascunho").length
-      : currentUser?.id
-        ? despesas.filter(
-            (d) =>
-              d.usuario_id === currentUser.id &&
-              d.status_erp === "Rascunho",
-          ).length
-        : 0;
+      : despesas.filter(
+          (d) =>
+            d.status_erp === "Rascunho" &&
+            (currentUser?.id ? d.usuario_id === currentUser.id : true),
+        ).length;
 
     return {
       aprovacao,
@@ -100,7 +99,7 @@ export function usePendenciasCount(): PendenciasCount {
       todasDespesas,
       total: aprovacao + financeiro + reembolso + consumo + minhasDespesas,
     };
-  }, [despesas, frotas, isGestorOuAdmin, isFinanceiroOuAdmin]);
+  }, [despesas, frotas, isGestorOuAdmin, isFinanceiroOuAdmin, currentUser?.id, perfil]);
 
   return counts;
 }
