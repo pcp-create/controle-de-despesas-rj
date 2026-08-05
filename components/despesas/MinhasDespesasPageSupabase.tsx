@@ -113,7 +113,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
   const handleEnviar = async (grupo: GrupoDespesa) => {
     let hasError = false;
     for (const parcela of grupo.parcelas) {
-      if (parcela.status_erp === "Rascunho") {
+      if (parcela.status_erp === "Rascunho" || parcela.status_aprovacao === "Reprovado") {
         const result = await enviarDespesa(parcela.id);
         if (!result.ok) {
           setFeedback({ type: "error", msg: result.msg });
@@ -282,7 +282,7 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                     showLancamentos={false}
                     acoes={
                       <>
-                        {d.status_erp === "Rascunho" && (
+                        {(d.status_erp === "Rascunho" || d.status_aprovacao === "Reprovado") && (
                           <>
                             {/* Aviso de reprovação — exibido quando há motivo salvo */}
                             {d.justificativa_reprovacao && (

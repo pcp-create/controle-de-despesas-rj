@@ -68,26 +68,22 @@ export function usePendenciasCount(): PendenciasCount {
       ? frotas.filter((f) => f.alerta_ativo === true).length
       : 0;
 
-    // Minhas Despesas: despesas do usuário logado com status "Não enviada" ou "Reprovada"
-    // Ambos os casos: status_erp === "Rascunho"
+    // Predicado: despesa pendente de ação do colaborador
+    // = Rascunho não enviado OU Reprovada aguardando correção
+    const isPendente = (d: (typeof despesas)[0]) =>
+      d.status_erp === "Rascunho" || d.status_aprovacao === "Reprovado";
+
+    // Minhas Despesas: pendentes do usuário logado
     const minhasDespesas = currentUser?.id
-      ? despesas.filter(
-          (d) =>
-            d.usuario_id === currentUser.id &&
-            d.status_erp === "Rascunho",
-        ).length
+      ? despesas.filter((d) => d.usuario_id === currentUser.id && isPendente(d)).length
       : 0;
 
-    // Todas as Despesas: conta despesas com status_erp "Rascunho" (não enviadas e reprovadas).
-    // Gestor/Admin → todos os rascunhos de qualquer funcionário.
-    // Demais perfis → apenas os próprios rascunhos.
-    // OBS: não usa grupo/parcela deduplication — conta cada registro individualmente.
+    // Todas as Despesas: pendentes visíveis no menu "Todas as Despesas"
+    // Gestor/Admin → todos; demais → apenas os próprios
     const todasDespesas = isGestorOuAdmin
-      ? despesas.filter((d) => d.status_erp === "Rascunho").length
+      ? despesas.filter(isPendente).length
       : despesas.filter(
-          (d) =>
-            d.status_erp === "Rascunho" &&
-            (currentUser?.id ? d.usuario_id === currentUser.id : true),
+          (d) => isPendente(d) && (currentUser?.id ? d.usuario_id === currentUser.id : true),
         ).length;
 
     return {

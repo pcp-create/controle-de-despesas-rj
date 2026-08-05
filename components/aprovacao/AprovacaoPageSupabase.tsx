@@ -195,11 +195,11 @@ export default function AprovacaoPageSupabase() {
       const { error } = await supabase
         .from("despesas")
         .update({
-          // Retorna ao criador igual à revogação, mas preserva o motivo da reprovação
-          status_aprovacao: "AguardandoGestor",
+          // Retorna ao criador para correção mantendo status "Reprovado" visível
+          status_aprovacao: "Reprovado",
           status_erp: "Rascunho",
-          gestor_aprovador_id: null,
-          data_aprovacao: null,
+          gestor_aprovador_id: currentUser?.id ?? null,
+          data_aprovacao: new Date().toISOString(),
           justificativa_reprovacao: justificativa,
         })
         .eq("id", parcela.id);
