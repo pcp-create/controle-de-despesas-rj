@@ -195,11 +195,12 @@ export default function AprovacaoPageSupabase() {
       const { error } = await supabase
         .from("despesas")
         .update({
-          status_aprovacao: "Reprovado",
-          status_erp: "ErroAtualizarERP",
-          gestor_aprovador_id: currentUser?.id,
+          // Retorna ao criador igual à revogação, mas preserva o motivo da reprovação
+          status_aprovacao: "AguardandoGestor",
+          status_erp: "Rascunho",
+          gestor_aprovador_id: null,
+          data_aprovacao: null,
           justificativa_reprovacao: justificativa,
-          data_aprovacao: new Date().toISOString(),
         })
         .eq("id", parcela.id);
 
@@ -212,11 +213,13 @@ export default function AprovacaoPageSupabase() {
       entidadeId: grupo.chave,
       usuarioId: currentUser?.id || "sistema",
       detalhes: grupo.parcelado
-        ? `Grupo de ${grupo.numeroParcelas} parcelas reprovado: ${justificativa}`
-        : `Despesa reprovada: ${justificativa}`,
+        ? `Grupo de ${grupo.numeroParcelas} parcelas reprovado e retornado ao criador: ${justificativa}`
+        : `Despesa reprovada e retornada ao criador: ${justificativa}`,
     });
 
-    const msg = grupo.parcelado ? `${grupo.numeroParcelas} parcelas reprovadas` : "Despesa reprovada";
+    const msg = grupo.parcelado
+      ? `${grupo.numeroParcelas} parcelas reprovadas e retornadas ao solicitante`
+      : "Despesa reprovada e retornada ao solicitante";
     setFeedback({ type: "success", msg });
     setReprovandoChave(null);
     setJustificativa("");

@@ -284,6 +284,13 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                       <>
                         {d.status_erp === "Rascunho" && (
                           <>
+                            {/* Aviso de reprovação — exibido quando há motivo salvo */}
+                            {d.justificativa_reprovacao && (
+                              <div className="w-full mb-1 px-3 py-2.5 rounded-lg bg-destructive/10 border border-destructive/30 text-sm text-destructive flex flex-col gap-0.5">
+                                <span className="font-semibold">Despesa reprovada — corrija antes de reenviar</span>
+                                <span className="text-destructive/80">Motivo: {d.justificativa_reprovacao}</span>
+                              </div>
+                            )}
                             <button
                               onClick={() => onEditar(d)}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition"
