@@ -153,7 +153,7 @@ export default function AppShellSupabase() {
       </div>
 
       {/* Bottom nav mobile */}
-      <BottomNav currentPage={page} onNavigate={navigate} />
+      <BottomNav currentPage={page} onNavigate={navigate} pendencias={pendencias} />
 
       {/* Floating Nova Despesa button mobile */}
       {currentUser?.perfil === "funcionario" && page !== "nova-despesa" && (
