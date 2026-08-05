@@ -694,6 +694,8 @@ export function useDespesas(userId?: string, perfil?: string) {
       erp_resposta: erpResposta,
       data_envio: now,
       updated_at: now,
+      // Limpa o motivo de reprovação ao reenviar — o aviso não deve aparecer novamente
+      justificativa_reprovacao: null,
     };
 
     if (aprovacaoAutomatica) {

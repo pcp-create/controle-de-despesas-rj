@@ -5,10 +5,12 @@ import { useDespesas, useControleKm, useFrotas } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 
 export interface PendenciasCount {
-  aprovacao: number;   // grupos aguardando aprovação do gestor
-  financeiro: number;  // despesas aprovadas pendentes de lançamento ERP
-  reembolso: number;   // despesas em dinheiro aguardando reembolso
-  consumo: number;     // abastecimentos com apontamentos de KM insuficientes
+  aprovacao: number;       // grupos aguardando aprovação do gestor
+  financeiro: number;      // despesas aprovadas pendentes de lançamento ERP
+  reembolso: number;       // despesas em dinheiro aguardando reembolso
+  consumo: number;         // abastecimentos com apontamentos de KM insuficientes
+  minhasDespesas: number;  // despesas do usuário logado não enviadas ou reprovadas
+  todasDespesas: number;   // rascunhos (não enviadas + reprovadas) visíveis no menu Todas as Despesas
   total: number;
 }
 
@@ -66,8 +68,34 @@ export function usePendenciasCount(): PendenciasCount {
       ? frotas.filter((f) => f.alerta_ativo === true).length
       : 0;
 
-    return { aprovacao, financeiro, reembolso, consumo, total: aprovacao + financeiro + reembolso + consumo };
-  }, [despesas, frotas, isGestorOuAdmin, isFinanceiroOuAdmin]);
+    // Predicado: despesa pendente de ação do colaborador
+    // = Rascunho não enviado OU Reprovada aguardando correção
+    const isPendente = (d: (typeof despesas)[0]) =>
+      d.status_erp === "Rascunho" || d.status_aprovacao === "Reprovado";
+
+    // Minhas Despesas: pendentes do usuário logado
+    const minhasDespesas = currentUser?.id
+      ? despesas.filter((d) => d.usuario_id === currentUser.id && isPendente(d)).length
+      : 0;
+
+    // Todas as Despesas: pendentes visíveis no menu "Todas as Despesas"
+    // Gestor/Admin → todos; demais → apenas os próprios
+    const todasDespesas = isGestorOuAdmin
+      ? despesas.filter(isPendente).length
+      : despesas.filter(
+          (d) => isPendente(d) && (currentUser?.id ? d.usuario_id === currentUser.id : true),
+        ).length;
+
+    return {
+      aprovacao,
+      financeiro,
+      reembolso,
+      consumo,
+      minhasDespesas,
+      todasDespesas,
+      total: aprovacao + financeiro + reembolso + consumo + minhasDespesas,
+    };
+  }, [despesas, frotas, isGestorOuAdmin, isFinanceiroOuAdmin, currentUser?.id, perfil]);
 
   return counts;
 }
