@@ -40,6 +40,7 @@ interface UsuarioForm {
   telefone: string;
   gestor_id: string | null;
   frota_padrao_id: string | null;
+  chave_pix: string;
   senha?: string;
   pessoaId?: string;
 }
@@ -53,6 +54,7 @@ const initialForm: UsuarioForm = {
   telefone: "",
   gestor_id: null,
   frota_padrao_id: null,
+  chave_pix: "",
   senha: "",
   pessoaId: "",
 };
@@ -145,6 +147,7 @@ export default function UsuariosPageSupabase() {
         telefone: user.telefone || "",
         gestor_id: user.gestor_id || null,
         frota_padrao_id: user.frota_padrao_id || null,
+        chave_pix: user.chave_pix || "",
         senha: "",
         pessoaId: user.pessoa_id ? String(user.pessoa_id) : "",
       });
@@ -193,6 +196,7 @@ export default function UsuariosPageSupabase() {
             telefone: form.telefone || null,
             gestor_id: form.gestor_id || null,
             frota_padrao_id: form.frota_padrao_id || null,
+            chave_pix: form.chave_pix.trim() || null,
             pessoa_id: form.pessoaId ? Number(form.pessoaId) : null,
           })
           .eq("id", editingUser.id);
@@ -883,6 +887,24 @@ export default function UsuariosPageSupabase() {
                     </select>
                     <p className="text-xs text-muted-foreground">
                       Quando definido, o veículo será pré-selecionado no Controle de KM.
+                    </p>
+                  </div>
+
+                  {/* Chave PIX */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                      <Key className="w-4 h-4 text-muted-foreground" />
+                      Chave PIX
+                    </label>
+                    <input
+                      type="text"
+                      value={form.chave_pix}
+                      onChange={(e) => setForm({ ...form, chave_pix: e.target.value })}
+                      placeholder="CPF, e-mail, telefone ou chave aleatória"
+                      className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Utilizada no relatório de reembolsos para facilitar o pagamento. Campo opcional.
                     </p>
                   </div>
                 </>

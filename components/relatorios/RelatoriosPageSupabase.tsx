@@ -775,10 +775,13 @@ export default function RelatoriosPageSupabase() {
 
       grupos.forEach((grupo) => {
         const subtotal = grupo.despesas.reduce((s, d) => s + Number(d.valor), 0);
+        const tecProfile = profiles.find((p) => p.id === grupo.despesas[0]?.tecnico_id);
+        const chavePix = tecProfile?.chave_pix?.trim() || "Não cadastrada";
+        const nomeComPix = `${grupo.nome}  —  Chave PIX: ${chavePix}`;
         checkY(10);
         pdf.setFillColor(...LIGHT); pdf.rect(ML, y, CW, 8, "F");
         pdf.setFontSize(9); pdf.setFont("helvetica", "bold"); pdf.setTextColor(...NAVY);
-        t(grupo.nome, ML + 4, y + 5.5);
+        t(nomeComPix, ML + 4, y + 5.5);
         pdf.setFontSize(8.5);
         t(`${formatCurrency(subtotal)}  •  ${grupo.despesas.length} item${grupo.despesas.length !== 1 ? "ns" : ""}`, ML + CW, y + 5.5, { align: "right" });
         y += 8;
