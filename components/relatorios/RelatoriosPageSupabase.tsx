@@ -165,11 +165,29 @@ export default function RelatoriosPageSupabase() {
     salvarRel({ modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroFuncionario, filtroTipo });
   }, [modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroFuncionario, filtroTipo]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Campo de referência do período: data_despesa ou data_vencimento ──
+  const [campoPeriodo, setCampoPeriodo] = useState<"data_despesa" | "data_vencimento">("data_despesa");
+
   // ── Tabela de despesas colapsável ──
   const [tabelaAberta, setTabelaAberta] = useState(false);
 
   // ── Exportação PDF ──
   const [exportando, setExportando] = useState(false);
+  const [exportandoReembolso, setExportandoReembolso] = useState(false);
+  const [pdfMenuAberto, setPdfMenuAberto] = useState(false);
+  const pdfMenuRef = useRef<HTMLDivElement>(null);
+
+  // Fecha o menu PDF ao clicar fora
+  useEffect(() => {
+    if (!pdfMenuAberto) return;
+    const handler = (e: MouseEvent) => {
+      if (pdfMenuRef.current && !pdfMenuRef.current.contains(e.target as Node)) {
+        setPdfMenuAberto(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [pdfMenuAberto]);
 
   const periodoLabel = modoFiltro === "mes"
     ? `${MESES_FULL[mesSelecionado]} ${anoSelecionado}`
@@ -655,6 +673,175 @@ export default function RelatoriosPageSupabase() {
     }
   };
 
+  // ── Exportação de Reembolsos ──
+  // Sempre usa data_vencimento como referência, filtra só pagamento_tipo === "dinheiro"
+  const handleExportarReembolsos = async () => {
+    setExportandoReembolso(true);
+    setPdfMenuAberto(false);
+    try {
+      const { default: jsPDF } = await import("jspdf");
+
+      // Filtra: dinheiro + período (data_vencimento) + demais filtros ativos
+      const despesasReembolso = despesas.filter((d) => {
+        if (d.status_erp === "Rascunho" && d.status_aprovacao === "AguardandoGestor" && !d.data_envio) return false;
+        if (d.pagamento_tipo !== "dinheiro") return false;
+        const dataStr = (d.data_vencimento || d.data_despesa || d.created_at || "").slice(0, 10);
+        if (modoFiltro === "mes") {
+          const dt = new Date(dataStr + "T00:00:00");
+          if (dt.getMonth() !== mesSelecionado || dt.getFullYear() !== anoSelecionado) return false;
+        } else {
+          if (dataInicial && dataStr < dataInicial) return false;
+          if (dataFinal && dataStr > dataFinal) return false;
+        }
+        if (filtroFuncionario && d.tecnico_id !== filtroFuncionario) return false;
+        if (filtroTipo && d.tipo_despesa_id !== filtroTipo) return false;
+        return true;
+      });
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const PW = 210, PH = 297, ML = 12, MR = 12, BOT = 14;
+      const CW = PW - ML - MR;
+      const NAVY:  [number,number,number] = [22, 45, 95];
+      const AZURE: [number,number,number] = [44, 105, 210];
+      const GREEN: [number,number,number] = [22, 163, 74];
+      const LIGHT: [number,number,number] = [230, 238, 252];
+
+      let y = ML;
+      let pageNum = 1;
+
+      const newPage = () => {
+        pdf.addPage();
+        pageNum++;
+        y = ML;
+      };
+      const checkY = (n: number) => { if (y + n > PH - BOT) newPage(); };
+      const t = (s: string, x: number, yy: number, opts?: Parameters<typeof pdf.text>[3]) => pdf.text(s, x, yy, opts);
+
+      // Cabeçalho
+      pdf.setFillColor(...NAVY);
+      pdf.rect(0, 0, PW, 22, "F");
+      pdf.setFontSize(14); pdf.setFont("helvetica", "bold"); pdf.setTextColor(255, 255, 255);
+      t("Relatório de Reembolsos", ML, 13);
+      pdf.setFontSize(8); pdf.setFont("helvetica", "normal"); pdf.setTextColor(180, 200, 240);
+      t(`Período (vencimento): ${periodoLabel}  •  Gerado em ${new Date().toLocaleDateString("pt-BR")}`, ML, 19);
+      y = 30;
+
+      // Resumo
+      const totalReembolso = despesasReembolso.reduce((s, d) => s + Number(d.valor), 0);
+      pdf.setFillColor(...LIGHT);
+      pdf.roundedRect(ML, y, CW, 14, 2, 2, "F");
+      pdf.setFontSize(9); pdf.setFont("helvetica", "bold"); pdf.setTextColor(...NAVY);
+      t(`${despesasReembolso.length} reembolso${despesasReembolso.length !== 1 ? "s" : ""} a pagar`, ML + 4, y + 5.5);
+      pdf.setFontSize(12); pdf.setFont("helvetica", "bold"); pdf.setTextColor(...GREEN);
+      t(formatCurrency(totalReembolso), ML + CW, y + 9, { align: "right" });
+      y += 20;
+
+      // Agrupado por funcionário
+      const grupos: { nome: string; despesas: typeof despesasReembolso }[] = [];
+      const seen = new Map<string, number>();
+      despesasReembolso.forEach((d) => {
+        const key = d.tecnico_id ?? "__sem__";
+        if (!seen.has(key)) {
+          const tec = profiles.find((p) => p.id === d.tecnico_id);
+          seen.set(key, grupos.length);
+          grupos.push({ nome: tec?.nome ?? "Sem funcionário", despesas: [] });
+        }
+        grupos[seen.get(key)!].despesas.push(d);
+      });
+      grupos.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
+      const cols = [
+        { label: "Vencimento", w: CW * 0.14 },
+        { label: "Data Desp.", w: CW * 0.14 },
+        { label: "Tipo",       w: CW * 0.18 },
+        { label: "Cliente",    w: CW * 0.22 },
+        { label: "OS",         w: CW * 0.10 },
+        { label: "Observação", w: CW * 0.12 },
+        { label: "Valor",      w: CW * 0.10, align: "right" as const },
+      ];
+
+      const tblHdr = () => {
+        checkY(8);
+        pdf.setFillColor(...LIGHT); pdf.rect(ML, y, CW, 6.5, "F");
+        pdf.setFontSize(7.5); pdf.setFont("helvetica", "bold"); pdf.setTextColor(...NAVY);
+        let cx = ML;
+        cols.forEach((c) => {
+          const xPos = c.align === "right" ? cx + c.w : cx + 2;
+          t(c.label.toUpperCase(), xPos, y + 4.5, { align: c.align ?? "left" });
+          cx += c.w;
+        });
+        pdf.setTextColor(0, 0, 0); y += 6.5;
+      };
+
+      grupos.forEach((grupo) => {
+        const subtotal = grupo.despesas.reduce((s, d) => s + Number(d.valor), 0);
+        const tecProfile = profiles.find((p) => p.id === grupo.despesas[0]?.tecnico_id);
+        const chavePix = tecProfile?.chave_pix?.trim() || "Não cadastrada";
+        const nomeComPix = `${grupo.nome}  —  Chave PIX: ${chavePix}`;
+        checkY(10);
+        pdf.setFillColor(...LIGHT); pdf.rect(ML, y, CW, 8, "F");
+        pdf.setFontSize(9); pdf.setFont("helvetica", "bold"); pdf.setTextColor(...NAVY);
+        t(nomeComPix, ML + 4, y + 5.5);
+        pdf.setFontSize(8.5);
+        t(`${formatCurrency(subtotal)}  •  ${grupo.despesas.length} item${grupo.despesas.length !== 1 ? "ns" : ""}`, ML + CW, y + 5.5, { align: "right" });
+        y += 8;
+        tblHdr();
+
+        grupo.despesas
+          .slice()
+          .sort((a, b) => (a.data_vencimento ?? a.data_despesa).localeCompare(b.data_vencimento ?? b.data_despesa))
+          .forEach((d, i) => {
+            checkY(6.5);
+            if (i % 2 !== 0) { pdf.setFillColor(245, 247, 252); pdf.rect(ML, y, CW, 6, "F"); }
+            pdf.setFontSize(8.5); pdf.setFont("helvetica", "normal"); pdf.setTextColor(17, 24, 39);
+            const tipo = tiposDespesa.find((tp) => tp.id === d.tipo_despesa_id);
+            let cx = ML;
+            const vals = [
+              { val: d.data_vencimento ? formatDate(d.data_vencimento) : "—", w: cols[0].w },
+              { val: formatDate(d.data_despesa),    w: cols[1].w },
+              { val: tipo?.nome ?? "—",             w: cols[2].w },
+              { val: d.cliente,                     w: cols[3].w },
+              { val: d.numero_os ?? "—",            w: cols[4].w },
+              { val: d.observacao ?? "—",           w: cols[5].w },
+              { val: formatCurrency(Number(d.valor)), w: cols[6].w, align: "right" as const, bold: true },
+            ];
+            vals.forEach((v) => {
+              pdf.setFont("helvetica", v.bold ? "bold" : "normal");
+              const xPos = v.align === "right" ? cx + v.w : cx + 2;
+              const maxW = v.w - 4;
+              const lines = pdf.splitTextToSize(v.val, maxW) as string[];
+              t(lines[0], xPos, y + 4.2, { align: v.align ?? "left" });
+              cx += v.w;
+            });
+            pdf.setDrawColor(220, 226, 240); pdf.setLineWidth(0.1); pdf.line(ML, y + 6, ML + CW, y + 6);
+            y += 6;
+          });
+        y += 5;
+      });
+
+      // Total geral
+      checkY(10);
+      pdf.setFillColor(...NAVY); pdf.roundedRect(ML, y, CW, 9, 1, 1, "F");
+      pdf.setFontSize(9.5); pdf.setFont("helvetica", "bold"); pdf.setTextColor(255, 255, 255);
+      t(`Total Reembolsos  •  ${despesasReembolso.length} registro${despesasReembolso.length !== 1 ? "s" : ""}`, ML + 3, y + 6);
+      t(formatCurrency(totalReembolso), ML + CW, y + 6, { align: "right" });
+
+      // Rodapé
+      const totalPgs = (pdf as any).internal.getNumberOfPages();
+      for (let pg = 1; pg <= totalPgs; pg++) {
+        pdf.setPage(pg);
+        pdf.setFontSize(7.5); pdf.setFont("helvetica", "normal"); pdf.setTextColor(160, 174, 200);
+        pdf.text(`Pagina ${pg} de ${totalPgs}`, PW / 2, PH - 5, { align: "center" });
+      }
+
+      pdf.save(`reembolsos-${periodoLabel.replace(/[\s/]/g, "-").toLowerCase()}.pdf`);
+    } catch (err) {
+      console.error("[v0] Erro ao exportar reembolsos:", err);
+    } finally {
+      setExportandoReembolso(false);
+    }
+  };
+
       const checkY = (needed: number) => {
         if (y + needed > PH - BOTTOM_MARGIN) newPage();
       };
@@ -730,12 +917,18 @@ export default function RelatoriosPageSupabase() {
 
   const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
 
+  // Helper: extrai a data de referência conforme campoPeriodo
+  const getDataRef = (d: typeof despesas[0]): string =>
+    campoPeriodo === "data_vencimento"
+      ? (d.data_vencimento || d.data_despesa || d.created_at || "").slice(0, 10)
+      : (d.data_despesa || d.created_at || "").slice(0, 10);
+
   // Todas as despesas enviadas do período (exclui apenas rascunhos) — base para gráficos e tabela
   const despesasAno = useMemo(() => {
     return despesas.filter((d) => {
       // Exclui rascunhos nunca enviados
       if (d.status_erp === "Rascunho" && d.status_aprovacao === "AguardandoGestor" && !d.data_envio) return false;
-      const dataStr = (d.data_despesa || d.created_at || "").slice(0, 10);
+      const dataStr = getDataRef(d);
       if (modoFiltro === "mes") {
         const dt = new Date(dataStr + "T00:00:00");
         return dt.getMonth() === mesSelecionado && dt.getFullYear() === anoSelecionado;
@@ -745,7 +938,7 @@ export default function RelatoriosPageSupabase() {
         return true;
       }
     });
-  }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
+  }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, campoPeriodo]);
 
   // Despesas com filtros cruzados (todas enviadas) — usadas nos gráficos e cards
   const despesasCruzadas = useMemo(() => {
@@ -761,7 +954,7 @@ export default function RelatoriosPageSupabase() {
     return despesas.filter((d) => {
       // Exclui apenas rascunhos (nunca enviados)
       if (d.status_erp === "Rascunho" && d.status_aprovacao === "AguardandoGestor" && !d.data_envio) return false;
-      const dataStr = (d.data_despesa || d.created_at || "").slice(0, 10);
+      const dataStr = getDataRef(d);
       if (modoFiltro === "mes") {
         const dt = new Date(dataStr + "T00:00:00");
         if (dt.getMonth() !== mesSelecionado || dt.getFullYear() !== anoSelecionado) return false;
@@ -773,7 +966,7 @@ export default function RelatoriosPageSupabase() {
       if (filtroTipo && d.tipo_despesa_id !== filtroTipo) return false;
       return true;
     });
-  }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroFuncionario, filtroTipo]);
+  }, [despesas, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroFuncionario, filtroTipo, campoPeriodo]);
 
   const totalAno = despesasCruzadas.reduce((s, d) => s + Number(d.valor), 0);
   const totalLancamentos = despesasCruzadas.length;
@@ -792,12 +985,15 @@ export default function RelatoriosPageSupabase() {
       mes: m,
       valor: base
         .filter((d) => {
-          const dt = new Date((d.data_despesa || d.created_at || "").slice(0, 10) + "T12:00:00");
+          const dataStr = campoPeriodo === "data_vencimento"
+            ? (d.data_vencimento || d.data_despesa || d.created_at || "").slice(0, 10)
+            : (d.data_despesa || d.created_at || "").slice(0, 10);
+          const dt = new Date(dataStr + "T12:00:00");
           return dt.getMonth() === i && dt.getFullYear() === anoSelecionado;
         })
         .reduce((s, d) => s + Number(d.valor), 0),
     }));
-  }, [despesas, anoSelecionado, filtroFuncionario, filtroTipo]);
+  }, [despesas, anoSelecionado, filtroFuncionario, filtroTipo, campoPeriodo]);
 
   // Por tipo — filtrado pelo funcionário selecionado
   const byTipo = useMemo(() => {
@@ -1032,7 +1228,22 @@ export default function RelatoriosPageSupabase() {
         </div>
 
         <div className="flex flex-col gap-2 sm:items-end">
-          <div className="flex items-center gap-2 sm:self-end">
+          <div className="flex items-center gap-2 sm:self-end flex-wrap justify-end">
+            {/* Seletor: Período baseado em */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-border rounded-lg text-xs text-muted-foreground">
+              <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+              <span className="font-medium text-foreground/70 hidden sm:inline">Baseado em</span>
+              <select
+                value={campoPeriodo}
+                onChange={(e) => setCampoPeriodo(e.target.value as "data_despesa" | "data_vencimento")}
+                className="bg-transparent text-xs font-medium text-foreground focus:outline-none cursor-pointer"
+              >
+                <option value="data_despesa">Data da Despesa</option>
+                <option value="data_vencimento">Data de Vencimento</option>
+              </select>
+            </div>
+
+            {/* Seletor: Por Mês / Período */}
             <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
               <button
                 onClick={() => setModoFiltro("mes")}
@@ -1047,23 +1258,58 @@ export default function RelatoriosPageSupabase() {
                 Período
               </button>
             </div>
-            <button
-              onClick={handleExportarPDF}
-              disabled={exportando}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input bg-white text-xs hover:bg-muted transition disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {exportando ? (
-                <>
-                  <div className="w-3.5 h-3.5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-                  Gerando...
-                </>
-              ) : (
-                <>
-                  <Download className="w-3.5 h-3.5" />
-                  Exportar PDF
-                </>
+
+            {/* Dropdown Exportar PDF */}
+            <div className="relative" ref={pdfMenuRef}>
+              <button
+                onClick={() => setPdfMenuAberto((v) => !v)}
+                disabled={exportando || exportandoReembolso}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input bg-white text-xs hover:bg-muted transition disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {(exportando || exportandoReembolso) ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                    Gerando...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" />
+                    Exportar PDF
+                    <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                  </>
+                )}
+              </button>
+
+              {pdfMenuAberto && (
+                <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-border rounded-xl shadow-lg z-30 overflow-hidden">
+                  <button
+                    onClick={() => { setPdfMenuAberto(false); handleExportarPDF(); }}
+                    className="w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-muted transition"
+                  >
+                    <FileText className="w-4 h-4 text-accent mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">Exportação Completa</p>
+                      <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+                        Todas as despesas pelo {campoPeriodo === "data_despesa" ? "data da despesa" : "data de vencimento"}
+                      </p>
+                    </div>
+                  </button>
+                  <div className="border-t border-border" />
+                  <button
+                    onClick={handleExportarReembolsos}
+                    className="w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-muted transition"
+                  >
+                    <DollarSign className="w-4 h-4 text-success mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">Exportação de Reembolsos</p>
+                      <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+                        Somente pagamentos em dinheiro · sempre por vencimento
+                      </p>
+                    </div>
+                  </button>
+                </div>
               )}
-            </button>
+            </div>
           </div>
 
           {modoFiltro === "mes" ? (

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { mutate as swrMutate } from "swr";
-import { useFrotas, type Frota } from "@/lib/supabase/hooks";
+import { useFrotas, useDespesas, useControleKm, type Frota } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
+import { calcularAutonomiaMedia, type AutonomiaFrota } from "@/lib/consumo-frota";
 import {
   Car,
   Plus,
@@ -19,6 +20,7 @@ import {
   ToggleRight,
   Clock,
   ShieldCheck,
+  Gauge,
 } from "lucide-react";
 
 const TIPOS_VEICULO = ["Carro", "Moto", "Caminhão", "Van", "Pickup", "Utilitário", "Outro"];
@@ -39,6 +41,18 @@ const EMPTY_FORM = {
 export default function FrotasPageSupabase() {
   const { frotas, isLoading, addFrota, updateFrota, deleteFrota } = useFrotas();
   const currentUser = useAppStore((s) => s.currentUser);
+  const { despesas } = useDespesas();
+  const { registros: apontamentosKm } = useControleKm();
+
+  // Autonomia real calculada por frota a partir dos históricos reais
+  const autonomiaPorFrota = useMemo(() => {
+    const mapa = new Map<string, AutonomiaFrota>();
+    for (const frota of frotas) {
+      const resultado = calcularAutonomiaMedia(frota.id, despesas, apontamentosKm);
+      if (resultado) mapa.set(frota.id, resultado);
+    }
+    return mapa;
+  }, [frotas, despesas, apontamentosKm]);
 
   const [search, setSearch] = useState("");
   const [showAtivos, setShowAtivos] = useState(true);
@@ -410,6 +424,51 @@ export default function FrotasPageSupabase() {
                   </span>
                 </div>
               )}
+
+              {/* Autonomia do Veículo */}
+              {(() => {
+                const autonomia = autonomiaPorFrota.get(frota.id);
+                const mediaReal = autonomia?.mediaKmPorLitro ?? 0;
+                const mediaCadastrada = frota.km_media_litro ?? 0;
+                const diff = mediaCadastrada > 0 ? ((mediaReal - mediaCadastrada) / mediaCadastrada) * 100 : null;
+                const abaixo = diff !== null && diff < -10;
+                const acima  = diff !== null && diff > 10;
+
+                if (!autonomia) {
+                  return (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+                      <Gauge className="w-3.5 h-3.5 shrink-0" />
+                      <span>Autonomia — dados insuficientes (mín. 2 abastecimentos)</span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className={`flex flex-col gap-1.5 rounded-lg px-3 py-2.5 text-xs border ${
+                    abaixo ? "bg-destructive/5 border-destructive/20" :
+                    acima  ? "bg-success/5 border-success/20" :
+                             "bg-muted/40 border-border"
+                  }`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 font-medium text-foreground">
+                        <Gauge className="w-3.5 h-3.5" />
+                        Autonomia real média
+                      </span>
+                      <span className={`font-bold text-sm ${abaixo ? "text-destructive" : acima ? "text-success" : "text-foreground"}`}>
+                        {mediaReal.toFixed(1)} km/l
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>Baseado em {autonomia.janelasMedidas} de {autonomia.totalJanelas} intervalo{autonomia.totalJanelas !== 1 ? "s" : ""}</span>
+                      {mediaCadastrada > 0 && diff !== null && (
+                        <span className={`font-medium ${abaixo ? "text-destructive" : acima ? "text-success" : "text-muted-foreground"}`}>
+                          {diff > 0 ? "+" : ""}{diff.toFixed(0)}% vs. meta ({mediaCadastrada} km/l)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {frota.observacao && (
                 <p className="text-xs text-muted-foreground border-t border-border pt-2">{frota.observacao}</p>

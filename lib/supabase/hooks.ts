@@ -150,6 +150,7 @@ export interface Profile {
   operacao_financeira_id: number | null;
   moeda_id: number | null;
   centro_custo_id: number | null;
+  chave_pix: string | null;
   created_at: string;
   updated_at: string;
 }
