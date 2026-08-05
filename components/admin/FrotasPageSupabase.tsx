@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { mutate as swrMutate } from "swr";
 import { useFrotas, type Frota } from "@/lib/supabase/hooks";
+import { useAppStore } from "@/lib/store";
 import {
   Car,
   Plus,
@@ -16,6 +18,7 @@ import {
   ToggleLeft,
   ToggleRight,
   Clock,
+  ShieldCheck,
 } from "lucide-react";
 
 const TIPOS_VEICULO = ["Carro", "Moto", "Caminhão", "Van", "Pickup", "Utilitário", "Outro"];
@@ -35,6 +38,7 @@ const EMPTY_FORM = {
 
 export default function FrotasPageSupabase() {
   const { frotas, isLoading, addFrota, updateFrota, deleteFrota } = useFrotas();
+  const currentUser = useAppStore((s) => s.currentUser);
 
   const [search, setSearch] = useState("");
   const [showAtivos, setShowAtivos] = useState(true);
@@ -46,6 +50,53 @@ export default function FrotasPageSupabase() {
   const [loading, setLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [migrationSqlKm, setMigrationSqlKm] = useState<string | null>(null);
+
+  // Modal de tratamento de alerta de consumo
+  const [modalTratarFrota, setModalTratarFrota] = useState<Frota | null>(null);
+  const [justificativaAlerta, setJustificativaAlerta] = useState("");
+  const [tratandoAlerta, setTratandoAlerta] = useState(false);
+
+  async function handleTratarAlerta() {
+    if (!modalTratarFrota || !justificativaAlerta.trim()) return;
+    setTratandoAlerta(true);
+    try {
+      // Busca o alerta ativo mais recente desta frota
+      const res = await fetch(`/api/alertas-consumo?frota_id=${modalTratarFrota.id}&apenas_ativos=true`);
+      const dados = await res.json();
+      const alertas: { id: string }[] = dados?.data ?? [];
+
+      if (alertas.length === 0) {
+        setModalTratarFrota(null);
+        setJustificativaAlerta("");
+        return;
+      }
+
+      // Trata todos os alertas ativos desta frota
+      await Promise.all(
+        alertas.map((a) =>
+          fetch("/api/alertas-consumo", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: a.id,
+              resolvido_por: currentUser?.id ?? null,
+              justificativa: justificativaAlerta.trim(),
+            }),
+          }),
+        ),
+      );
+
+      await swrMutate("frotas");
+      setModalTratarFrota(null);
+      setJustificativaAlerta("");
+      setFeedback({ type: "success", msg: "Alerta tratado com sucesso." });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch {
+      setFeedback({ type: "error", msg: "Erro ao tratar alerta. Tente novamente." });
+    } finally {
+      setTratandoAlerta(false);
+    }
+  }
 
   // Verifica se as colunas de métricas KM existem no banco
   useEffect(() => {
@@ -365,7 +416,16 @@ export default function FrotasPageSupabase() {
               )}
 
               {/* Actions */}
-              <div className="flex items-center gap-2 border-t border-border pt-2">
+              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
+                {frota.alerta_ativo && (
+                  <button
+                    onClick={() => { setModalTratarFrota(frota); setJustificativaAlerta(""); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-warning/10 border border-warning/30 text-warning hover:bg-warning/20 transition"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Tratar Alerta
+                  </button>
+                )}
                 <button
                   onClick={() => openEdit(frota)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 text-foreground transition"
@@ -603,6 +663,83 @@ export default function FrotasPageSupabase() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Tratar Alerta de Consumo */}
+      {modalTratarFrota && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-background rounded-2xl shadow-xl border border-border w-full max-w-md flex flex-col gap-5 p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-warning" />
+                  Tratar Alerta de Consumo
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {modalTratarFrota.placa} — {modalTratarFrota.modelo}
+                </p>
+              </div>
+              <button
+                onClick={() => { setModalTratarFrota(null); setJustificativaAlerta(""); }}
+                className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Resumo do último cálculo */}
+            {modalTratarFrota.ultimo_calculo_em && (
+              <div className="bg-warning/5 border border-warning/20 rounded-lg px-4 py-3 flex flex-col gap-1 text-sm">
+                <span className="font-medium text-warning flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Apontamentos insuficientes
+                </span>
+                <span className="text-muted-foreground">
+                  {Math.round((modalTratarFrota.ultimo_calculo_percentual ?? 0) * 100)}% apontado —{" "}
+                  {(modalTratarFrota.ultimo_calculo_km_apontado ?? 0).toLocaleString("pt-BR")} de{" "}
+                  {(modalTratarFrota.ultimo_calculo_km_esperado ?? 0).toLocaleString("pt-BR")} km esperados
+                </span>
+                <span className="text-xs text-muted-foreground/70">
+                  Calculado em {new Date(modalTratarFrota.ultimo_calculo_em).toLocaleDateString("pt-BR")}
+                </span>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-foreground">
+                Justificativa <span className="text-destructive">*</span>
+              </label>
+              <textarea
+                value={justificativaAlerta}
+                onChange={(e) => setJustificativaAlerta(e.target.value)}
+                placeholder="Descreva o motivo do tratamento deste alerta..."
+                rows={3}
+                className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setModalTratarFrota(null); setJustificativaAlerta(""); }}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-input hover:bg-muted transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleTratarAlerta}
+                disabled={!justificativaAlerta.trim() || tratandoAlerta}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-warning text-white hover:bg-warning/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {tratandoAlerta
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <ShieldCheck className="w-4 h-4" />
+                }
+                Confirmar Tratamento
+              </button>
+            </div>
           </div>
         </div>
       )}
