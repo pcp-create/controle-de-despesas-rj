@@ -75,6 +75,8 @@ const EMPTY_FORM = {
 const EMPTY_FIN = {
   km_final: "",
   observacao: "",
+  ocorrencia: "",
+  houve_ocorrencia: false,
 };
 
 export default function ControleKmPage() {
@@ -312,7 +314,8 @@ export default function ControleKmPage() {
       targetRegistro.id,
       Number(fin.km_final),
       fin.observacao.trim() || undefined,
-      targetRegistro.frota_id
+      targetRegistro.frota_id,
+      fin.houve_ocorrencia ? (fin.ocorrencia.trim() || undefined) : undefined,
     );
     setLoading(false);
 
@@ -354,11 +357,12 @@ export default function ControleKmPage() {
         r.destino ?? "",
         r.motivo ?? "",
         r.observacao ?? "",
+        r.ocorrencia ?? "",
         r.status === "aberto" ? "Em Andamento" : "Finalizado",
       ];
     });
 
-    const header = ["Início", "Fim", "Funcionário", "Veículo", "KM Inicial", "KM Final", "KM Percorrido", "Duração", "Destino", "Motivo", "Observação", "Status"];
+    const header = ["Início", "Fim", "Funcionário", "Veículo", "KM Inicial", "KM Final", "KM Percorrido", "Duração", "Destino", "Motivo", "Observação", "Ocorrência", "Status"];
     const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(";")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -1098,10 +1102,41 @@ export default function ControleKmPage() {
                 <textarea
                   value={fin.observacao}
                   onChange={(e) => setFin({ ...fin, observacao: e.target.value })}
-                  placeholder="Alguma ocorrência durante a viagem?"
+                  placeholder="Observações gerais sobre a viagem..."
                   rows={2}
                   className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                 />
+              </div>
+
+              {/* Ocorrência */}
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-foreground">Houve alguma ocorrência?</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFin({ ...fin, houve_ocorrencia: true })}
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition ${fin.houve_ocorrencia ? "bg-destructive/10 border-destructive text-destructive" : "border-input bg-background text-muted-foreground hover:bg-muted"}`}
+                  >
+                    Sim
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFin({ ...fin, houve_ocorrencia: false, ocorrencia: "" })}
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition ${!fin.houve_ocorrencia ? "bg-success/10 border-success text-success" : "border-input bg-background text-muted-foreground hover:bg-muted"}`}
+                  >
+                    Não
+                  </button>
+                </div>
+                {fin.houve_ocorrencia && (
+                  <textarea
+                    value={fin.ocorrencia}
+                    onChange={(e) => setFin({ ...fin, ocorrencia: e.target.value })}
+                    placeholder="Descreva a ocorrência durante a viagem..."
+                    rows={3}
+                    className="px-3 py-2.5 rounded-lg border border-destructive/50 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-destructive/30 resize-none"
+                    autoFocus
+                  />
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-1">
