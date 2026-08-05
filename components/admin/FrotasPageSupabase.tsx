@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { useFrotas, useDespesas, useControleKm, type Frota } from "@/lib/supabase/hooks";
-import { gerarAlertasConsumo } from "@/lib/consumo-frota";
+import { useState, useEffect } from "react";
+import { useFrotas, type Frota } from "@/lib/supabase/hooks";
 import {
   Car,
   Plus,
@@ -36,30 +35,6 @@ const EMPTY_FORM = {
 
 export default function FrotasPageSupabase() {
   const { frotas, isLoading, addFrota, updateFrota, deleteFrota } = useFrotas();
-  const { despesas } = useDespesas();
-  const { registros: apontamentosKm } = useControleKm();
-
-  // Indica se a frota possui algum alerta ativo no abastecimento MAIS RECENTE.
-  // Ignora janelas antigas — só sinaliza se o último abastecimento tem KM insuficiente.
-  const alertasPorFrota = useMemo(() => {
-    const mapa = new Map<string, number>();
-    const todos = gerarAlertasConsumo(despesas, apontamentosKm);
-
-    // Agrupa alertas por frota e mantém apenas o mais recente (maior data)
-    const maisRecente = new Map<string, typeof todos[number]>();
-    for (const alerta of todos) {
-      const atual = maisRecente.get(alerta.frotaId);
-      if (!atual || new Date(alerta.data) > new Date(atual.data)) {
-        maisRecente.set(alerta.frotaId, alerta);
-      }
-    }
-
-    // Conta 1 alerta por frota (apenas se o mais recente ainda está abaixo do limite)
-    for (const [frotaId] of maisRecente) {
-      mapa.set(frotaId, 1);
-    }
-    return mapa;
-  }, [despesas, apontamentosKm]);
 
   const [search, setSearch] = useState("");
   const [showAtivos, setShowAtivos] = useState(true);
