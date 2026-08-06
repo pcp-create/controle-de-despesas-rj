@@ -489,9 +489,42 @@ export function useDespesas(userId?: string, perfil?: string) {
 
   const addDespesa = async (despesa: Omit<Despesa, "id" | "tecnico_id" | "created_at" | "updated_at" | "tipo_despesa" | "cartao" | "tecnico">) => {
     if (!userId) return { error: "Não autenticado" };
-    
+
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
+
+    // ── Validação server-side: bloqueia abastecimento com KM em aberto ──────────
+    // isAbastecimento verifica frota_id + litros_abastecidos > 0
+    if (isAbastecimento(despesa as Despesa) && despesa.frota_id) {
+      try {
+        const res = await fetch("/api/verificar-km-aberto", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ frota_id: despesa.frota_id }),
+        });
+        const json = await res.json();
+        if (json.bloqueado) {
+          // Retorna erro estruturado para o front-end exibir o modal de bloqueio
+          return {
+            error: "KM_ABERTO",
+            kmAberto: json.apontamento as {
+              id: string;
+              frota_id: string;
+              usuario_id: string;
+              km_inicial: number;
+              data_inicio: string;
+              responsavel_nome: string;
+              frota_placa: string;
+              frota_modelo: string;
+            },
+          };
+        }
+      } catch (err) {
+        // Falha na verificação: loga mas NÃO bloqueia — o front tem sua própria validação
+        console.error("[addDespesa] Erro ao verificar KM aberto:", err);
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────────
 
     const { data, error } = await supabase
       .from("despesas")
@@ -500,7 +533,7 @@ export function useDespesas(userId?: string, perfil?: string) {
       .single();
 
     if (error) return { error: error.message };
-    
+
     // Registrar auditoria
     if (data?.id) {
       await registrarAuditoria({
@@ -511,7 +544,7 @@ export function useDespesas(userId?: string, perfil?: string) {
         detalhes: `Criada despesa de R$ ${despesa.valor.toFixed(2)} para ${despesa.cliente}`,
       });
     }
-    
+
     mutate();
 
     // Se for um abastecimento, recalcula e persiste os alertas de consumo.
@@ -521,7 +554,9 @@ export function useDespesas(userId?: string, perfil?: string) {
       const novoId = (data as Despesa).id;
       const todasDespesas: Despesa[] = await fetchDespesas(undefined, "administrador");
       const kmAdmin = await fetchControleKm();
-      persistirAlertasConsumo(todasDespesas, kmAdmin, novoId).catch(() => {/* silencioso */});
+      persistirAlertasConsumo(todasDespesas, kmAdmin, novoId).catch((err) => {
+        console.error("[addDespesa] Erro ao persistir alertas de consumo:", err);
+      });
     }
 
     return { data };
@@ -1325,6 +1360,22 @@ export function useControleKm(userId?: string) {
 
     mutate();
     swrMutate("controle_km"); // invalida a chave global usada pelo FrotasPage
+
+    // Após finalizar um apontamento, recalcula os alertas de consumo para o veículo.
+    // O apontamento finalizado pode alterar o percentual km apontado / km esperado,
+    // ativando ou desativando um alerta existente.
+    if (frota_id) {
+      fetchDespesas(undefined, "administrador")
+        .then((todasDespesas) =>
+          fetchControleKm().then((kmAdmin) =>
+            persistirAlertasConsumo(todasDespesas, kmAdmin),
+          ),
+        )
+        .catch((err) => {
+          console.error("[finalizarKm] Erro ao recalcular alertas de consumo:", err);
+        });
+    }
+
     return { error: null };
   };
 

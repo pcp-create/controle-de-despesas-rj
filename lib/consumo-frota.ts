@@ -563,7 +563,7 @@ export async function persistirAlertasConsumo(
   }
 
   // Para cada frota avaliada: persiste alerta se houver, ou limpa se estiver OK
-  await Promise.all(
+  const resultados = await Promise.allSettled(
     Array.from(frotasAvaliadas).map((frotaId) => {
       const alerta = alertasPorFrota.get(frotaId);
       if (alerta) {
@@ -583,70 +583,109 @@ export async function persistirAlertasConsumo(
       }
     }),
   );
+
+  // Loga erros sem mascarar — não bloqueia o fluxo principal pois o abastecimento já foi salvo
+  for (const r of resultados) {
+    if (r.status === "rejected") {
+      console.error("[persistirAlertasConsumo] Falha ao persistir alerta:", r.reason);
+    }
+  }
 }
 
 /**
- * Gera alertas de consumo avaliando cada veículo com abastecimentos no período
- * que vai até "hoje".
+ * Gera alertas de consumo avaliando cada veículo com pelo menos dois abastecimentos.
  *
- * Para cada veículo com abastecimento, usa calcularEstimativaVeiculo no período
- * do último abastecimento até hoje — considerando saldo anterior — em vez da
- * fórmula antiga (litros × km_media_litro) que ignorava o saldo remanescente.
+ * Regra:
+ *  - Janela = do penúltimo abastecimento (inclusive) até o último abastecimento (inclusive)
+ *  - KM apontado = soma de todos os apontamentos FINALIZADOS do veículo dentro da janela,
+ *    independentemente do funcionário
+ *  - KM esperado = litros do penúltimo abastecimento × km_media_litro da frota
+ *  - Alerta apenas quando percentual < 80% (LIMITE_CONSUMO)
  *
- * Não gera alerta quando o veículo tem saldo anterior suficiente para cobrir
- * os KM apontados sem abastecimento no mês.
+ * Não gera alerta quando:
+ *  - Há menos de 2 abastecimentos válidos
+ *  - Existe apontamento em aberto para o veículo
+ *  - KM esperado é zero (sem km_media_litro cadastrado)
+ *  - Dados insuficientes
  */
 export function gerarAlertasConsumo(
   despesas: Despesa[],
   apontamentos: ControleKm[],
 ): AlertaConsumo[] {
-  // Frotas com pelo menos um abastecimento com litros
+  // Frotas com pelo menos dois abastecimentos com litros
   const frotaIds = [
     ...new Set(despesas.filter(isAbastecimento).map((d) => d.frota_id as string)),
   ];
 
   const alertas: AlertaConsumo[] = [];
-  const hoje = new Date().toISOString().slice(0, 10);
 
   for (const frotaId of frotaIds) {
-    // Encontra o abastecimento mais recente desta frota
-    const ultimoAbast = despesas
+    // Ordena todos os abastecimentos do veículo por data real (asc)
+    const abastecimentos = despesas
       .filter((d) => d.frota_id === frotaId && isAbastecimento(d))
-      .sort((a, b) => (b.data_despesa ?? b.created_at).localeCompare(a.data_despesa ?? a.created_at))[0];
+      .sort((a, b) =>
+        (a.data_despesa ?? a.created_at).localeCompare(b.data_despesa ?? b.created_at),
+      );
 
-    if (!ultimoAbast) continue;
+    // Precisa de pelo menos 2 abastecimentos para calcular a janela
+    if (abastecimentos.length < 2) continue;
 
-    const frotaKmMedia = ultimoAbast.frota?.km_media_litro ?? null;
+    const penultimo = abastecimentos[abastecimentos.length - 2];
+    const ultimo    = abastecimentos[abastecimentos.length - 1];
 
-    // Período: do início do mês do último abastecimento até hoje
-    const dataAbast = (ultimoAbast.data_despesa ?? ultimoAbast.created_at).slice(0, 10);
-    const [ano, mes] = dataAbast.split("-").map(Number);
-    const periodoIni = `${ano}-${String(mes).padStart(2, "0")}-01`;
-    const periodoFim = hoje;
+    // Não gera alerta se existir apontamento aberto para o veículo
+    const temAberto = apontamentos.some(
+      (a) => a.frota_id === frotaId && a.status === "aberto",
+    );
+    if (temAberto) continue;
 
-    const est = calcularEstimativaVeiculo({
-      frotaId,
-      periodoIni,
-      periodoFim,
-      frotaKmMedia,
-      todasDespesas: despesas,
-      todosRegistrosKm: apontamentos,
-    });
+    const kmMediaLitro = ultimo.frota?.km_media_litro ?? penultimo.frota?.km_media_litro ?? null;
+    if (!kmMediaLitro || kmMediaLitro <= 0) continue;
 
-    if (!est.temAlerta) continue;
-    if (est.kmEstimado <= 0) continue;
+    const litros = penultimo.litros_abastecidos as number;
+    const kmEsperado = litros * kmMediaLitro;
+    if (kmEsperado <= 0) continue;
 
+    // Janela: data/hora do penúltimo até data/hora do último (comparação de string ISO)
+    const iniStr = (penultimo.data_despesa ?? penultimo.created_at);
+    const fimStr = (ultimo.data_despesa    ?? ultimo.created_at);
+
+    const iniMs = new Date(iniStr.length === 10 ? `${iniStr}T00:00:00` : iniStr).getTime();
+    const fimMs = new Date(fimStr.length === 10 ? `${fimStr}T23:59:59` : fimStr).getTime();
+
+    // Soma todos os apontamentos finalizados do veículo dentro da janela
+    const kmApontado = apontamentos
+      .filter((a) => {
+        if (a.frota_id !== frotaId) return false;
+        if (a.status !== "finalizado") return false;
+        const km = kmPercorridoApontamento(a);
+        if (km <= 0) return false;
+        const dMs = new Date(
+          (a.data_fim ?? a.data_inicio).length === 10
+            ? `${a.data_fim ?? a.data_inicio}T12:00:00`
+            : (a.data_fim ?? a.data_inicio),
+        ).getTime();
+        return dMs >= iniMs && dMs <= fimMs;
+      })
+      .reduce((sum, a) => sum + kmPercorridoApontamento(a), 0);
+
+    const percentual = kmApontado / kmEsperado;
+
+    // Apenas gera alerta se percentual for estritamente menor que 80%
+    if (percentual >= LIMITE_CONSUMO) continue;
+
+    const dataRef = fimStr.slice(0, 10);
     alertas.push({
-      id: `${frotaId}_${periodoFim}`,
+      id: `${frotaId}_${dataRef}`,
       frotaId,
-      placa: ultimoAbast.frota?.placa ?? "—",
-      modelo: ultimoAbast.frota?.modelo ?? "",
-      data: periodoFim,
-      litros: est.litrosPeriodo,
-      kmApontado: est.kmApontado,
-      kmEsperado: est.kmEstimado,
-      percentual: est.percentual ?? 0,
-      valor: ultimoAbast.valor,
+      placa: ultimo.frota?.placa ?? "—",
+      modelo: ultimo.frota?.modelo ?? "",
+      data: dataRef,
+      litros,
+      kmApontado: Math.round(kmApontado),
+      kmEsperado: Math.round(kmEsperado),
+      percentual: Math.round(percentual * 100) / 100,
+      valor: penultimo.valor,
     });
   }
 

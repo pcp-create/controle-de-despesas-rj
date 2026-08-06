@@ -76,6 +76,18 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   const [alertaConsumo, setAlertaConsumo] = useState<string | null>(null);
   const [migrationSql, setMigrationSql] = useState<string | null>(null);
 
+  // Modal de bloqueio por KM aberto
+  const [kmAbertoInfo, setKmAbertoInfo] = useState<{
+    id: string;
+    frota_id: string;
+    usuario_id: string;
+    km_inicial: number;
+    data_inicio: string;
+    responsavel_nome: string;
+    frota_placa: string;
+    frota_modelo: string;
+  } | null>(null);
+
   useEffect(() => {
     fetch("/api/setup-km-metricas")
       .then((r) => r.json())
@@ -193,6 +205,25 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       return;
     }
 
+    // ── Validação front-end: bloqueia abastecimento com KM aberto ────────────────
+    if (isCombustivel && form.frotaId && !editDespesa) {
+      try {
+        const res = await fetch("/api/verificar-km-aberto", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ frota_id: form.frotaId }),
+        });
+        const json = await res.json();
+        if (json.bloqueado) {
+          setKmAbertoInfo(json.apontamento);
+          return; // Não prossegue — exibe o modal de bloqueio
+        }
+      } catch {
+        // Falha na verificação front-end — o servidor ainda valida via addDespesa
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────────
+
     setLoading(true);
     setErrors({});
 
@@ -282,6 +313,12 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         grupo_parcela_id: null,
         data_vencimento: calcularVencimento(form.dataDespesa, 0),
       });
+      if ((result as any).error === "KM_ABERTO") {
+        setKmAbertoInfo((result as any).kmAberto ?? null);
+        setLoading(false);
+        return;
+      }
+
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
       } else {
@@ -388,6 +425,76 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
   return (
     <div className="max-w-2xl mx-auto">
+
+      {/* Modal de bloqueio: existe apontamento de KM em aberto para o veículo */}
+      {kmAbertoInfo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="km-aberto-titulo"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-4 bg-destructive/10 border-b border-destructive/20">
+              <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />
+              <h2 id="km-aberto-titulo" className="text-base font-semibold text-destructive">
+                Apontamento de KM em aberto
+              </h2>
+            </div>
+            <div className="px-5 py-4 flex flex-col gap-3">
+              <p className="text-sm text-foreground leading-relaxed">
+                Existe um apontamento de KM em aberto para este veículo.
+                Finalize o apontamento antes de registrar o abastecimento.
+              </p>
+              <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-xs flex flex-col gap-1.5">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Veículo</span>
+                  <span className="font-medium text-foreground">
+                    {kmAbertoInfo.frota_modelo} &mdash; {kmAbertoInfo.frota_placa}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Iniciado por</span>
+                  <span className="font-medium text-foreground">{kmAbertoInfo.responsavel_nome}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Início</span>
+                  <span className="font-medium text-foreground">
+                    {new Date(kmAbertoInfo.data_inicio).toLocaleString("pt-BR", {
+                      day: "2-digit", month: "2-digit", year: "numeric",
+                      hour: "2-digit", minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">KM inicial</span>
+                  <span className="font-medium text-foreground">
+                    {kmAbertoInfo.km_inicial.toLocaleString("pt-BR")} km
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Se o apontamento pertence a outro funcionário, solicite que o responsável finalize o registro no Controle de KM.
+              </p>
+            </div>
+            <div className="flex items-center justify-between px-5 py-4 border-t border-border gap-2">
+              <button
+                onClick={() => setKmAbertoInfo(null)}
+                className="px-4 py-2 rounded-lg border border-input bg-background text-sm text-foreground hover:bg-muted transition"
+              >
+                Voltar ao formulário
+              </button>
+              <button
+                onClick={() => { setKmAbertoInfo(null); onBack(); }}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
+              >
+                <Car className="w-3.5 h-3.5" />
+                Ir para Controle de KM
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Popup de alerta de consumo (fecha somente ao clicar em OK) */}
       {alertaConsumo && (
