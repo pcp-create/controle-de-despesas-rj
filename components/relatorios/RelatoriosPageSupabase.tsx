@@ -7,6 +7,7 @@ import type { FiltrosRelatorio } from "@/lib/supabase/use-filtros-persistidos";
 import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas, ControleKm } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { formatCurrency } from "@/lib/helpers";
+import { calcularEstimativaVeiculo } from "@/lib/consumo-frota";
 import {
   BarChart,
   Bar,
@@ -1131,182 +1132,71 @@ export default function RelatoriosPageSupabase() {
   }, [profiles, registrosKmFiltrados, isGestorOuAdmin]);
 
   // ─── Estimativa KM vs Apontado por funcionário ───────────────────────────────
-  // Considera saldo estimado de combustível vindo do período anterior.
-  // Lógica por veículo: média histórica real → saldo anterior → disponível no período → KM estimado.
+  // Usa calcularEstimativaVeiculo (consumo-frota.ts) como fonte única de cálculo.
   const estimativaKmFuncionario = useMemo(() => {
     if (!isGestorOuAdmin) return [];
 
-    // Datas de início/fim do período selecionado (strings YYYY-MM-DD)
+    // Datas de início/fim do período
     let periodoIni: string;
     let periodoFim: string;
     if (modoFiltro === "mes") {
       periodoIni = new Date(anoSelecionado, mesSelecionado, 1).toISOString().slice(0, 10);
-      const ultimoDia = new Date(anoSelecionado, mesSelecionado + 1, 0).getDate();
-      periodoFim = new Date(anoSelecionado, mesSelecionado, ultimoDia).toISOString().slice(0, 10);
+      periodoFim = new Date(anoSelecionado, mesSelecionado + 1, 0).toISOString().slice(0, 10);
     } else {
       periodoIni = dataInicial;
       periodoFim = dataFinal;
     }
 
-    // Helper: é despesa de combustível com litros?
-    const isCombustivel = (d: typeof despesas[0]) =>
-      !!(d.tipo_despesa?.nome?.toLowerCase().includes("combust")) &&
-      typeof d.litros_abastecidos === "number" &&
-      d.litros_abastecidos > 0;
-
-    // Helper: média histórica de consumo km/L de um veículo a partir de abastecimentos
-    // Usa intervalos entre abastecimentos consecutivos + apontamentos reais
-    const mediaConsumoFrota = (frotaId: string, todasDespComb: typeof despesas): number | null => {
-      const abast = todasDespComb
-        .filter((d) => d.frota_id === frotaId && isCombustivel(d))
-        .sort((a, b) => (a.data_despesa ?? "").localeCompare(b.data_despesa ?? ""));
-
-      if (abast.length < 2) return null;
-
-      const razoes: number[] = [];
-      for (let i = 0; i < abast.length - 1; i++) {
-        const litros = abast[i].litros_abastecidos as number;
-        const iniMs = new Date((abast[i].data_despesa ?? abast[i].created_at) + "T12:00:00").getTime();
-        const fimMs = new Date((abast[i + 1].data_despesa ?? abast[i + 1].created_at) + "T12:00:00").getTime();
-        const kmJanela = registrosKm
-          .filter((r) => {
-            if (r.frota_id !== frotaId) return false;
-            if ((r.status as string) !== "finalizado") return false;
-            const dMs = new Date((r.data_fim ?? r.data_inicio) + "T12:00:00").getTime();
-            return dMs >= iniMs && dMs <= fimMs;
-          })
-          .reduce((s, r) => s + kmPercorrido(r), 0);
-        if (litros > 0 && kmJanela > 0) razoes.push(kmJanela / litros);
-      }
-      if (razoes.length === 0) return null;
-      return razoes.reduce((s, v) => s + v, 0) / razoes.length;
-    };
-
-    // Helper: saldo estimado de um veículo na data de início do período
-    const saldoInicialFrota = (
-      frotaId: string,
-      frotaKmMedia: number | null,
-      mediaReal: number | null,
-      despAnteriores: typeof despesas,
-    ): { saldo: number; mediaUsada: number; dadosSuficientes: boolean } => {
-      const media = mediaReal ?? frotaKmMedia ?? null;
-      if (!media || media <= 0) return { saldo: 0, mediaUsada: 0, dadosSuficientes: false };
-
-      // Abastecimentos anteriores ao período, cronológicos
-      const abastAnt = despAnteriores
-        .filter((d) => d.frota_id === frotaId && isCombustivel(d) && (d.data_despesa ?? "") < periodoIni)
-        .sort((a, b) => (a.data_despesa ?? "").localeCompare(b.data_despesa ?? ""));
-
-      if (abastAnt.length === 0) return { saldo: 0, mediaUsada: media, dadosSuficientes: true };
-
-      // Percorre o histórico cronológico acumulando saldo
-      let saldo = 0;
-      for (let i = 0; i < abastAnt.length; i++) {
-        const abat = abastAnt[i];
-        saldo += abat.litros_abastecidos as number;
-
-        // KM percorrido entre este abastecimento e o próximo (ou até periodoIni)
-        const iniMs = new Date((abat.data_despesa ?? abat.created_at) + "T12:00:00").getTime();
-        const proximoStr = abastAnt[i + 1]?.data_despesa ?? periodoIni;
-        const fimMs = new Date(proximoStr + "T12:00:00").getTime();
-
-        const kmJanela = registrosKm
-          .filter((r) => {
-            if (r.frota_id !== frotaId) return false;
-            if ((r.status as string) !== "finalizado") return false;
-            const dMs = new Date((r.data_fim ?? r.data_inicio) + "T12:00:00").getTime();
-            return dMs >= iniMs && dMs < fimMs;
-          })
-          .reduce((s, r) => s + kmPercorrido(r), 0);
-
-        const consumoEstimado = kmJanela / media;
-        saldo = Math.max(0, saldo - consumoEstimado);
-      }
-
-      return { saldo, mediaUsada: media, dadosSuficientes: true };
-    };
-
     return profiles
       .map((p) => {
-        // KM apontado no período (usa registrosKmPeriodo — já filtrado pela data)
-        const kmApontado = registrosKmPeriodo
-          .filter((r) => r.usuario_id === p.id)
-          .reduce((s, r) => s + kmPercorrido(r), 0);
+        // Frotas que este funcionário utilizou (abastecimentos ou apontamentos — qualquer momento)
+        const frotasDoFunc = new Set<string>([
+          ...despesas.filter((d) => d.tecnico_id === p.id && d.frota_id).map((d) => d.frota_id as string),
+          ...registrosKm.filter((r) => r.usuario_id === p.id && r.frota_id).map((r) => r.frota_id as string),
+        ]);
 
-        // Abastecimentos do funcionário no período
-        const despPeriodo = despesas.filter((d) => {
-          if (d.tecnico_id !== p.id) return false;
-          if (!isCombustivel(d)) return false;
-          const ds = d.data_despesa ?? "";
-          return ds >= periodoIni && ds <= periodoFim;
-        });
+        if (frotasDoFunc.size === 0) return null;
 
-        // Todos os abastecimentos do funcionário (para média histórica e saldo anterior)
-        const todasDespComb = despesas.filter((d) => d.tecnico_id === p.id && isCombustivel(d));
-
-        // Agrupa por frota
-        const frotas_ids = [...new Set(todasDespComb.map((d) => d.frota_id).filter(Boolean) as string[])];
-
-        type VeiculoItem = {
-          frotaId: string; placa: string;
-          litrosPeriodo: number; saldoInicial: number; combustivelDisponivel: number;
-          kmEstimado: number; kmApontadoVeiculo: number;
-          diferenca: number; pctVeiculo: number | null;
-          saldoFinal: number; mediaUsada: number; dadosSuficientes: boolean; estimativa: boolean;
-        };
-
-        const veiculos: VeiculoItem[] = frotas_ids.map((frotaId) => {
+        const veiculos = [...frotasDoFunc].map((frotaId) => {
           const frota = frotas.find((f) => f.id === frotaId);
           const placa = (frota as any)?.placa ?? frotaId;
           const frotaKmMedia = (frota as any)?.km_media_litro ?? null;
 
-          const mediaReal = mediaConsumoFrota(frotaId, todasDespComb);
-          const { saldo: saldoInicial, mediaUsada, dadosSuficientes } = saldoInicialFrota(
-            frotaId, frotaKmMedia, mediaReal, todasDespComb
-          );
-
-          const litrosPeriodo = despPeriodo
-            .filter((d) => d.frota_id === frotaId)
-            .reduce((s, d) => s + (d.litros_abastecidos as number), 0);
-
-          const combustivelDisponivel = saldoInicial + litrosPeriodo;
-          const mediaFinal = mediaUsada > 0 ? mediaUsada : (frotaKmMedia ?? 0);
-          const kmEstimadoVeiculo = combustivelDisponivel * mediaFinal;
-
-          const kmApontadoVeiculo = registrosKmPeriodo
-            .filter((r) => r.frota_id === frotaId && r.usuario_id === p.id)
-            .reduce((s, r) => s + kmPercorrido(r), 0);
-
-          const diferenca = kmEstimadoVeiculo - kmApontadoVeiculo;
-          const pctVeiculo = kmEstimadoVeiculo > 0
-            ? Math.round((kmApontadoVeiculo / kmEstimadoVeiculo) * 100)
-            : null;
-
-          const consumidoEstimado = mediaFinal > 0 ? kmApontadoVeiculo / mediaFinal : 0;
-          const saldoFinal = Math.max(0, combustivelDisponivel - consumidoEstimado);
+          const est = calcularEstimativaVeiculo({
+            frotaId,
+            periodoIni,
+            periodoFim,
+            frotaKmMedia,
+            todasDespesas: despesas,
+            todosRegistrosKm: registrosKm,
+            usuarioId: p.id,
+          });
 
           return {
-            frotaId, placa, litrosPeriodo,
-            saldoInicial: Math.round(saldoInicial * 10) / 10,
-            combustivelDisponivel: Math.round(combustivelDisponivel * 10) / 10,
-            kmEstimado: Math.round(kmEstimadoVeiculo),
-            kmApontadoVeiculo: Math.round(kmApontadoVeiculo),
-            diferenca: Math.round(diferenca),
-            pctVeiculo,
-            saldoFinal: Math.round(saldoFinal * 10) / 10,
-            mediaUsada: Math.round(mediaFinal * 100) / 100,
-            dadosSuficientes,
-            estimativa: !mediaReal,
+            frotaId,
+            placa,
+            litrosPeriodo:         est.litrosPeriodo,
+            saldoInicial:          est.saldoInicial,
+            combustivelDisponivel: est.combustivelDisponivel,
+            kmEstimado:            est.kmEstimado,
+            kmApontadoVeiculo:     est.kmApontado,
+            diferenca:             est.diferenca,
+            pctVeiculo:            est.percentual,
+            saldoFinal:            est.saldoFinal,
+            mediaUsada:            est.mediaUsada,
+            dadosSuficientes:      est.dadosSuficientes,
+            estimativa:            est.estimativa,
           };
-        });
+        }).filter((v) => v.kmEstimado > 0 || v.kmApontadoVeiculo > 0 || v.litrosPeriodo > 0);
 
-        // Agrega veículos do funcionário
-        const kmEstimado = veiculos.reduce((s, v) => s + v.kmEstimado, 0);
-        const totalLitros = veiculos.reduce((s, v) => s + v.litrosPeriodo, 0);
-        const totalSaldoInicial = veiculos.reduce((s, v) => s + v.saldoInicial, 0);
-        const totalCombustivelDisponivel = veiculos.reduce((s, v) => s + v.combustivelDisponivel, 0);
-        const totalSaldoFinal = veiculos.reduce((s, v) => s + v.saldoFinal, 0);
+        if (veiculos.length === 0) return null;
 
+        const kmApontado          = veiculos.reduce((s, v) => s + v.kmApontadoVeiculo, 0);
+        const kmEstimado          = veiculos.reduce((s, v) => s + v.kmEstimado, 0);
+        const totalLitros         = veiculos.reduce((s, v) => s + v.litrosPeriodo, 0);
+        const totalSaldoInicial   = veiculos.reduce((s, v) => s + v.saldoInicial, 0);
+        const totalCombDisp       = veiculos.reduce((s, v) => s + v.combustivelDisponivel, 0);
+        const totalSaldoFinal     = veiculos.reduce((s, v) => s + v.saldoFinal, 0);
         const pct = kmEstimado > 0 ? Math.round((kmApontado / kmEstimado) * 100) : null;
         const kmLReal = totalLitros > 0 ? Math.round((kmApontado / totalLitros) * 100) / 100 : null;
         const semAbastecimento = kmApontado > 0 && totalLitros === 0 && totalSaldoInicial === 0;
@@ -1315,13 +1205,13 @@ export default function RelatoriosPageSupabase() {
         return {
           id: p.id,
           nome: p.nome.split(" ").slice(0, 2).join(" "),
-          kmApontado: Math.round(kmApontado),
-          kmEstimado: Math.round(kmEstimado),
-          totalLitros: Math.round(totalLitros * 100) / 100,
-          totalSaldoInicial: Math.round(totalSaldoInicial * 10) / 10,
-          totalCombustivelDisponivel: Math.round(totalCombustivelDisponivel * 10) / 10,
-          totalSaldoFinal: Math.round(totalSaldoFinal * 10) / 10,
-          diferenca: Math.round(kmEstimado - kmApontado),
+          kmApontado,
+          kmEstimado,
+          totalLitros,
+          totalSaldoInicial,
+          totalCombustivelDisponivel: totalCombDisp,
+          totalSaldoFinal,
+          diferenca: kmEstimado - kmApontado,
           pct,
           kmLReal,
           semAbastecimento,
@@ -1329,8 +1219,9 @@ export default function RelatoriosPageSupabase() {
           veiculos,
         };
       })
-      .filter((item) => item.kmApontado > 0 || item.totalLitros > 0)
-      .sort((a, b) => b.kmApontado - a.kmApontado) as {
+      .filter(Boolean)
+      .filter((item) => item!.kmApontado > 0 || item!.totalLitros > 0)
+      .sort((a, b) => b!.kmApontado - a!.kmApontado) as {
         id: string; nome: string;
         kmApontado: number; kmEstimado: number;
         totalLitros: number; totalSaldoInicial: number;
@@ -1346,7 +1237,7 @@ export default function RelatoriosPageSupabase() {
           dadosSuficientes: boolean; estimativa: boolean;
         }[];
       }[];
-  }, [profiles, registrosKmPeriodo, registrosKm, despesas, frotas, isGestorOuAdmin, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
+  }, [profiles, registrosKm, despesas, frotas, isGestorOuAdmin, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
 
   const filtroFuncionarioNome = filtroFuncionario ? profiles.find((p) => p.id === filtroFuncionario)?.nome : null;
   const filtroTipoNome = filtroTipo ? tiposDespesa.find((t) => t.id === filtroTipo)?.nome : null;

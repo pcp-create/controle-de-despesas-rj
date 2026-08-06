@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { mutate as swrMutate } from "swr";
 import { useFrotas, useDespesas, useControleKm, type Frota } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
-import { calcularAutonomiaMedia, type AutonomiaFrota } from "@/lib/consumo-frota";
+import { calcularEstimativaVeiculo, type EstimativaVeiculoResult } from "@/lib/consumo-frota";
 import {
   Car,
   Plus,
@@ -44,15 +44,31 @@ export default function FrotasPageSupabase() {
   const { despesas } = useDespesas();
   const { registros: apontamentosKm } = useControleKm();
 
-  // Autonomia real calculada por frota a partir dos históricos reais
-  const autonomiaPorFrota = useMemo(() => {
-    const mapa = new Map<string, AutonomiaFrota>();
+  // Período de referência para cálculo de estimativa (mês atual por padrão)
+  const hoje = new Date();
+  const [periodoFrotaIni, setPeriodoFrotaIni] = useState(
+    new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10)
+  );
+  const [periodoFrotaFim, setPeriodoFrotaFim] = useState(
+    new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).toISOString().slice(0, 10)
+  );
+
+  // Estimativa KM vs Apontado por frota — usa a mesma fonte única do Relatório
+  const estimativaPorFrota = useMemo(() => {
+    const mapa = new Map<string, EstimativaVeiculoResult>();
     for (const frota of frotas) {
-      const resultado = calcularAutonomiaMedia(frota.id, despesas, apontamentosKm);
-      if (resultado) mapa.set(frota.id, resultado);
+      const est = calcularEstimativaVeiculo({
+        frotaId: frota.id,
+        periodoIni: periodoFrotaIni,
+        periodoFim: periodoFrotaFim,
+        frotaKmMedia: (frota as any).km_media_litro ?? null,
+        todasDespesas: despesas,
+        todosRegistrosKm: apontamentosKm,
+      });
+      mapa.set(frota.id, est);
     }
     return mapa;
-  }, [frotas, despesas, apontamentosKm]);
+  }, [frotas, despesas, apontamentosKm, periodoFrotaIni, periodoFrotaFim]);
 
   const [search, setSearch] = useState("");
   const [showAtivos, setShowAtivos] = useState(true);
@@ -289,7 +305,7 @@ export default function FrotasPageSupabase() {
         </button>
       </div>
 
-      {/* Barra de busca + toggle */}
+      {/* Barra de busca + período + toggle */}
       <div className="bg-white rounded-xl border border-border p-3 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -299,6 +315,25 @@ export default function FrotasPageSupabase() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+
+        {/* Seletor de período de referência para estimativa */}
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+          <Clock className="w-3.5 h-3.5 shrink-0" />
+          <span className="hidden sm:inline font-medium">Período:</span>
+          <input
+            type="date"
+            value={periodoFrotaIni}
+            onChange={(e) => setPeriodoFrotaIni(e.target.value)}
+            className="px-2 py-1.5 rounded-lg border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+          <span>—</span>
+          <input
+            type="date"
+            value={periodoFrotaFim}
+            onChange={(e) => setPeriodoFrotaFim(e.target.value)}
+            className="px-2 py-1.5 rounded-lg border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
         <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
@@ -425,46 +460,76 @@ export default function FrotasPageSupabase() {
                 </div>
               )}
 
-              {/* Autonomia do Veículo */}
+              {/* Estimativa KM vs Apontado — mesma lógica do Relatório */}
               {(() => {
-                const autonomia = autonomiaPorFrota.get(frota.id);
-                const mediaReal = autonomia?.mediaKmPorLitro ?? 0;
-                const mediaCadastrada = frota.km_media_litro ?? 0;
-                const diff = mediaCadastrada > 0 ? ((mediaReal - mediaCadastrada) / mediaCadastrada) * 100 : null;
-                const abaixo = diff !== null && diff < -10;
-                const acima  = diff !== null && diff > 10;
+                const est = estimativaPorFrota.get(frota.id);
+                if (!est) return null;
 
-                if (!autonomia) {
+                const semDados = !est.dadosSuficientes;
+                const pct = est.percentual;
+                const pctColor = pct === null ? "text-muted-foreground"
+                  : pct >= 80 && pct <= 115 ? "text-success"
+                  : pct > 115 ? "text-warning"
+                  : "text-destructive";
+                const borderColor = pct === null ? "border-border bg-muted/30"
+                  : pct >= 80 && pct <= 115 ? "border-success/20 bg-success/5"
+                  : pct > 115 ? "border-warning/20 bg-warning/5"
+                  : "border-destructive/20 bg-destructive/5";
+                const hasActivity = est.kmEstimado > 0 || est.kmApontado > 0 || est.litrosPeriodo > 0;
+
+                if (semDados || !hasActivity) {
                   return (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
                       <Gauge className="w-3.5 h-3.5 shrink-0" />
-                      <span>Autonomia — dados insuficientes (mín. 2 abastecimentos)</span>
+                      <span>
+                        {semDados
+                          ? "Estimativa indisponível — sem média de consumo cadastrada ou histórico suficiente"
+                          : "Sem movimentação no período selecionado"}
+                      </span>
                     </div>
                   );
                 }
 
                 return (
-                  <div className={`flex flex-col gap-1.5 rounded-lg px-3 py-2.5 text-xs border ${
-                    abaixo ? "bg-destructive/5 border-destructive/20" :
-                    acima  ? "bg-success/5 border-success/20" :
-                             "bg-muted/40 border-border"
-                  }`}>
+                  <div className={`flex flex-col gap-2 rounded-lg px-3 py-2.5 text-xs border ${borderColor}`}>
+                    {/* Linha 1: título + % */}
                     <div className="flex items-center justify-between gap-2">
                       <span className="flex items-center gap-1.5 font-medium text-foreground">
                         <Gauge className="w-3.5 h-3.5" />
-                        Autonomia real média
+                        KM estimado vs apontado
+                        {est.estimativa && <span className="text-[10px] text-muted-foreground font-normal">(média cadastrada)</span>}
                       </span>
-                      <span className={`font-bold text-sm ${abaixo ? "text-destructive" : acima ? "text-success" : "text-foreground"}`}>
-                        {mediaReal.toFixed(1)} km/l
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-muted-foreground">
-                      <span>Baseado em {autonomia.janelasMedidas} de {autonomia.totalJanelas} intervalo{autonomia.totalJanelas !== 1 ? "s" : ""}</span>
-                      {mediaCadastrada > 0 && diff !== null && (
-                        <span className={`font-medium ${abaixo ? "text-destructive" : acima ? "text-success" : "text-muted-foreground"}`}>
-                          {diff > 0 ? "+" : ""}{diff.toFixed(0)}% vs. meta ({mediaCadastrada} km/l)
-                        </span>
+                      {pct !== null && (
+                        <span className={`font-bold text-sm ${pctColor}`}>{pct}%</span>
                       )}
+                    </div>
+
+                    {/* Barra */}
+                    {est.kmEstimado > 0 && (
+                      <div className="relative h-4 rounded overflow-hidden bg-muted/40">
+                        <div className="absolute inset-y-0 left-0 bg-muted-foreground/20 rounded" style={{ width: "100%" }} />
+                        <div
+                          className={`absolute inset-y-0 left-0 rounded transition-all ${
+                            pct !== null && pct < 80 ? "bg-destructive/70"
+                            : pct !== null && pct > 115 ? "bg-warning/70"
+                            : "bg-success/70"
+                          }`}
+                          style={{ width: `${Math.min(100, ((est.kmApontado / est.kmEstimado) * 100))}%` }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Grid de métricas */}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+                      <span className="text-muted-foreground">Saldo inicial est.: <span className="font-medium text-foreground">{est.saldoInicial.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span></span>
+                      <span className="text-muted-foreground">Abastecido: <span className="font-medium text-foreground">{est.litrosPeriodo.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span></span>
+                      <span className="text-muted-foreground">KM estimado: <span className="font-medium text-foreground">{est.kmEstimado.toLocaleString("pt-BR")} km</span></span>
+                      <span className="text-muted-foreground">KM apontado: <span className="font-medium text-foreground">{est.kmApontado.toLocaleString("pt-BR")} km</span></span>
+                      <span className="text-muted-foreground">Diferença: <span className={`font-medium ${est.diferenca >= 0 ? "text-success" : "text-destructive"}`}>{est.diferenca >= 0 ? "+" : ""}{est.diferenca.toLocaleString("pt-BR")} km</span></span>
+                      <span className="text-muted-foreground">Saldo final est.: <span className="font-medium text-foreground">{est.saldoFinal.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span></span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      Consumo médio: <span className="font-medium text-foreground">{est.mediaUsada > 0 ? `${est.mediaUsada.toFixed(1)} km/L` : "—"}</span>
                     </div>
                   </div>
                 );
