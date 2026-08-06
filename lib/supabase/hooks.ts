@@ -548,13 +548,14 @@ export function useDespesas(userId?: string, perfil?: string) {
     mutate();
 
     // Se for um abastecimento, recalcula e persiste os alertas de consumo.
-    // Passa o id do novo abastecimento para excluí-lo da avaliação —
-    // ele ainda não tem apontamentos e geraria um falso alerta.
+    // O novo abastecimento já está no banco (mutate() foi chamado acima), por isso
+    // fetchDespesas retornará os dados atualizados incluindo o novo registro —
+    // que será corretamente tratado como o "último abastecimento" em gerarAlertasConsumo.
     if (isAbastecimento(data as Despesa)) {
-      const novoId = (data as Despesa).id;
+      const frotaId = (data as Despesa).frota_id ?? undefined;
       const todasDespesas: Despesa[] = await fetchDespesas(undefined, "administrador");
       const kmAdmin = await fetchControleKm();
-      persistirAlertasConsumo(todasDespesas, kmAdmin, novoId).catch((err) => {
+      persistirAlertasConsumo(todasDespesas, kmAdmin, frotaId).catch((err) => {
         console.error("[addDespesa] Erro ao persistir alertas de consumo:", err);
       });
     }
@@ -1361,14 +1362,17 @@ export function useControleKm(userId?: string) {
     mutate();
     swrMutate("controle_km"); // invalida a chave global usada pelo FrotasPage
 
-    // Após finalizar um apontamento, recalcula os alertas de consumo para o veículo.
-    // O apontamento finalizado pode alterar o percentual km apontado / km esperado,
-    // ativando ou desativando um alerta existente.
+    // Após finalizar um apontamento, recalcula os alertas de consumo apenas para
+    // esse veículo — evita sobrescrever alertas já tratados de outros veículos.
+    // Nota: finalizarKm só ocorre antes do próximo abastecimento (o bloqueio de KM aberto
+    // impede abastecimento enquanto há apontamento em aberto), portanto gerarAlertasConsumo
+    // ainda não terá o próximo abastecimento — o recálculo aqui pode não gerar alerta novo,
+    // mas garantirá limpeza de alerta falso caso o apontamento finalizado complete a janela.
     if (frota_id) {
       fetchDespesas(undefined, "administrador")
         .then((todasDespesas) =>
           fetchControleKm().then((kmAdmin) =>
-            persistirAlertasConsumo(todasDespesas, kmAdmin),
+            persistirAlertasConsumo(todasDespesas, kmAdmin, frota_id),
           ),
         )
         .catch((err) => {

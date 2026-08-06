@@ -531,30 +531,28 @@ export function avaliarAbastecimento(
 
 /**
  * Persiste os alertas calculados no banco via API route.
- * Deve ser chamado após um abastecimento ser salvo, passando o id do
- * abastecimento recém-criado para excluí-lo da avaliação (ainda não
- * tem apontamentos — o funcionário ainda vai rodar com esse tanque).
  *
- * Para frotas cujo abastecimento anterior ficou acima de 80%, remove
- * o alerta ativo e atualiza o último cálculo normalmente.
+ * Deve ser chamado após um abastecimento ser salvo ou um apontamento ser finalizado.
+ * Os dados passados já devem estar atualizados (incluindo o novo registro).
+ *
+ * @param frotaId — quando fornecido, processa apenas esse veículo; caso contrário,
+ *   processa todas as frotas com abastecimentos. Use sempre que possível para evitar
+ *   sobrescrever alertas de outros veículos.
  */
 export async function persistirAlertasConsumo(
   despesas: Despesa[],
   apontamentos: ControleKm[],
-  novoAbastecimentoId?: string,
+  frotaId?: string,
 ): Promise<void> {
-  // Exclui o abastecimento recém-criado — ainda não possui apontamentos e
-  // geraria um falso alerta (0% apontado).
-  const despesasParaAvaliar = novoAbastecimentoId
-    ? despesas.filter((d) => d.id !== novoAbastecimentoId)
-    : despesas;
+  const alertas = gerarAlertasConsumo(despesas, apontamentos);
 
-  const alertas = gerarAlertasConsumo(despesasParaAvaliar, apontamentos);
-
-  // Coleta as frotas dos abastecimentos avaliados (excluindo o novo)
-  const frotasAvaliadas = new Set(
-    despesasParaAvaliar.filter(isAbastecimento).map((d) => d.frota_id as string),
+  // Coleta as frotas a avaliar: somente a especificada, ou todas com abastecimentos
+  const todasFrotasComAbast = new Set(
+    despesas.filter(isAbastecimento).map((d) => d.frota_id as string),
   );
+  const frotasAvaliadas = frotaId
+    ? (todasFrotasComAbast.has(frotaId) ? new Set([frotaId]) : new Set<string>())
+    : todasFrotasComAbast;
 
   // Alertas com problema (abaixo de 80%) — um por frota (o mais recente)
   const alertasPorFrota = new Map<string, AlertaConsumo>();
@@ -620,12 +618,16 @@ export function gerarAlertasConsumo(
   const alertas: AlertaConsumo[] = [];
 
   for (const frotaId of frotaIds) {
-    // Ordena todos os abastecimentos do veículo por data real (asc)
+    // Ordena todos os abastecimentos do veículo por data+hora real (asc).
+    // Combina data_despesa + hora_despesa para ordenação precisa em abastecimentos
+    // retroativos ou múltiplos abastecimentos no mesmo dia.
     const abastecimentos = despesas
       .filter((d) => d.frota_id === frotaId && isAbastecimento(d))
-      .sort((a, b) =>
-        (a.data_despesa ?? a.created_at).localeCompare(b.data_despesa ?? b.created_at),
-      );
+      .sort((a, b) => {
+        const tsA = `${a.data_despesa ?? a.created_at.slice(0, 10)}T${a.hora_despesa ?? "00:00:00"}`;
+        const tsB = `${b.data_despesa ?? b.created_at.slice(0, 10)}T${b.hora_despesa ?? "00:00:00"}`;
+        return tsA.localeCompare(tsB);
+      });
 
     // Precisa de pelo menos 2 abastecimentos para calcular a janela
     if (abastecimentos.length < 2) continue;
@@ -646,12 +648,18 @@ export function gerarAlertasConsumo(
     const kmEsperado = litros * kmMediaLitro;
     if (kmEsperado <= 0) continue;
 
-    // Janela: data/hora do penúltimo até data/hora do último (comparação de string ISO)
-    const iniStr = (penultimo.data_despesa ?? penultimo.created_at);
-    const fimStr = (ultimo.data_despesa    ?? ultimo.created_at);
+    // Janela: data+hora do penúltimo até data+hora do último
+    // Usa hora_despesa quando disponível para precisão em dias iguais.
+    const iniDate = penultimo.data_despesa ?? penultimo.created_at.slice(0, 10);
+    const iniHora = penultimo.hora_despesa ?? "00:00:00";
+    const fimDate = ultimo.data_despesa    ?? ultimo.created_at.slice(0, 10);
+    const fimHora = ultimo.hora_despesa    ?? "23:59:59";
 
-    const iniMs = new Date(iniStr.length === 10 ? `${iniStr}T00:00:00` : iniStr).getTime();
-    const fimMs = new Date(fimStr.length === 10 ? `${fimStr}T23:59:59` : fimStr).getTime();
+    const iniMs = new Date(`${iniDate}T${iniHora}`).getTime();
+    const fimMs = new Date(`${fimDate}T${fimHora}`).getTime();
+
+    // dataRef usada como chave do alerta — data do último abastecimento
+    const dataRef = fimDate;
 
     // Soma todos os apontamentos finalizados do veículo dentro da janela
     const kmApontado = apontamentos
@@ -674,7 +682,6 @@ export function gerarAlertasConsumo(
     // Apenas gera alerta se percentual for estritamente menor que 80%
     if (percentual >= LIMITE_CONSUMO) continue;
 
-    const dataRef = fimStr.slice(0, 10);
     alertas.push({
       id: `${frotaId}_${dataRef}`,
       frotaId,
