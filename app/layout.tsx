@@ -15,9 +15,9 @@ export const metadata: Metadata = {
   description:
     "Sistema de controle de despesas corporativas para técnicos externos da RJ Compressores.",
   generator: "v0.app",
-  // Os arquivos app/icon.png e app/apple-icon.png são detectados automaticamente
-  // pelo Next.js App Router e geram os <link rel="icon"> e <link rel="apple-touch-icon"> corretos.
-  // Definir icons: {} manualmente aqui sobrescreve esse comportamento automático — por isso omitimos.
+  // Ícones servidos diretamente de public/ (estáticos, sem processamento do Next.js).
+  // app/icon.png e app/apple-icon.png foram removidos pois o processamento automático
+  // do Next.js App Router converte PNG para JPEG perdendo o canal alfa (transparência).
   manifest: "/manifest.webmanifest",
 };
 
@@ -37,9 +37,9 @@ export default function RootLayout({
     <html lang="pt-BR" className={`${inter.variable} bg-background`}>
       <head>
         {/* Apple Touch Icon — tag explícita necessária para o atalho na tela inicial do iPhone */}
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=4" />
-        <link rel="icon" type="image/png" sizes="192x192" href="/icon.png?v=4" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/icon.png?v=4" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=5" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/icon.png?v=5" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/icon.png?v=5" />
       </head>
       <body className="font-sans antialiased">
         <AuthProvider>
