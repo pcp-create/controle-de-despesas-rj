@@ -89,6 +89,80 @@ export async function POST(req: Request) {
 }
 
 /**
+ * PUT /api/alertas-consumo
+ * Reprocessamento forçado: atualiza um alerta existente com valores corrigidos,
+ * mesmo que já tenha sido calculado antes. Não reativa alertas tratados manualmente
+ * (resolvido_por != null), mas corrige os valores de km_apontado/km_esperado/percentual.
+ * Body: { alerta: AlertaConsumo, ativo: boolean }
+ */
+export async function PUT(req: Request) {
+  try {
+    const { alerta, ativo } = await req.json();
+    if (!alerta?.id || !alerta?.frotaId) {
+      return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
+    }
+
+    const supabase = getServiceClient();
+
+    // Verifica se foi tratado manualmente — nesse caso preserva ativo=false e resolvido_por,
+    // mas ainda corrige os valores de km (os dados exibidos na tela ficam corretos)
+    const { data: existente } = await supabase
+      .from("alertas_consumo")
+      .select("ativo, resolvido_por")
+      .eq("id", alerta.id)
+      .maybeSingle();
+
+    const jaTratado = existente && existente.ativo === false && existente.resolvido_por != null;
+
+    const { error: alertaError } = await supabase
+      .from("alertas_consumo")
+      .upsert({
+        id: alerta.id,
+        frota_id: alerta.frotaId,
+        placa: alerta.placa,
+        modelo: alerta.modelo,
+        data: alerta.data,
+        litros: alerta.litros,
+        km_apontado: alerta.kmApontado,
+        km_esperado: alerta.kmEsperado,
+        percentual: alerta.percentual,
+        valor: alerta.valor,
+        // Se já tratado, preserva ativo=false; caso contrário usa o ativo calculado
+        ativo: jaTratado ? false : ativo,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "id" });
+
+    if (alertaError) {
+      return NextResponse.json({ error: alertaError.message }, { status: 500 });
+    }
+
+    // Atualiza frotas com os valores corrigidos do último cálculo
+    const { data: alertasAtivos } = await supabase
+      .from("alertas_consumo")
+      .select("id")
+      .eq("frota_id", alerta.frotaId)
+      .eq("ativo", true);
+
+    const temAlertaAtivo = (alertasAtivos?.length ?? 0) > 0;
+
+    await supabase
+      .from("frotas")
+      .update({
+        alerta_ativo: temAlertaAtivo,
+        ultimo_calculo_em: alerta.data,
+        ultimo_calculo_km_apontado: alerta.kmApontado,
+        ultimo_calculo_km_esperado: alerta.kmEsperado,
+        ultimo_calculo_percentual: alerta.percentual,
+      })
+      .eq("id", alerta.frotaId);
+
+    return NextResponse.json({ success: true, reprocessado: true, jaTratado });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
+
+/**
  * PATCH /api/alertas-consumo
  * Marca um alerta como tratado (ativo = false) e atualiza a frota.
  * Body: { id: string, resolvido_por: string, justificativa?: string }
