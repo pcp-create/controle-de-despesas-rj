@@ -21,6 +21,7 @@ import {
   Clock,
   ShieldCheck,
   Gauge,
+  CalendarDays,
 } from "lucide-react";
 
 const TIPOS_VEICULO = ["Carro", "Moto", "Caminhão", "Van", "Pickup", "Utilitário", "Outro"];
@@ -44,23 +45,46 @@ export default function FrotasPageSupabase() {
   const { despesas } = useDespesas();
   const { registros: apontamentosKm } = useControleKm();
 
-  // Período de referência para cálculo de estimativa (mês atual por padrão)
-  const hoje = new Date();
-  const [periodoFrotaIni, setPeriodoFrotaIni] = useState(
-    new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10)
-  );
-  const [periodoFrotaFim, setPeriodoFrotaFim] = useState(
-    new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).toISOString().slice(0, 10)
-  );
+  // Filtro de período — inativo por padrão (todo o histórico)
+  const [filtroPeriodoAtivo, setFiltroPeriodoAtivo] = useState(false);
+  const [periodoFrotaIni, setPeriodoFrotaIni] = useState("");
+  const [periodoFrotaFim, setPeriodoFrotaFim] = useState("");
+  // Valores de draft (editados pelo usuário antes de clicar em Aplicar)
+  const [draftIni, setDraftIni] = useState("");
+  const [draftFim, setDraftFim] = useState("");
+
+  const ativarFiltroPeriodo = () => {
+    setFiltroPeriodoAtivo(true);
+  };
+
+  const aplicarPeriodo = () => {
+    setPeriodoFrotaIni(draftIni);
+    setPeriodoFrotaFim(draftFim);
+  };
+
+  const limparPeriodo = () => {
+    setFiltroPeriodoAtivo(false);
+    setDraftIni("");
+    setDraftFim("");
+    setPeriodoFrotaIni("");
+    setPeriodoFrotaFim("");
+  };
+
+  // Período efetivo: null quando filtro inativo ou datas incompletas
+  const periodoEfetivo = filtroPeriodoAtivo && periodoFrotaIni && periodoFrotaFim
+    ? { ini: periodoFrotaIni, fim: periodoFrotaFim }
+    : null;
 
   // Estimativa KM vs Apontado por frota — usa a mesma fonte única do Relatório
+  // Quando periodoEfetivo for null, periodoIni/periodoFim são strings vazias e
+  // calcularEstimativaVeiculo considera todo o histórico (filtro de data retorna true para "")
   const estimativaPorFrota = useMemo(() => {
     const mapa = new Map<string, EstimativaVeiculoResult>();
     for (const frota of frotas) {
       const est = calcularEstimativaVeiculo({
         frotaId: frota.id,
-        periodoIni: periodoFrotaIni,
-        periodoFim: periodoFrotaFim,
+        periodoIni: periodoEfetivo?.ini ?? "",
+        periodoFim: periodoEfetivo?.fim ?? "",
         frotaKmMedia: (frota as any).km_media_litro ?? null,
         todasDespesas: despesas,
         todosRegistrosKm: apontamentosKm,
@@ -68,7 +92,8 @@ export default function FrotasPageSupabase() {
       mapa.set(frota.id, est);
     }
     return mapa;
-  }, [frotas, despesas, apontamentosKm, periodoFrotaIni, periodoFrotaFim]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frotas, despesas, apontamentosKm, periodoEfetivo?.ini, periodoEfetivo?.fim]);
 
   const [search, setSearch] = useState("");
   const [showAtivos, setShowAtivos] = useState(true);
@@ -318,24 +343,57 @@ export default function FrotasPageSupabase() {
           />
         </div>
 
-        {/* Seletor de período de referência para estimativa */}
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
-          <Clock className="w-3.5 h-3.5 shrink-0" />
-          <span className="hidden sm:inline font-medium">Período:</span>
-          <input
-            type="date"
-            value={periodoFrotaIni}
-            onChange={(e) => setPeriodoFrotaIni(e.target.value)}
-            className="px-2 py-1.5 rounded-lg border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-          <span>—</span>
-          <input
-            type="date"
-            value={periodoFrotaFim}
-            onChange={(e) => setPeriodoFrotaFim(e.target.value)}
-            className="px-2 py-1.5 rounded-lg border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
+        {/* Filtro de período — recolhido por padrão */}
+        {!filtroPeriodoAtivo ? (
+          /* Estado inativo: indicação + botão para ativar */
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Clock className="w-3.5 h-3.5 shrink-0" />
+              <span>Período: <span className="font-medium text-foreground">Todo o histórico</span></span>
+            </span>
+            <button
+              onClick={ativarFiltroPeriodo}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-input bg-background text-foreground hover:bg-muted transition"
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              Filtrar por período
+            </button>
+          </div>
+        ) : (
+          /* Estado ativo: campos de data + botões */
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+              <CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />
+              Período:
+            </span>
+            <input
+              type="date"
+              value={draftIni}
+              onChange={(e) => setDraftIni(e.target.value)}
+              className="px-2 py-1.5 rounded-lg border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <span className="text-xs text-muted-foreground">—</span>
+            <input
+              type="date"
+              value={draftFim}
+              onChange={(e) => setDraftFim(e.target.value)}
+              className="px-2 py-1.5 rounded-lg border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <button
+              onClick={aplicarPeriodo}
+              disabled={!draftIni || !draftFim}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            >
+              Aplicar período
+            </button>
+            <button
+              onClick={limparPeriodo}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-input bg-background text-muted-foreground hover:text-foreground hover:bg-muted transition"
+            >
+              Usar todo o histórico
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
           <button
             onClick={() => setShowAtivos(true)}

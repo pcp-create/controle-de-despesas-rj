@@ -406,10 +406,13 @@ export function calcularEstimativaVeiculo(opts: EstimativaVeiculoOpts): Estimati
     : 0;
 
   // 3. Litros abastecidos dentro do período
+  // Quando periodoIni/periodoFim são strings vazias, não há filtro de data (todo o histórico).
+  const temFiltroPeriodo = !!periodoIni && !!periodoFim;
   const litrosPeriodo = todasDespesas
     .filter((d) => {
       if (d.frota_id !== frotaId) return false;
       if (!isCombustivelComLitros(d)) return false;
+      if (!temFiltroPeriodo) return true;
       const ds = d.data_despesa ?? "";
       return ds >= periodoIni && ds <= periodoFim;
     })
@@ -425,6 +428,7 @@ export function calcularEstimativaVeiculo(opts: EstimativaVeiculoOpts): Estimati
       if (r.frota_id !== frotaId) return false;
       if ((r.status as string) !== "finalizado") return false;
       if (usuarioId && r.usuario_id !== usuarioId) return false;
+      if (!temFiltroPeriodo) return true;
       const ds = (r.data_fim ?? r.data_inicio ?? "").slice(0, 10);
       return ds >= periodoIni && ds <= periodoFim;
     })
