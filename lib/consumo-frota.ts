@@ -531,30 +531,28 @@ export function avaliarAbastecimento(
 
 /**
  * Persiste os alertas calculados no banco via API route.
- * Deve ser chamado após um abastecimento ser salvo, passando o id do
- * abastecimento recém-criado para excluí-lo da avaliação (ainda não
- * tem apontamentos — o funcionário ainda vai rodar com esse tanque).
  *
- * Para frotas cujo abastecimento anterior ficou acima de 80%, remove
- * o alerta ativo e atualiza o último cálculo normalmente.
+ * Deve ser chamado após um abastecimento ser salvo ou um apontamento ser finalizado.
+ * Os dados passados já devem estar atualizados (incluindo o novo registro).
+ *
+ * @param frotaId — quando fornecido, processa apenas esse veículo; caso contrário,
+ *   processa todas as frotas com abastecimentos. Use sempre que possível para evitar
+ *   sobrescrever alertas de outros veículos.
  */
 export async function persistirAlertasConsumo(
   despesas: Despesa[],
   apontamentos: ControleKm[],
-  novoAbastecimentoId?: string,
+  frotaId?: string,
 ): Promise<void> {
-  // Exclui o abastecimento recém-criado — ainda não possui apontamentos e
-  // geraria um falso alerta (0% apontado).
-  const despesasParaAvaliar = novoAbastecimentoId
-    ? despesas.filter((d) => d.id !== novoAbastecimentoId)
-    : despesas;
+  const alertas = gerarAlertasConsumo(despesas, apontamentos);
 
-  const alertas = gerarAlertasConsumo(despesasParaAvaliar, apontamentos);
-
-  // Coleta as frotas dos abastecimentos avaliados (excluindo o novo)
-  const frotasAvaliadas = new Set(
-    despesasParaAvaliar.filter(isAbastecimento).map((d) => d.frota_id as string),
+  // Coleta as frotas a avaliar: somente a especificada, ou todas com abastecimentos
+  const todasFrotasComAbast = new Set(
+    despesas.filter(isAbastecimento).map((d) => d.frota_id as string),
   );
+  const frotasAvaliadas = frotaId
+    ? (todasFrotasComAbast.has(frotaId) ? new Set([frotaId]) : new Set<string>())
+    : todasFrotasComAbast;
 
   // Alertas com problema (abaixo de 80%) — um por frota (o mais recente)
   const alertasPorFrota = new Map<string, AlertaConsumo>();
@@ -563,7 +561,7 @@ export async function persistirAlertasConsumo(
   }
 
   // Para cada frota avaliada: persiste alerta se houver, ou limpa se estiver OK
-  await Promise.all(
+  const resultados = await Promise.allSettled(
     Array.from(frotasAvaliadas).map((frotaId) => {
       const alerta = alertasPorFrota.get(frotaId);
       if (alerta) {
@@ -583,70 +581,118 @@ export async function persistirAlertasConsumo(
       }
     }),
   );
+
+  // Loga erros sem mascarar — não bloqueia o fluxo principal pois o abastecimento já foi salvo
+  for (const r of resultados) {
+    if (r.status === "rejected") {
+      console.error("[persistirAlertasConsumo] Falha ao persistir alerta:", r.reason);
+    }
+  }
 }
 
 /**
- * Gera alertas de consumo avaliando cada veículo com abastecimentos no período
- * que vai até "hoje".
+ * Gera alertas de consumo avaliando cada veículo com pelo menos dois abastecimentos.
  *
- * Para cada veículo com abastecimento, usa calcularEstimativaVeiculo no período
- * do último abastecimento até hoje — considerando saldo anterior — em vez da
- * fórmula antiga (litros × km_media_litro) que ignorava o saldo remanescente.
+ * Regra:
+ *  - Janela = do penúltimo abastecimento (inclusive) até o último abastecimento (inclusive)
+ *  - KM apontado = soma de todos os apontamentos FINALIZADOS do veículo dentro da janela,
+ *    independentemente do funcionário
+ *  - KM esperado = litros do penúltimo abastecimento × km_media_litro da frota
+ *  - Alerta apenas quando percentual < 80% (LIMITE_CONSUMO)
  *
- * Não gera alerta quando o veículo tem saldo anterior suficiente para cobrir
- * os KM apontados sem abastecimento no mês.
+ * Não gera alerta quando:
+ *  - Há menos de 2 abastecimentos válidos
+ *  - Existe apontamento em aberto para o veículo
+ *  - KM esperado é zero (sem km_media_litro cadastrado)
+ *  - Dados insuficientes
  */
 export function gerarAlertasConsumo(
   despesas: Despesa[],
   apontamentos: ControleKm[],
 ): AlertaConsumo[] {
-  // Frotas com pelo menos um abastecimento com litros
+  // Frotas com pelo menos dois abastecimentos com litros
   const frotaIds = [
     ...new Set(despesas.filter(isAbastecimento).map((d) => d.frota_id as string)),
   ];
 
   const alertas: AlertaConsumo[] = [];
-  const hoje = new Date().toISOString().slice(0, 10);
 
   for (const frotaId of frotaIds) {
-    // Encontra o abastecimento mais recente desta frota
-    const ultimoAbast = despesas
+    // Ordena todos os abastecimentos do veículo por data+hora real (asc).
+    // Combina data_despesa + hora_despesa para ordenação precisa em abastecimentos
+    // retroativos ou múltiplos abastecimentos no mesmo dia.
+    const abastecimentos = despesas
       .filter((d) => d.frota_id === frotaId && isAbastecimento(d))
-      .sort((a, b) => (b.data_despesa ?? b.created_at).localeCompare(a.data_despesa ?? a.created_at))[0];
+      .sort((a, b) => {
+        const tsA = `${a.data_despesa ?? a.created_at.slice(0, 10)}T${a.hora_despesa ?? "00:00:00"}`;
+        const tsB = `${b.data_despesa ?? b.created_at.slice(0, 10)}T${b.hora_despesa ?? "00:00:00"}`;
+        return tsA.localeCompare(tsB);
+      });
 
-    if (!ultimoAbast) continue;
+    // Precisa de pelo menos 2 abastecimentos para calcular a janela
+    if (abastecimentos.length < 2) continue;
 
-    const frotaKmMedia = ultimoAbast.frota?.km_media_litro ?? null;
+    const penultimo = abastecimentos[abastecimentos.length - 2];
+    const ultimo    = abastecimentos[abastecimentos.length - 1];
 
-    // Período: do início do mês do último abastecimento até hoje
-    const dataAbast = (ultimoAbast.data_despesa ?? ultimoAbast.created_at).slice(0, 10);
-    const [ano, mes] = dataAbast.split("-").map(Number);
-    const periodoIni = `${ano}-${String(mes).padStart(2, "0")}-01`;
-    const periodoFim = hoje;
+    // Não gera alerta se existir apontamento aberto para o veículo
+    const temAberto = apontamentos.some(
+      (a) => a.frota_id === frotaId && a.status === "aberto",
+    );
+    if (temAberto) continue;
 
-    const est = calcularEstimativaVeiculo({
-      frotaId,
-      periodoIni,
-      periodoFim,
-      frotaKmMedia,
-      todasDespesas: despesas,
-      todosRegistrosKm: apontamentos,
-    });
+    const kmMediaLitro = ultimo.frota?.km_media_litro ?? penultimo.frota?.km_media_litro ?? null;
+    if (!kmMediaLitro || kmMediaLitro <= 0) continue;
 
-    if (!est.temAlerta) continue;
-    if (est.kmEstimado <= 0) continue;
+    const litros = penultimo.litros_abastecidos as number;
+    const kmEsperado = litros * kmMediaLitro;
+    if (kmEsperado <= 0) continue;
+
+    // Janela: data+hora do penúltimo até data+hora do último
+    // Usa hora_despesa quando disponível para precisão em dias iguais.
+    const iniDate = penultimo.data_despesa ?? penultimo.created_at.slice(0, 10);
+    const iniHora = penultimo.hora_despesa ?? "00:00:00";
+    const fimDate = ultimo.data_despesa    ?? ultimo.created_at.slice(0, 10);
+    const fimHora = ultimo.hora_despesa    ?? "23:59:59";
+
+    const iniMs = new Date(`${iniDate}T${iniHora}`).getTime();
+    const fimMs = new Date(`${fimDate}T${fimHora}`).getTime();
+
+    // dataRef usada como chave do alerta — data do último abastecimento
+    const dataRef = fimDate;
+
+    // Soma todos os apontamentos finalizados do veículo dentro da janela
+    const kmApontado = apontamentos
+      .filter((a) => {
+        if (a.frota_id !== frotaId) return false;
+        if (a.status !== "finalizado") return false;
+        const km = kmPercorridoApontamento(a);
+        if (km <= 0) return false;
+        const dMs = new Date(
+          (a.data_fim ?? a.data_inicio).length === 10
+            ? `${a.data_fim ?? a.data_inicio}T12:00:00`
+            : (a.data_fim ?? a.data_inicio),
+        ).getTime();
+        return dMs >= iniMs && dMs <= fimMs;
+      })
+      .reduce((sum, a) => sum + kmPercorridoApontamento(a), 0);
+
+    const percentual = kmApontado / kmEsperado;
+
+    // Apenas gera alerta se percentual for estritamente menor que 80%
+    if (percentual >= LIMITE_CONSUMO) continue;
 
     alertas.push({
-      id: `${frotaId}_${periodoFim}`,
+      id: `${frotaId}_${dataRef}`,
       frotaId,
-      placa: ultimoAbast.frota?.placa ?? "—",
-      modelo: ultimoAbast.frota?.modelo ?? "",
-      data: periodoFim,
-      litros: est.litrosPeriodo,
-      kmApontado: est.kmApontado,
-      kmEsperado: est.kmEstimado,
-      percentual: est.percentual ?? 0,
-      valor: ultimoAbast.valor,
+      placa: ultimo.frota?.placa ?? "—",
+      modelo: ultimo.frota?.modelo ?? "",
+      data: dataRef,
+      litros,
+      kmApontado: Math.round(kmApontado),
+      kmEsperado: Math.round(kmEsperado),
+      percentual: Math.round(percentual * 100) / 100,
+      valor: penultimo.valor,
     });
   }
 

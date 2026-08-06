@@ -21,6 +21,20 @@ export async function POST(req: Request) {
 
     const supabase = getServiceClient();
 
+    // Verifica se esse intervalo já foi tratado manualmente (ativo = false com resolvido_por preenchido).
+    // Se foi tratado, não reativa — o alerta só volta se houver um novo intervalo (novo abastecimento).
+    const { data: existente } = await supabase
+      .from("alertas_consumo")
+      .select("ativo, resolvido_por")
+      .eq("id", alerta.id)
+      .maybeSingle();
+
+    const jaTratado = existente && existente.ativo === false && existente.resolvido_por != null;
+    if (jaTratado) {
+      // Retorna sucesso sem alterar — o alerta tratado para esse intervalo é imutável
+      return NextResponse.json({ success: true, alerta_ativo: false, ignorado: true });
+    }
+
     // Upsert na tabela alertas_consumo
     const { error: alertaError } = await supabase
       .from("alertas_consumo")
