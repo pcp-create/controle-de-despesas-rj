@@ -366,233 +366,298 @@ export default function FrotasPageSupabase() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {frostasFiltradas.map((frota) => (
-            <div key={frota.id} className="bg-white rounded-xl border border-border p-4 flex flex-col gap-3">
-              {/* Top */}
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
-                    <Car className="w-5 h-5 text-accent" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-foreground tracking-wider text-sm">{frota.placa}</p>
-                    <p className="text-xs text-muted-foreground">{frota.marca} {frota.modelo}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {frota.alerta_ativo && (
-                    <span
-                      className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-warning/10 text-warning"
-                      title={frota.ultimo_calculo_percentual != null
-                        ? `KM apontado: ${Math.round((frota.ultimo_calculo_percentual ?? 0) * 100)}% do esperado`
-                        : "Apontamentos de KM insuficientes"}
-                    >
-                      <AlertTriangle className="w-3 h-3" />
-                      Alerta
-                    </span>
-                  )}
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${frota.ativo ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
-                    {frota.ativo ? "Ativo" : "Inativo"}
-                  </span>
-                </div>
-              </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
+          {frostasFiltradas.map((frota) => {
+            const est = estimativaPorFrota.get(frota.id);
+            const hasActivity = est && (est.kmEstimado > 0 || est.kmApontado > 0 || est.litrosPeriodo > 0);
+            const pct = est?.percentual ?? null;
 
-              {/* Info */}
-              <div className="grid grid-cols-2 gap-1.5 text-xs">
-                {frota.tipo && (
+            // Cor do bloco de estimativa
+            const estBorderColor = !hasActivity || !est?.dadosSuficientes
+              ? "border-border bg-muted/20"
+              : pct === null ? "border-border bg-muted/20"
+              : pct >= 80 && pct <= 115 ? "border-success/20 bg-success/5"
+              : pct > 115 ? "border-warning/20 bg-warning/5"
+              : "border-destructive/20 bg-destructive/5";
+
+            const pctColor = pct === null ? "text-muted-foreground"
+              : pct >= 80 && pct <= 115 ? "text-success"
+              : pct > 115 ? "text-warning"
+              : "text-destructive";
+
+            // Origem da média
+            const origemMedia = !est ? "Dados insuficientes"
+              : !est.dadosSuficientes ? "Dados insuficientes"
+              : est.mediaKmLReal !== null ? "Média histórica"
+              : "Média cadastrada";
+
+            const consumoMedioLabel = est && est.mediaUsada > 0
+              ? `${est.mediaUsada.toFixed(1).replace(".", ",")} km/L`
+              : "Não calculado";
+
+            return (
+              <div key={frota.id} className="bg-white rounded-xl border border-border p-4 flex flex-col gap-3 h-full">
+
+                {/* 1. Cabeçalho */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
+                      <Car className="w-5 h-5 text-accent" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-foreground tracking-wider text-sm">{frota.placa}</p>
+                      <p className="text-xs text-muted-foreground">{frota.marca} {frota.modelo}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {frota.alerta_ativo && (
+                      <span
+                        className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-warning/10 text-warning"
+                        title={frota.ultimo_calculo_percentual != null
+                          ? `KM apontado: ${Math.round((frota.ultimo_calculo_percentual ?? 0) * 100)}% do esperado`
+                          : "Apontamentos de KM insuficientes"}
+                      >
+                        <AlertTriangle className="w-3 h-3" />
+                        Alerta
+                      </span>
+                    )}
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${frota.ativo ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
+                      {frota.ativo ? "Ativo" : "Inativo"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2. Informações principais — grade fixa 2×2, sempre presente */}
+                <div className="grid grid-cols-2 gap-1.5 text-xs">
                   <div className="flex flex-col gap-0.5">
                     <span className="text-muted-foreground">Tipo</span>
-                    <span className="font-medium text-foreground">{frota.tipo}</span>
+                    <span className="font-medium text-foreground">{frota.tipo || "—"}</span>
                   </div>
-                )}
-                {frota.ano && (
                   <div className="flex flex-col gap-0.5">
                     <span className="text-muted-foreground">Ano</span>
-                    <span className="font-medium text-foreground">{frota.ano}</span>
+                    <span className="font-medium text-foreground">{frota.ano || "—"}</span>
                   </div>
-                )}
-                {frota.cor && (
                   <div className="flex flex-col gap-0.5">
                     <span className="text-muted-foreground">Cor</span>
-                    <span className="font-medium text-foreground">{frota.cor}</span>
+                    <span className="font-medium text-foreground">{frota.cor || "—"}</span>
                   </div>
-                )}
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-muted-foreground">KM atual</span>
-                  <span className="font-medium text-foreground">{frota.quilometragem.toLocaleString("pt-BR")} km</span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-muted-foreground">KM atual</span>
+                    <span className="font-medium text-foreground">{frota.quilometragem.toLocaleString("pt-BR")} km</span>
+                  </div>
                 </div>
-              </div>
 
-              {/* Última atualização de KM via Controle de KM */}
-              {frota.km_atualizado_em && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5">
+                {/* 3. Última atualização de KM — sempre presente (placeholder quando vazio) */}
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-1.5 min-h-[30px]">
                   <Clock className="w-3.5 h-3.5 shrink-0" />
-                  <span>
-                    KM atualizado em{" "}
-                    <span className="font-medium text-foreground">
-                      {new Date(frota.km_atualizado_em).toLocaleString("pt-BR", {
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                  {frota.km_atualizado_em ? (
+                    <span>
+                      KM atualizado em{" "}
+                      <span className="font-medium text-foreground">
+                        {new Date(frota.km_atualizado_em).toLocaleString("pt-BR", {
+                          day: "2-digit", month: "2-digit", year: "numeric",
+                          hour: "2-digit", minute: "2-digit",
+                        })}
+                      </span>
                     </span>
-                  </span>
+                  ) : (
+                    <span>KM ainda não atualizado via controle</span>
+                  )}
                 </div>
-              )}
 
-              {/* Último cálculo de consumo */}
-              {frota.ultimo_calculo_em && (
-                <div className={`flex items-center gap-1.5 text-xs rounded-lg px-3 py-1.5 ${frota.alerta_ativo ? "bg-warning/5 border border-warning/20 text-warning" : "bg-success/5 border border-success/20 text-success"}`}>
-                  <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${frota.alerta_ativo ? "text-warning" : "text-success"}`} />
-                  <span>
-                    Último cálculo:{" "}
-                    <span className="font-medium">
-                      {Math.round((frota.ultimo_calculo_percentual ?? 0) * 100)}% apontado
+                {/* 4. Último cálculo de consumo — sempre presente (placeholder quando vazio) */}
+                <div className={`flex items-center gap-1.5 text-xs rounded-lg px-3 py-1.5 min-h-[30px] ${
+                  frota.ultimo_calculo_em
+                    ? frota.alerta_ativo
+                      ? "bg-warning/5 border border-warning/20 text-warning"
+                      : "bg-success/5 border border-success/20 text-success"
+                    : "bg-muted/40 border border-border text-muted-foreground"
+                }`}>
+                  <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${
+                    frota.ultimo_calculo_em
+                      ? frota.alerta_ativo ? "text-warning" : "text-success"
+                      : "text-muted-foreground"
+                  }`} />
+                  {frota.ultimo_calculo_em ? (
+                    <span>
+                      Último cálculo:{" "}
+                      <span className="font-medium">
+                        {Math.round((frota.ultimo_calculo_percentual ?? 0) * 100)}% apontado
+                      </span>
+                      {" "}({(frota.ultimo_calculo_km_apontado ?? 0).toLocaleString("pt-BR")} / {(frota.ultimo_calculo_km_esperado ?? 0).toLocaleString("pt-BR")} km) em{" "}
+                      <span className="font-medium">
+                        {new Date(frota.ultimo_calculo_em).toLocaleDateString("pt-BR")}
+                      </span>
                     </span>
-                    {" "}({(frota.ultimo_calculo_km_apontado ?? 0).toLocaleString("pt-BR")} / {(frota.ultimo_calculo_km_esperado ?? 0).toLocaleString("pt-BR")} km) em{" "}
-                    <span className="font-medium">
-                      {new Date(frota.ultimo_calculo_em).toLocaleDateString("pt-BR")}
-                    </span>
-                  </span>
+                  ) : (
+                    <span>Nenhum cálculo registrado</span>
+                  )}
                 </div>
-              )}
 
-              {/* Estimativa KM vs Apontado — mesma lógica do Relatório */}
-              {(() => {
-                const est = estimativaPorFrota.get(frota.id);
-                if (!est) return null;
-
-                const semDados = !est.dadosSuficientes;
-                const pct = est.percentual;
-                const pctColor = pct === null ? "text-muted-foreground"
-                  : pct >= 80 && pct <= 115 ? "text-success"
-                  : pct > 115 ? "text-warning"
-                  : "text-destructive";
-                const borderColor = pct === null ? "border-border bg-muted/30"
-                  : pct >= 80 && pct <= 115 ? "border-success/20 bg-success/5"
-                  : pct > 115 ? "border-warning/20 bg-warning/5"
-                  : "border-destructive/20 bg-destructive/5";
-                const hasActivity = est.kmEstimado > 0 || est.kmApontado > 0 || est.litrosPeriodo > 0;
-
-                if (semDados || !hasActivity) {
-                  return (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+                {/* 5. Bloco KM estimado vs apontado — sempre presente, mesma altura mínima */}
+                <div className={`flex flex-col gap-2 rounded-lg px-3 py-2.5 text-xs border ${estBorderColor}`}>
+                  {/* Título + percentual */}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 font-medium text-foreground">
                       <Gauge className="w-3.5 h-3.5 shrink-0" />
-                      <span>
-                        {semDados
-                          ? "Estimativa indisponível — sem média de consumo cadastrada ou histórico suficiente"
-                          : "Sem movimentação no período selecionado"}
-                      </span>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className={`flex flex-col gap-2 rounded-lg px-3 py-2.5 text-xs border ${borderColor}`}>
-                    {/* Linha 1: título + % */}
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="flex items-center gap-1.5 font-medium text-foreground">
-                        <Gauge className="w-3.5 h-3.5" />
-                        KM estimado vs apontado
-                        {est.estimativa && <span className="text-[10px] text-muted-foreground font-normal">(média cadastrada)</span>}
-                      </span>
-                      {pct !== null && (
-                        <span className={`font-bold text-sm ${pctColor}`}>{pct}%</span>
-                      )}
-                    </div>
-
-                    {/* Barra */}
-                    {est.kmEstimado > 0 && (
-                      <div className="relative h-4 rounded overflow-hidden bg-muted/40">
-                        <div className="absolute inset-y-0 left-0 bg-muted-foreground/20 rounded" style={{ width: "100%" }} />
-                        <div
-                          className={`absolute inset-y-0 left-0 rounded transition-all ${
-                            pct !== null && pct < 80 ? "bg-destructive/70"
-                            : pct !== null && pct > 115 ? "bg-warning/70"
-                            : "bg-success/70"
-                          }`}
-                          style={{ width: `${Math.min(100, ((est.kmApontado / est.kmEstimado) * 100))}%` }}
-                        />
-                      </div>
+                      KM estimado vs apontado
+                    </span>
+                    {pct !== null ? (
+                      <span className={`font-bold text-sm ${pctColor}`}>{pct}%</span>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground">—</span>
                     )}
+                  </div>
 
-                    {/* Grid de métricas */}
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
-                      <span className="text-muted-foreground">Saldo inicial est.: <span className="font-medium text-foreground">{est.saldoInicial.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span></span>
-                      <span className="text-muted-foreground">Abastecido: <span className="font-medium text-foreground">{est.litrosPeriodo.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span></span>
-                      <span className="text-muted-foreground">KM estimado: <span className="font-medium text-foreground">{est.kmEstimado.toLocaleString("pt-BR")} km</span></span>
-                      <span className="text-muted-foreground">KM apontado: <span className="font-medium text-foreground">{est.kmApontado.toLocaleString("pt-BR")} km</span></span>
-                      <span className="text-muted-foreground">Diferença: <span className={`font-medium ${est.diferenca >= 0 ? "text-success" : "text-destructive"}`}>{est.diferenca >= 0 ? "+" : ""}{est.diferenca.toLocaleString("pt-BR")} km</span></span>
-                      <span className="text-muted-foreground">Saldo final est.: <span className="font-medium text-foreground">{est.saldoFinal.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span></span>
+                  {/* Barra — preservada mesmo sem dados */}
+                  <div className="relative h-3 rounded overflow-hidden bg-muted/40">
+                    {hasActivity && est && est.kmEstimado > 0 && (
+                      <div
+                        className={`absolute inset-y-0 left-0 rounded transition-all ${
+                          pct !== null && pct < 80 ? "bg-destructive/70"
+                          : pct !== null && pct > 115 ? "bg-warning/70"
+                          : "bg-success/70"
+                        }`}
+                        style={{ width: `${Math.min(100, Math.round((est.kmApontado / est.kmEstimado) * 100))}%` }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Grade fixa 2×4 — sempre os mesmos campos nas mesmas posições */}
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px]">
+                    {/* Col 1 */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-muted-foreground">Saldo inicial estimado</span>
+                      <span className="font-medium text-foreground">
+                        {hasActivity && est ? `${est.saldoInicial.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L` : "—"}
+                      </span>
                     </div>
-                    <div className="text-[10px] text-muted-foreground">
-                      Consumo médio: <span className="font-medium text-foreground">{est.mediaUsada > 0 ? `${est.mediaUsada.toFixed(1)} km/L` : "—"}</span>
+                    {/* Col 2 */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-muted-foreground">Litros abastecidos</span>
+                      <span className="font-medium text-foreground">
+                        {hasActivity && est ? `${est.litrosPeriodo.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L` : "—"}
+                      </span>
+                    </div>
+                    {/* Col 1 */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-muted-foreground">KM estimado</span>
+                      <span className="font-medium text-foreground">
+                        {hasActivity && est ? `${est.kmEstimado.toLocaleString("pt-BR")} km` : "—"}
+                      </span>
+                    </div>
+                    {/* Col 2 */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-muted-foreground">KM apontado</span>
+                      <span className="font-medium text-foreground">
+                        {hasActivity && est ? `${est.kmApontado.toLocaleString("pt-BR")} km` : "—"}
+                      </span>
+                    </div>
+                    {/* Col 1 */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-muted-foreground">Diferença</span>
+                      <span className={`font-medium ${
+                        !hasActivity || !est ? "text-foreground"
+                        : est.diferenca >= 0 ? "text-success" : "text-destructive"
+                      }`}>
+                        {hasActivity && est
+                          ? `${est.diferenca >= 0 ? "+" : ""}${est.diferenca.toLocaleString("pt-BR")} km`
+                          : "—"}
+                      </span>
+                    </div>
+                    {/* Col 2 */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-muted-foreground">Saldo final estimado</span>
+                      <span className="font-medium text-foreground">
+                        {hasActivity && est ? `${est.saldoFinal.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L` : "—"}
+                      </span>
+                    </div>
+                    {/* Col 1 */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-muted-foreground">Consumo médio estimado</span>
+                      <span className="font-medium text-foreground">{consumoMedioLabel}</span>
+                    </div>
+                    {/* Col 2 */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-muted-foreground">Origem da média</span>
+                      <span className={`font-medium ${origemMedia === "Dados insuficientes" ? "text-muted-foreground italic" : "text-foreground"}`}>
+                        {origemMedia}
+                      </span>
                     </div>
                   </div>
-                );
-              })()}
 
-              {frota.observacao && (
-                <p className="text-xs text-muted-foreground border-t border-border pt-2">{frota.observacao}</p>
-              )}
+                  {/* Mensagem de estado quando sem movimentação */}
+                  {!hasActivity && (
+                    <p className="text-[10px] text-muted-foreground italic">
+                      {est?.dadosSuficientes === false
+                        ? "Sem média de consumo disponível para calcular a estimativa."
+                        : "Sem movimentação no período selecionado."}
+                    </p>
+                  )}
+                </div>
 
-              {/* Actions */}
-              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
-                {frota.alerta_ativo && (
-                  <button
-                    onClick={() => { setModalTratarFrota(frota); setJustificativaAlerta(""); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-warning/10 border border-warning/30 text-warning hover:bg-warning/20 transition"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    Tratar Alerta
-                  </button>
-                )}
-                <button
-                  onClick={() => openEdit(frota)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 text-foreground transition"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                  Editar
-                </button>
-                <button
-                  onClick={() => handleToggleAtivo(frota)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 text-foreground transition"
-                >
-                  {frota.ativo
-                    ? <ToggleRight className="w-3.5 h-3.5 text-success" />
-                    : <ToggleLeft className="w-3.5 h-3.5 text-muted-foreground" />
-                  }
-                  {frota.ativo ? "Desativar" : "Ativar"}
-                </button>
-                {deleteConfirm === frota.id ? (
-                  <div className="flex items-center gap-1 ml-auto">
+                {/* 6. Nome / observação do veículo — sempre ocupa espaço (flex-1 empurra actions para baixo) */}
+                <div className="flex-1 min-h-[1.5rem]">
+                  {frota.observacao && (
+                    <p className="text-xs text-muted-foreground">{frota.observacao}</p>
+                  )}
+                </div>
+
+                {/* 7. Botões de ação — sempre no rodapé */}
+                <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2 mt-auto">
+                  {frota.alerta_ativo && (
                     <button
-                      onClick={() => handleDelete(frota.id)}
-                      className="px-2 py-1.5 rounded-lg text-xs font-medium bg-destructive text-white hover:bg-destructive/90 transition"
+                      onClick={() => { setModalTratarFrota(frota); setJustificativaAlerta(""); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-warning/10 border border-warning/30 text-warning hover:bg-warning/20 transition"
                     >
-                      Confirmar
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      Tratar Alerta
                     </button>
-                    <button
-                      onClick={() => setDeleteConfirm(null)}
-                      className="px-2 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 transition"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                ) : (
+                  )}
                   <button
-                    onClick={() => setDeleteConfirm(frota.id)}
-                    className="ml-auto p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+                    onClick={() => openEdit(frota)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 text-foreground transition"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Pencil className="w-3.5 h-3.5" />
+                    Editar
                   </button>
-                )}
+                  <button
+                    onClick={() => handleToggleAtivo(frota)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 text-foreground transition"
+                  >
+                    {frota.ativo
+                      ? <ToggleRight className="w-3.5 h-3.5 text-success" />
+                      : <ToggleLeft className="w-3.5 h-3.5 text-muted-foreground" />
+                    }
+                    {frota.ativo ? "Desativar" : "Ativar"}
+                  </button>
+                  {deleteConfirm === frota.id ? (
+                    <div className="flex items-center gap-1 ml-auto">
+                      <button
+                        onClick={() => handleDelete(frota.id)}
+                        className="px-2 py-1.5 rounded-lg text-xs font-medium bg-destructive text-white hover:bg-destructive/90 transition"
+                      >
+                        Confirmar
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(null)}
+                        className="px-2 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 transition"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setDeleteConfirm(frota.id)}
+                      className="ml-auto p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
