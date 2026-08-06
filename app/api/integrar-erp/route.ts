@@ -759,7 +759,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       erp_id: erpId,
-      centroCustoCodigo: erpId,
+      documentoFiscalId: erpId,
       numeroDocumentoErp,
     });
   } catch (error: any) {
