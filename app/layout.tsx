@@ -15,6 +15,18 @@ export const metadata: Metadata = {
   description:
     "Sistema de controle de despesas corporativas para técnicos externos da RJ Compressores.",
   generator: "v0.app",
+  icons: {
+    icon: [
+      { url: "/icon.png?v=2", sizes: "32x32", type: "image/png" },
+      { url: "/icon.png?v=2", sizes: "192x192", type: "image/png" },
+      { url: "/icon.png?v=2", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-icon.png?v=2", sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: "/icon.png?v=2",
+  },
+  manifest: "/manifest.webmanifest",
 };
 
 export const viewport: Viewport = {
