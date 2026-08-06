@@ -70,14 +70,7 @@ export function calcularConsumoFrota(opts: {
 
   if (!kmMediaLitro || kmMediaLitro <= 0) return null;
 
-  // Converte data+hora LOCAL para ms (sem Z para não tratar como UTC)
-  const toLocalMs = (dateStr: string, timeStr: string) =>
-    new Date(`${dateStr.slice(0, 10)}T${timeStr}`).getTime();
-
-  const fimJanelaMs = toLocalMs(
-    novaDataDespesa,
-    novaHoraDespesa ? `${novaHoraDespesa}:00` : "23:59:59",
-  );
+  const fimJanelaMs = abastecimentoUtcMs(novaDataDespesa, novaHoraDespesa);
 
   // Abastecimento anterior (mais recente antes do atual)
   const ultimoAbast = despesas
@@ -96,11 +89,8 @@ export function calcularConsumoFrota(opts: {
 
   if (!ultimoAbast) return null;
 
-  const horaInicio = (ultimoAbast as Despesa & { hora_despesa?: string | null }).hora_despesa ?? "00:00:00";
-  const inicioJanelaMs = toLocalMs(
-    ultimoAbast.data_despesa.slice(0, 10),
-    horaInicio,
-  );
+  const horaInicio = (ultimoAbast as Despesa & { hora_despesa?: string | null }).hora_despesa;
+  const inicioJanelaMs = abastecimentoUtcMs(ultimoAbast.data_despesa.slice(0, 10), horaInicio);
 
   const litros = ultimoAbast.litros_abastecidos as number;
   const kmEsperado = litros * kmMediaLitro;
@@ -117,8 +107,8 @@ export function calcularConsumoFrota(opts: {
       if (a.frota_id !== frotaId) return false;
       if (a.status !== "finalizado") return false;
       if (kmPorApontamento(a) <= 0) return false;
-      const dataApontMs = new Date(a.data_fim ?? a.data_inicio).getTime();
-      return dataApontMs >= inicioJanelaMs && dataApontMs <= fimJanelaMs;
+      const dataApontMs = apontamentoUtcMs(a);
+      return dataApontMs > inicioJanelaMs && dataApontMs <= fimJanelaMs;
     })
     .reduce((sum, a) => sum + kmPorApontamento(a), 0);
 
@@ -197,16 +187,22 @@ export function calcularAutonomiaMedia(
     const proximo  = abastecimentos[i + 1];
     const litros   = anterior.litros_abastecidos as number;
 
-    const inicioMs = new Date(anterior.data_despesa ?? anterior.created_at).getTime();
-    const fimMs    = new Date(proximo.data_despesa  ?? proximo.created_at).getTime();
+    const inicioMs = abastecimentoUtcMs(
+      anterior.data_despesa ?? anterior.created_at.slice(0, 10),
+      anterior.hora_despesa,
+    );
+    const fimMs = abastecimentoUtcMs(
+      proximo.data_despesa ?? proximo.created_at.slice(0, 10),
+      proximo.hora_despesa,
+    );
 
     const kmApontado = apontamentos
       .filter((a) => {
         if (a.frota_id !== frotaId) return false;
         if (a.status !== "finalizado") return false;
         if (kmPorApontamento(a) <= 0) return false;
-        const dataApontMs = new Date(a.data_fim ?? a.data_inicio).getTime();
-        return dataApontMs >= inicioMs && dataApontMs <= fimMs;
+        const dataApontMs = apontamentoUtcMs(a);
+        return dataApontMs > inicioMs && dataApontMs <= fimMs;
       })
       .reduce((sum, a) => sum + kmPorApontamento(a), 0);
 
@@ -422,7 +418,7 @@ export function calcularEstimativaVeiculo(opts: EstimativaVeiculoOpts): Estimati
   const combustivelDisponivel = saldoInicial + litrosPeriodo;
   const kmEstimado = combustivelDisponivel * mediaUsada;
 
-  // 5. KM apontado no período (filtra por usuário se especificado)
+  // 5. KM apontado no per��odo (filtra por usuário se especificado)
   const kmApontado = todosRegistrosKm
     .filter((r) => {
       if (r.frota_id !== frotaId) return false;
@@ -565,7 +561,9 @@ export async function persistirAlertasConsumo(
     Array.from(frotasAvaliadas).map((frotaId) => {
       const alerta = alertasPorFrota.get(frotaId);
       if (alerta) {
-        // Frota com problema: persiste alerta ativo
+        // Frota com problema: persiste ou atualiza alerta via POST (fluxo normal).
+        // POST protege alertas já tratados manualmente (resolvido_por != null) e
+        // atualiza km_apontado/km_esperado/percentual quando o alerta ainda está ativo.
         return fetch("/api/alertas-consumo", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -590,27 +588,93 @@ export async function persistirAlertasConsumo(
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Normalização de datas para comparação de janelas de abastecimento
+//
+// CAUSA DO BUG (TPY0G26 — 06/08/2026):
+//   - data_inicio / data_fim em ControleKm são strings ISO completas em UTC
+//     ex: "2026-08-06T17:13:45.000Z" (= 14:13:45 BRT)
+//   - hora_despesa em Despesa é armazenada como "HH:mm" sem segundos
+//     ex: "14:13" (representa 14:13:00 BRT, mas o apontamento finalizou 14:13:45 BRT)
+//
+// Quando o abastecimento ocorre no mesmo minuto do apontamento (14:13 BRT):
+//   - fimMs calculado sem correção = 14:13:00 BRT → 17:13:00 UTC
+//   - data_fim do apontamento      = 14:13:45 BRT → 17:13:45 UTC
+//   - 17:13:45 > 17:13:00 → apontamento excluído incorretamente
+//
+// SOLUÇÃO: quando hora_despesa tem apenas "HH:mm" (sem segundos), considerar como
+// limite final o último ms daquele minuto (HH:mm:59.999), cobrindo qualquer
+// apontamento finalizado dentro do mesmo minuto digitado pelo usuário.
+// Quando hora_despesa já tem segundos ("HH:mm:ss"), usar o valor exato.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Offset fixo BRT em ms (UTC-3). */
+const BRT_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * Converte data+hora LOCAL (America/Sao_Paulo, BRT = UTC-3) para timestamp UTC em ms.
+ *
+ * Regra de precisão de segundos:
+ *   - "HH:mm" (5 chars, sem segundos)  → usa HH:mm:59.999 como limite
+ *     Razão: hora_despesa não armazena segundos; o usuário digitou "14:13" mas o
+ *     apontamento pode ter sido finalizado em 14:13:45 — o minuto inteiro é válido.
+ *   - "HH:mm:ss" (8 chars, com segundos) → usa o valor exato, sem extensão.
+ *     Razão: se os segundos estão presentes, o horário é preciso.
+ *   - null/undefined → usa 00:00:00.000 (início do dia).
+ *
+ * Usa Date.UTC + BRT_OFFSET_MS para ser determinístico em qualquer timezone de servidor.
+ *
+ * @param dateStr "YYYY-MM-DD"
+ * @param timeStr "HH:mm" | "HH:mm:ss" | null
+ */
+function abastecimentoUtcMs(
+  dateStr: string,
+  timeStr: string | null | undefined,
+): number {
+  const [year, month, day] = dateStr.slice(0, 10).split("-").map(Number);
+
+  if (!timeStr) {
+    // Sem hora: início do dia (00:00:00.000 BRT)
+    return Date.UTC(year, month - 1, day, 0, 0, 0, 0) + BRT_OFFSET_MS;
+  }
+
+  const semSegundos = timeStr.length === 5; // "HH:mm"
+  const partes = timeStr.split(":").map(Number);
+  const hh = partes[0];
+  const mm = partes[1];
+  const ss = semSegundos ? 59 : (partes[2] ?? 0);
+  const ms = semSegundos ? 999 : 0;
+
+  return Date.UTC(year, month - 1, day, hh, mm, ss, ms) + BRT_OFFSET_MS;
+}
+
+/**
+ * Extrai o timestamp UTC em ms de um apontamento (data_fim ou data_inicio).
+ * data_fim é string ISO com Z (UTC) — pode ser null se ainda aberto.
+ */
+function apontamentoUtcMs(a: ControleKm): number {
+  const raw = a.data_fim ?? a.data_inicio;
+  // ISO com Z ou com +00:00 → new Date() parseia corretamente como UTC
+  // String apenas "YYYY-MM-DD" (10 chars) → raramente ocorre, assume meio-dia UTC
+  if (raw.length === 10) return new Date(`${raw}T12:00:00Z`).getTime();
+  return new Date(raw).getTime();
+}
+
 /**
  * Gera alertas de consumo avaliando cada veículo com pelo menos dois abastecimentos.
  *
- * Regra:
- *  - Janela = do penúltimo abastecimento (inclusive) até o último abastecimento (inclusive)
- *  - KM apontado = soma de todos os apontamentos FINALIZADOS do veículo dentro da janela,
- *    independentemente do funcionário
- *  - KM esperado = litros do penúltimo abastecimento × km_media_litro da frota
- *  - Alerta apenas quando percentual < 80% (LIMITE_CONSUMO)
+ * Regra da janela (com fuso horário correto):
+ *  - iniMs = hora local BRT do penúltimo abastecimento convertida para UTC
+ *  - fimMs = hora local BRT do último abastecimento + 59s (cobre todo o minuto digitado)
+ *  - Apontamento incluído quando: apontamentoUtcMs > iniMs && apontamentoUtcMs <= fimMs
  *
- * Não gera alerta quando:
- *  - Há menos de 2 abastecimentos válidos
- *  - Existe apontamento em aberto para o veículo
- *  - KM esperado é zero (sem km_media_litro cadastrado)
- *  - Dados insuficientes
+ * KM esperado = litros do penúltimo × km_media_litro da frota.
+ * Alerta apenas quando percentual < 80% (LIMITE_CONSUMO).
  */
 export function gerarAlertasConsumo(
   despesas: Despesa[],
   apontamentos: ControleKm[],
 ): AlertaConsumo[] {
-  // Frotas com pelo menos dois abastecimentos com litros
   const frotaIds = [
     ...new Set(despesas.filter(isAbastecimento).map((d) => d.frota_id as string)),
   ];
@@ -618,18 +682,22 @@ export function gerarAlertasConsumo(
   const alertas: AlertaConsumo[] = [];
 
   for (const frotaId of frotaIds) {
-    // Ordena todos os abastecimentos do veículo por data+hora real (asc).
-    // Combina data_despesa + hora_despesa para ordenação precisa em abastecimentos
-    // retroativos ou múltiplos abastecimentos no mesmo dia.
+    // Ordena abastecimentos por data+hora local BRT (asc).
+    // Usa abastecimentoUtcMs para garantir ordenação correta em dias iguais.
     const abastecimentos = despesas
       .filter((d) => d.frota_id === frotaId && isAbastecimento(d))
       .sort((a, b) => {
-        const tsA = `${a.data_despesa ?? a.created_at.slice(0, 10)}T${a.hora_despesa ?? "00:00:00"}`;
-        const tsB = `${b.data_despesa ?? b.created_at.slice(0, 10)}T${b.hora_despesa ?? "00:00:00"}`;
-        return tsA.localeCompare(tsB);
+        const tsA = abastecimentoUtcMs(
+          a.data_despesa ?? a.created_at.slice(0, 10),
+          a.hora_despesa,
+        );
+        const tsB = abastecimentoUtcMs(
+          b.data_despesa ?? b.created_at.slice(0, 10),
+          b.hora_despesa,
+        );
+        return tsA - tsB;
       });
 
-    // Precisa de pelo menos 2 abastecimentos para calcular a janela
     if (abastecimentos.length < 2) continue;
 
     const penultimo = abastecimentos[abastecimentos.length - 2];
@@ -648,38 +716,33 @@ export function gerarAlertasConsumo(
     const kmEsperado = litros * kmMediaLitro;
     if (kmEsperado <= 0) continue;
 
-    // Janela: data+hora do penúltimo até data+hora do último
-    // Usa hora_despesa quando disponível para precisão em dias iguais.
-    const iniDate = penultimo.data_despesa ?? penultimo.created_at.slice(0, 10);
-    const iniHora = penultimo.hora_despesa ?? "00:00:00";
-    const fimDate = ultimo.data_despesa    ?? ultimo.created_at.slice(0, 10);
-    const fimHora = ultimo.hora_despesa    ?? "23:59:59";
+    // Converte abastecimentos para UTC para comparação com data_fim dos apontamentos (UTC)
+    const iniMs = abastecimentoUtcMs(
+      penultimo.data_despesa ?? penultimo.created_at.slice(0, 10),
+      penultimo.hora_despesa,
+    );
+    const fimMs = abastecimentoUtcMs(
+      ultimo.data_despesa ?? ultimo.created_at.slice(0, 10),
+      ultimo.hora_despesa,
+    );
 
-    const iniMs = new Date(`${iniDate}T${iniHora}`).getTime();
-    const fimMs = new Date(`${fimDate}T${fimHora}`).getTime();
+    const dataRef = ultimo.data_despesa ?? ultimo.created_at.slice(0, 10);
 
-    // dataRef usada como chave do alerta — data do último abastecimento
-    const dataRef = fimDate;
-
-    // Soma todos os apontamentos finalizados do veículo dentro da janela
+    // Soma apontamentos finalizados cujo data_fim UTC cai dentro da janela.
+    // Regra: data_fim > iniMs (posterior ao penúltimo abastecimento)
+    //        data_fim <= fimMs (anterior ou igual ao último abastecimento + 59s)
     const kmApontado = apontamentos
       .filter((a) => {
         if (a.frota_id !== frotaId) return false;
         if (a.status !== "finalizado") return false;
-        const km = kmPercorridoApontamento(a);
-        if (km <= 0) return false;
-        const dMs = new Date(
-          (a.data_fim ?? a.data_inicio).length === 10
-            ? `${a.data_fim ?? a.data_inicio}T12:00:00`
-            : (a.data_fim ?? a.data_inicio),
-        ).getTime();
-        return dMs >= iniMs && dMs <= fimMs;
+        if (kmPercorridoApontamento(a) <= 0) return false;
+        const dMs = apontamentoUtcMs(a);
+        return dMs > iniMs && dMs <= fimMs;
       })
       .reduce((sum, a) => sum + kmPercorridoApontamento(a), 0);
 
     const percentual = kmApontado / kmEsperado;
 
-    // Apenas gera alerta se percentual for estritamente menor que 80%
     if (percentual >= LIMITE_CONSUMO) continue;
 
     alertas.push({

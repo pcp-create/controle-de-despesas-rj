@@ -9,7 +9,15 @@ function getServiceClient() {
 
 /**
  * POST /api/alertas-consumo
- * Persiste ou atualiza um alerta de consumo e atualiza a frota com o último cálculo.
+ * Fluxo normal de persistência — chamado por persistirAlertasConsumo.
+ *
+ * Regras de proteção:
+ *   - Alerta TRATADO (ativo=false + resolvido_por preenchido + resolvido_em preenchido):
+ *     não reativa, não sobrescreve resolvido_por/resolvido_em/justificativa.
+ *   - Alerta ATIVO (ainda não tratado): atualiza km_apontado, km_esperado, percentual.
+ *     Se o novo percentual >= 80%, desativa automaticamente sem preencher resolução manual.
+ *   - Alerta INEXISTENTE: cria normalmente.
+ *
  * Body: { alerta: AlertaConsumo, ativo: boolean }
  */
 export async function POST(req: Request) {
@@ -21,21 +29,27 @@ export async function POST(req: Request) {
 
     const supabase = getServiceClient();
 
-    // Verifica se esse intervalo já foi tratado manualmente (ativo = false com resolvido_por preenchido).
-    // Se foi tratado, não reativa — o alerta só volta se houver um novo intervalo (novo abastecimento).
+    // Lê o estado atual do alerta (se existir)
     const { data: existente } = await supabase
       .from("alertas_consumo")
-      .select("ativo, resolvido_por")
+      .select("ativo, resolvido_por, resolvido_em")
       .eq("id", alerta.id)
       .maybeSingle();
 
-    const jaTratado = existente && existente.ativo === false && existente.resolvido_por != null;
+    // Alerta tratado manualmente: não reativa, não altera dados de resolução
+    const jaTratado = existente
+      && existente.ativo === false
+      && existente.resolvido_por != null
+      && existente.resolvido_em != null;
+
     if (jaTratado) {
-      // Retorna sucesso sem alterar — o alerta tratado para esse intervalo é imutável
-      return NextResponse.json({ success: true, alerta_ativo: false, ignorado: true });
+      return NextResponse.json({ success: true, ignorado: true });
     }
 
-    // Upsert na tabela alertas_consumo
+    // Determina o novo estado ativo:
+    //   - se ativo=true (percentual < 80%): mantém ativo
+    //   - se ativo=false (percentual >= 80%): desativa automaticamente,
+    //     mas sem preencher resolvido_por/resolvido_em (não foi tratamento manual)
     const { error: alertaError } = await supabase
       .from("alertas_consumo")
       .upsert({
@@ -57,7 +71,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: alertaError.message }, { status: 500 });
     }
 
-    // Verifica se ainda há alertas ativos para essa frota
+    // Atualiza frotas com o último cálculo e flag de alerta ativo
     const { data: alertasAtivos } = await supabase
       .from("alertas_consumo")
       .select("id")
@@ -66,7 +80,6 @@ export async function POST(req: Request) {
 
     const temAlertaAtivo = (alertasAtivos?.length ?? 0) > 0;
 
-    // Atualiza frotas com o último cálculo e flag de alerta ativo
     const { error: frotaError } = await supabase
       .from("frotas")
       .update({
@@ -83,6 +96,119 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true, alerta_ativo: temAlertaAtivo });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
+}
+
+/**
+ * PUT /api/alertas-consumo
+ * Reprocessamento ADMINISTRATIVO de um alerta específico.
+ *
+ * Diferente do POST (fluxo automático), este endpoint:
+ *   - Exige admin_user_id no body (verificado como administrador no banco)
+ *   - Corrige km_apontado/km_esperado/percentual de um alerta específico
+ *   - NÃO é chamado por persistirAlertasConsumo nem por nenhum fluxo automático
+ *   - Registra auditoria (operador + timestamp)
+ *   - Preserva resolvido_por/resolvido_em/justificativa se já tratado
+ *   - Afeta apenas o alerta_id informado (não reprocessa outras frotas)
+ *
+ * Body: { alerta: AlertaConsumo, ativo: boolean, admin_user_id: string }
+ */
+export async function PUT(req: Request) {
+  try {
+    const { alerta, ativo, admin_user_id } = await req.json();
+
+    if (!alerta?.id || !alerta?.frotaId) {
+      return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
+    }
+    if (!admin_user_id) {
+      return NextResponse.json({ error: "admin_user_id obrigatório" }, { status: 400 });
+    }
+
+    const supabase = getServiceClient();
+
+    // Verifica se o solicitante é administrador
+    const { data: perfil } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", admin_user_id)
+      .maybeSingle();
+
+    if (!perfil || perfil.role !== "administrador") {
+      return NextResponse.json({ error: "Acesso negado. Perfil administrador exigido." }, { status: 403 });
+    }
+
+    // Lê estado atual para preservar campos de resolução manual
+    const { data: existente } = await supabase
+      .from("alertas_consumo")
+      .select("ativo, resolvido_por, resolvido_em, justificativa")
+      .eq("id", alerta.id)
+      .maybeSingle();
+
+    const jaTratado = existente
+      && existente.ativo === false
+      && existente.resolvido_por != null;
+
+    // Atualiza km/percentual; preserva campos de resolução se já tratado
+    const { error: alertaError } = await supabase
+      .from("alertas_consumo")
+      .upsert({
+        id: alerta.id,
+        frota_id: alerta.frotaId,
+        placa: alerta.placa,
+        modelo: alerta.modelo,
+        data: alerta.data,
+        litros: alerta.litros,
+        km_apontado: alerta.kmApontado,
+        km_esperado: alerta.kmEsperado,
+        percentual: alerta.percentual,
+        valor: alerta.valor,
+        ativo: jaTratado ? false : ativo,
+        // Preserva dados de resolução manual — não limpa quem tratou
+        ...(jaTratado ? {
+          resolvido_por: existente.resolvido_por,
+          resolvido_em: existente.resolvido_em,
+          justificativa: existente.justificativa,
+        } : {}),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "id" });
+
+    if (alertaError) {
+      return NextResponse.json({ error: alertaError.message }, { status: 500 });
+    }
+
+    // Registra auditoria do reprocessamento administrativo
+    await supabase.from("auditoria").insert({
+      acao: "UPDATE",
+      entidade: "alerta_consumo",
+      entidade_id: alerta.id,
+      usuario_id: admin_user_id,
+      detalhes: `Reprocessamento administrativo: km_apontado=${alerta.kmApontado}, km_esperado=${alerta.kmEsperado}, percentual=${alerta.percentual}`,
+      created_at: new Date().toISOString(),
+    }).throwOnError().catch(() => {/* auditoria não bloqueia o reprocessamento */});
+
+    // Atualiza frotas com os valores corrigidos
+    const { data: alertasAtivos } = await supabase
+      .from("alertas_consumo")
+      .select("id")
+      .eq("frota_id", alerta.frotaId)
+      .eq("ativo", true);
+
+    const temAlertaAtivo = (alertasAtivos?.length ?? 0) > 0;
+
+    await supabase
+      .from("frotas")
+      .update({
+        alerta_ativo: temAlertaAtivo,
+        ultimo_calculo_em: alerta.data,
+        ultimo_calculo_km_apontado: alerta.kmApontado,
+        ultimo_calculo_km_esperado: alerta.kmEsperado,
+        ultimo_calculo_percentual: alerta.percentual,
+      })
+      .eq("id", alerta.frotaId);
+
+    return NextResponse.json({ success: true, reprocessado: true, jaTratado });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
