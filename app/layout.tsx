@@ -37,9 +37,9 @@ export default function RootLayout({
     <html lang="pt-BR" className={`${inter.variable} bg-background`}>
       <head>
         {/* Apple Touch Icon — tag explícita necessária para o atalho na tela inicial do iPhone */}
-        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-        <link rel="icon" type="image/png" sizes="192x192" href="/icon.png" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/icon.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=3" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/icon.png?v=3" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/icon.png?v=3" />
       </head>
       <body className="font-sans antialiased">
         <AuthProvider>
