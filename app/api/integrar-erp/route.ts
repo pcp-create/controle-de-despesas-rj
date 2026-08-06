@@ -445,7 +445,8 @@ export async function POST(request: Request) {
   }
 
   const codigoProduto = paraNumero(tipo?.codigo_produto_erp);
-  const centroCustoId = paraNumero(cc?.centro_custo_erp);
+  const centroCustoCodigo = paraNumero(cc?.centro_custo_erp);
+  const operacaoFinanceiraId = paraNumero(tecnico?.operacao_financeira_id);
   const valorDespesa = paraNumero(despesa.valor);
 
   const empresaIdM8 = cartao?.empresa_id_m8 ? Number(cartao.empresa_id_m8) : null;
@@ -455,7 +456,7 @@ export async function POST(request: Request) {
   if (!codigoProduto) camposFaltando.push("Código de Produto ERP M8");
   if (!tecnico?.area) camposFaltando.push("Área / Setor do funcionário");
   if (!tecnico?.pessoa_id) camposFaltando.push("Pessoa ID do funcionário (configure em Administração → Usuários → Configurações ERP)");
-  if (!centroCustoId) camposFaltando.push("Centro de Custo ERP M8");
+  if (!centroCustoCodigo) camposFaltando.push("Código do Centro de Custo ERP M8");
   if (!despesa.data_despesa) camposFaltando.push("Data da despesa");
   if (!despesa.data_vencimento) camposFaltando.push("Data de vencimento");
   if (!valorDespesa || valorDespesa <= 0) camposFaltando.push("Valor da despesa");
@@ -693,9 +694,10 @@ export async function POST(request: Request) {
     // ETAPA 5 — Cadastrar centro de custo
     if (etapaInicial <= 5) {
       const bodyEtapa5 = {
-        centroCustoId: centroCustoId!,
+        centroCustoCodigo: centroCustoCodigo!,
         percentual: 100,
         valor: valorDespesa!,
+        operacaoFinanceiraId: operacaoFinanceiraId ?? null,
         complemento: resumo,
       };
 
