@@ -70,11 +70,7 @@ export function calcularConsumoFrota(opts: {
 
   if (!kmMediaLitro || kmMediaLitro <= 0) return null;
 
-  const fimJanelaMs = abastecimentoUtcMs(
-    novaDataDespesa,
-    novaHoraDespesa,
-    true, // +59s para cobrir o minuto digitado
-  );
+  const fimJanelaMs = abastecimentoUtcMs(novaDataDespesa, novaHoraDespesa);
 
   // Abastecimento anterior (mais recente antes do atual)
   const ultimoAbast = despesas
@@ -94,11 +90,7 @@ export function calcularConsumoFrota(opts: {
   if (!ultimoAbast) return null;
 
   const horaInicio = (ultimoAbast as Despesa & { hora_despesa?: string | null }).hora_despesa;
-  const inicioJanelaMs = abastecimentoUtcMs(
-    ultimoAbast.data_despesa.slice(0, 10),
-    horaInicio,
-    false,
-  );
+  const inicioJanelaMs = abastecimentoUtcMs(ultimoAbast.data_despesa.slice(0, 10), horaInicio);
 
   const litros = ultimoAbast.litros_abastecidos as number;
   const kmEsperado = litros * kmMediaLitro;
@@ -198,12 +190,10 @@ export function calcularAutonomiaMedia(
     const inicioMs = abastecimentoUtcMs(
       anterior.data_despesa ?? anterior.created_at.slice(0, 10),
       anterior.hora_despesa,
-      false,
     );
     const fimMs = abastecimentoUtcMs(
       proximo.data_despesa ?? proximo.created_at.slice(0, 10),
       proximo.hora_despesa,
-      true,
     );
 
     const kmApontado = apontamentos
@@ -428,7 +418,7 @@ export function calcularEstimativaVeiculo(opts: EstimativaVeiculoOpts): Estimati
   const combustivelDisponivel = saldoInicial + litrosPeriodo;
   const kmEstimado = combustivelDisponivel * mediaUsada;
 
-  // 5. KM apontado no período (filtra por usuário se especificado)
+  // 5. KM apontado no per��odo (filtra por usuário se especificado)
   const kmApontado = todosRegistrosKm
     .filter((r) => {
       if (r.frota_id !== frotaId) return false;
@@ -571,11 +561,11 @@ export async function persistirAlertasConsumo(
     Array.from(frotasAvaliadas).map((frotaId) => {
       const alerta = alertasPorFrota.get(frotaId);
       if (alerta) {
-        // Frota com problema: persiste/corrige alerta via PUT (reprocessamento forçado).
-        // PUT atualiza os valores mesmo que o alerta já exista com dados incorretos,
-        // mas preserva o estado "tratado" (resolvido_por) se já foi resolvido manualmente.
+        // Frota com problema: persiste ou atualiza alerta via POST (fluxo normal).
+        // POST protege alertas já tratados manualmente (resolvido_por != null) e
+        // atualiza km_apontado/km_esperado/percentual quando o alerta ainda está ativo.
         return fetch("/api/alertas-consumo", {
-          method: "PUT",
+          method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ alerta, ativo: true }),
         });
@@ -601,15 +591,21 @@ export async function persistirAlertasConsumo(
 // ─────────────────────────────────────────────────────────────────────────────
 // Normalização de datas para comparação de janelas de abastecimento
 //
-// PROBLEMA DE FUSO HORÁRIO:
-//   - data_inicio / data_fim em ControleKm são ISO completos em UTC
-//     (ex: "2026-08-06T17:13:45.000Z" = 14:13:45 BRT)
-//   - data_despesa + hora_despesa em Despesa são strings locais sem timezone
-//     (ex: data_despesa="2026-08-06", hora_despesa="14:13")
+// CAUSA DO BUG (TPY0G26 — 06/08/2026):
+//   - data_inicio / data_fim em ControleKm são strings ISO completas em UTC
+//     ex: "2026-08-06T17:13:45.000Z" (= 14:13:45 BRT)
+//   - hora_despesa em Despesa é armazenada como "HH:mm" sem segundos
+//     ex: "14:13" (representa 14:13:00 BRT, mas o apontamento finalizou 14:13:45 BRT)
 //
-// SOLUÇÃO: converter data+hora local (BRT = UTC-3) para UTC antes de comparar.
-//   Isso evita excluir apontamentos por diferença de segundos quando a hora
-//   do abastecimento tem apenas HH:MM (sem segundos).
+// Quando o abastecimento ocorre no mesmo minuto do apontamento (14:13 BRT):
+//   - fimMs calculado sem correção = 14:13:00 BRT → 17:13:00 UTC
+//   - data_fim do apontamento      = 14:13:45 BRT → 17:13:45 UTC
+//   - 17:13:45 > 17:13:00 → apontamento excluído incorretamente
+//
+// SOLUÇÃO: quando hora_despesa tem apenas "HH:mm" (sem segundos), considerar como
+// limite final o último ms daquele minuto (HH:mm:59.999), cobrindo qualquer
+// apontamento finalizado dentro do mesmo minuto digitado pelo usuário.
+// Quando hora_despesa já tem segundos ("HH:mm:ss"), usar o valor exato.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Offset fixo BRT em ms (UTC-3). */
@@ -617,36 +613,39 @@ const BRT_OFFSET_MS = 3 * 60 * 60 * 1000;
 
 /**
  * Converte data+hora LOCAL (America/Sao_Paulo, BRT = UTC-3) para timestamp UTC em ms.
- * Usa offset fixo -3h para evitar dependência de Intl.DateTimeFormat em Edge Runtime.
+ *
+ * Regra de precisão de segundos:
+ *   - "HH:mm" (5 chars, sem segundos)  → usa HH:mm:59.999 como limite
+ *     Razão: hora_despesa não armazena segundos; o usuário digitou "14:13" mas o
+ *     apontamento pode ter sido finalizado em 14:13:45 — o minuto inteiro é válido.
+ *   - "HH:mm:ss" (8 chars, com segundos) → usa o valor exato, sem extensão.
+ *     Razão: se os segundos estão presentes, o horário é preciso.
+ *   - null/undefined → usa 00:00:00.000 (início do dia).
+ *
+ * Usa Date.UTC + BRT_OFFSET_MS para ser determinístico em qualquer timezone de servidor.
  *
  * @param dateStr "YYYY-MM-DD"
- * @param timeStr "HH:MM" ou "HH:MM:SS" — horário local (BRT)
- * @param endOfMinute quando true, adiciona 59s ao timestamp para cobrir toda a duração
- *   do minuto digitado (ex: "14:13" cobre de 14:13:00 a 14:13:59 local)
+ * @param timeStr "HH:mm" | "HH:mm:ss" | null
  */
 function abastecimentoUtcMs(
   dateStr: string,
   timeStr: string | null | undefined,
-  endOfMinute = false,
 ): number {
-  // Normaliza hora: "14:13" → "14:13:00", "14:13:45" → mantém
-  const hora = timeStr
-    ? (timeStr.length === 5 ? `${timeStr}:00` : timeStr.slice(0, 8))
-    : "00:00:00";
-
-  // Interpreta como local BRT (sem Z) → JavaScript trata como local da máquina,
-  // mas aqui somamos explicitamente o offset BRT para garantir UTC correto
-  // independentemente do timezone do servidor.
-  const localMs = new Date(`${dateStr.slice(0, 10)}T${hora}`).getTime();
-  // Se o browser/server estiver em UTC, new Date("...T14:13:00") = 14:13 UTC.
-  // Precisamos de 17:13 UTC (BRT+3). Somamos BRT_OFFSET_MS.
-  // Se o server já estiver em BRT, new Date("...T14:13:00") = 17:13 UTC — não somar.
-  // Para ser determinístico em qualquer ambiente, usamos UTC explícito:
   const [year, month, day] = dateStr.slice(0, 10).split("-").map(Number);
-  const [hh, mm, ss] = hora.split(":").map(Number);
-  // Data em UTC: local BRT = UTC + 3h → UTC = local - (-3h) = local + 3h
-  const utcMs = Date.UTC(year, month - 1, day, hh, mm, ss ?? 0) + BRT_OFFSET_MS;
-  return endOfMinute ? utcMs + 59_000 : utcMs;
+
+  if (!timeStr) {
+    // Sem hora: início do dia (00:00:00.000 BRT)
+    return Date.UTC(year, month - 1, day, 0, 0, 0, 0) + BRT_OFFSET_MS;
+  }
+
+  const semSegundos = timeStr.length === 5; // "HH:mm"
+  const partes = timeStr.split(":").map(Number);
+  const hh = partes[0];
+  const mm = partes[1];
+  const ss = semSegundos ? 59 : (partes[2] ?? 0);
+  const ms = semSegundos ? 999 : 0;
+
+  return Date.UTC(year, month - 1, day, hh, mm, ss, ms) + BRT_OFFSET_MS;
 }
 
 /**
@@ -721,12 +720,10 @@ export function gerarAlertasConsumo(
     const iniMs = abastecimentoUtcMs(
       penultimo.data_despesa ?? penultimo.created_at.slice(0, 10),
       penultimo.hora_despesa,
-      false, // início da janela: sem extensão de 59s
     );
     const fimMs = abastecimentoUtcMs(
       ultimo.data_despesa ?? ultimo.created_at.slice(0, 10),
       ultimo.hora_despesa,
-      true,  // fim da janela: +59s para cobrir o minuto inteiro digitado pelo usuário
     );
 
     const dataRef = ultimo.data_despesa ?? ultimo.created_at.slice(0, 10);
