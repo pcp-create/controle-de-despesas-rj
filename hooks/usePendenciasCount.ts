@@ -79,13 +79,17 @@ export function usePendenciasCount(): PendenciasCount {
       ? despesas.filter((d) => d.tecnico_id === currentUser.id && isPendente(d)).length
       : 0;
 
-    // Todas as Despesas: pendentes visíveis no menu "Todas as Despesas"
-    // Gestor/Admin → todos; demais → apenas os próprios
-    const todasDespesas = isGestorOuAdmin
-      ? despesas.filter(isPendente).length
+    // Todas as Despesas: grupos únicos pendentes visíveis no menu "Todas as Despesas"
+    // Usa a mesma chave de agrupamento de TodasDespesasPage: d.grupo_parcela_id ?? d.id
+    // Isso garante que uma despesa parcelada em N parcelas conta como 1 alerta, não N.
+    const despesasPendentesParaTodasDespesas = isGestorOuAdmin
+      ? despesas.filter(isPendente)
       : despesas.filter(
           (d) => isPendente(d) && (currentUser?.id ? d.tecnico_id === currentUser.id : true),
-        ).length;
+        );
+    const todasDespesas = new Set(
+      despesasPendentesParaTodasDespesas.map((d) => d.grupo_parcela_id ?? d.id),
+    ).size;
 
     return {
       aprovacao,

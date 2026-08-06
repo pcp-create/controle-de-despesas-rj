@@ -7,6 +7,7 @@ import type { FiltrosRelatorio } from "@/lib/supabase/use-filtros-persistidos";
 import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas, ControleKm } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { formatCurrency } from "@/lib/helpers";
+import { calcularEstimativaVeiculo } from "@/lib/consumo-frota";
 import {
   BarChart,
   Bar,
@@ -1131,71 +1132,112 @@ export default function RelatoriosPageSupabase() {
   }, [profiles, registrosKmFiltrados, isGestorOuAdmin]);
 
   // ─── Estimativa KM vs Apontado por funcionário ───────────────────────────────
-  // Calcula litros gastos em combustível * km/L da frota para estimar KM
+  // Usa calcularEstimativaVeiculo (consumo-frota.ts) como fonte única de cálculo.
   const estimativaKmFuncionario = useMemo(() => {
     if (!isGestorOuAdmin) return [];
 
+    // Datas de início/fim do período
+    let periodoIni: string;
+    let periodoFim: string;
+    if (modoFiltro === "mes") {
+      periodoIni = new Date(anoSelecionado, mesSelecionado, 1).toISOString().slice(0, 10);
+      periodoFim = new Date(anoSelecionado, mesSelecionado + 1, 0).toISOString().slice(0, 10);
+    } else {
+      periodoIni = dataInicial;
+      periodoFim = dataFinal;
+    }
+
     return profiles
       .map((p) => {
-        const kmApontado = registrosKmFiltrados
-          .filter((r) => r.usuario_id === p.id)
-          .reduce((s, r) => s + kmPercorrido(r), 0);
+        // Frotas que este funcionário utilizou (abastecimentos ou apontamentos — qualquer momento)
+        const frotasDoFunc = new Set<string>([
+          ...despesas.filter((d) => d.tecnico_id === p.id && d.frota_id).map((d) => d.frota_id as string),
+          ...registrosKm.filter((r) => r.usuario_id === p.id && r.frota_id).map((r) => r.frota_id as string),
+        ]);
 
-        // Despesas de combustível do funcionário no período filtrado com litros e km/L preenchidos
-        const despesasCombustivel = despesas.filter((d) => {
-          if (d.tecnico_id !== p.id) return false;
-          if (!d.tipo_despesa?.nome?.toLowerCase().includes("combust")) return false;
-          if (!d.litros_abastecidos || !d.frota?.km_media_litro) return false;
-          const dataStr = d.data_despesa;
-          if (modoFiltro === "mes") {
-            const dt = new Date(dataStr + "T12:00:00");
-            return dt.getMonth() === mesSelecionado && dt.getFullYear() === anoSelecionado;
-          }
-          if (dataInicial && dataStr < dataInicial) return false;
-          if (dataFinal && dataStr > dataFinal) return false;
-          return true;
-        });
+        if (frotasDoFunc.size === 0) return null;
 
-        const memorialItens = despesasCombustivel.map((d) => ({
-          data: d.data_despesa,
-          litros: d.litros_abastecidos ?? 0,
-          kmMedia: d.frota?.km_media_litro ?? 0,
-          kmEstimadoParcial: (d.litros_abastecidos ?? 0) * (d.frota?.km_media_litro ?? 0),
-          placa: (d.frota as any)?.placa ?? "",
-        }));
+        const veiculos = [...frotasDoFunc].map((frotaId) => {
+          const frota = frotas.find((f) => f.id === frotaId);
+          const placa = (frota as any)?.placa ?? frotaId;
+          const frotaKmMedia = (frota as any)?.km_media_litro ?? null;
 
-        const kmEstimado = memorialItens.reduce((s, i) => s + i.kmEstimadoParcial, 0);
-        const totalLitros = memorialItens.reduce((s, i) => s + i.litros, 0);
+          const est = calcularEstimativaVeiculo({
+            frotaId,
+            periodoIni,
+            periodoFim,
+            frotaKmMedia,
+            todasDespesas: despesas,
+            todosRegistrosKm: registrosKm,
+            usuarioId: p.id,
+          });
+
+          return {
+            frotaId,
+            placa,
+            litrosPeriodo:         est.litrosPeriodo,
+            saldoInicial:          est.saldoInicial,
+            combustivelDisponivel: est.combustivelDisponivel,
+            kmEstimado:            est.kmEstimado,
+            kmApontadoVeiculo:     est.kmApontado,
+            diferenca:             est.diferenca,
+            pctVeiculo:            est.percentual,
+            saldoFinal:            est.saldoFinal,
+            mediaUsada:            est.mediaUsada,
+            dadosSuficientes:      est.dadosSuficientes,
+            estimativa:            est.estimativa,
+          };
+        }).filter((v) => v.kmEstimado > 0 || v.kmApontadoVeiculo > 0 || v.litrosPeriodo > 0);
+
+        if (veiculos.length === 0) return null;
+
+        const kmApontado          = veiculos.reduce((s, v) => s + v.kmApontadoVeiculo, 0);
+        const kmEstimado          = veiculos.reduce((s, v) => s + v.kmEstimado, 0);
+        const totalLitros         = veiculos.reduce((s, v) => s + v.litrosPeriodo, 0);
+        const totalSaldoInicial   = veiculos.reduce((s, v) => s + v.saldoInicial, 0);
+        const totalCombDisp       = veiculos.reduce((s, v) => s + v.combustivelDisponivel, 0);
+        const totalSaldoFinal     = veiculos.reduce((s, v) => s + v.saldoFinal, 0);
         const pct = kmEstimado > 0 ? Math.round((kmApontado / kmEstimado) * 100) : null;
-
-        // KM/L real = km rodados apontados / litros abastecidos no período
         const kmLReal = totalLitros > 0 ? Math.round((kmApontado / totalLitros) * 100) / 100 : null;
-
-        // Inconsistências detectadas
-        const semAbastecimento = kmApontado > 0 && totalLitros === 0;
+        const semAbastecimento = kmApontado > 0 && totalLitros === 0 && totalSaldoInicial === 0;
         const semViagem = kmApontado === 0 && totalLitros > 0;
 
         return {
           id: p.id,
           nome: p.nome.split(" ").slice(0, 2).join(" "),
-          kmApontado: Math.round(kmApontado),
-          kmEstimado: Math.round(kmEstimado),
-          totalLitros: Math.round(totalLitros * 100) / 100,
+          kmApontado,
+          kmEstimado,
+          totalLitros,
+          totalSaldoInicial,
+          totalCombustivelDisponivel: totalCombDisp,
+          totalSaldoFinal,
+          diferenca: kmEstimado - kmApontado,
           pct,
           kmLReal,
           semAbastecimento,
           semViagem,
-          memorial: memorialItens,
+          veiculos,
         };
       })
-      .filter((item) => item !== null && (item.kmApontado > 0 || item.totalLitros > 0))
+      .filter(Boolean)
+      .filter((item) => item!.kmApontado > 0 || item!.totalLitros > 0)
       .sort((a, b) => b!.kmApontado - a!.kmApontado) as {
-        id: string; nome: string; kmApontado: number; kmEstimado: number;
-        totalLitros: number; pct: number | null;
-        kmLReal: number | null; semAbastecimento: boolean; semViagem: boolean;
-        memorial: { data: string; litros: number; kmMedia: number; kmEstimadoParcial: number; placa: string }[];
+        id: string; nome: string;
+        kmApontado: number; kmEstimado: number;
+        totalLitros: number; totalSaldoInicial: number;
+        totalCombustivelDisponivel: number; totalSaldoFinal: number;
+        diferenca: number; pct: number | null; kmLReal: number | null;
+        semAbastecimento: boolean; semViagem: boolean;
+        veiculos: {
+          frotaId: string; placa: string; litrosPeriodo: number;
+          saldoInicial: number; combustivelDisponivel: number;
+          kmEstimado: number; kmApontadoVeiculo: number;
+          diferenca: number; pctVeiculo: number | null;
+          saldoFinal: number; mediaUsada: number;
+          dadosSuficientes: boolean; estimativa: boolean;
+        }[];
       }[];
-  }, [profiles, registrosKmFiltrados, despesas, isGestorOuAdmin, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
+  }, [profiles, registrosKm, despesas, frotas, isGestorOuAdmin, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
 
   const filtroFuncionarioNome = filtroFuncionario ? profiles.find((p) => p.id === filtroFuncionario)?.nome : null;
   const filtroTipoNome = filtroTipo ? tiposDespesa.find((t) => t.id === filtroTipo)?.nome : null;
@@ -1833,17 +1875,18 @@ export default function RelatoriosPageSupabase() {
             <div>
               <h3 className="text-sm font-semibold text-foreground">Estimativa KM vs Apontado por Funcionário</h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Estimativa baseada nos litros abastecidos × média KM/L do veículo. Apontado = KM registrado no Controle de KM.
+                Considera saldo estimado de combustível do período anterior + abastecimentos do período.
+                A estimativa é calculada por veículo e agregada por funcionário.
               </p>
             </div>
             <div className="flex items-center gap-4 shrink-0">
               <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span className="w-3 h-3 rounded-sm bg-muted-foreground/20 inline-block" />
-                Estimado
+                KM disponível estimado
               </span>
               <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span className="w-3 h-3 rounded-sm bg-primary inline-block" />
-                Apontado
+                KM apontado
               </span>
             </div>
           </div>
@@ -1879,31 +1922,20 @@ export default function RelatoriosPageSupabase() {
                   : "sem estimativa";
 
               return (
-                <div key={item.id} className="py-4 first:pt-0 last:pb-0 flex flex-col gap-2">
+                <div key={item.id} className="py-4 first:pt-0 last:pb-0 flex flex-col gap-3">
 
-                  {/* Cabeçalho: nome à esquerda, % à direita */}
+                  {/* Cabeçalho: nome + % total */}
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-foreground" title={item.nome}>
-                      {item.nome}
-                    </span>
+                    <span className="text-xs font-bold text-foreground">{item.nome}</span>
                     <span className={`text-[11px] font-semibold whitespace-nowrap ${pctColor}`}>
                       {pctLabel}
                     </span>
                   </div>
 
-                  {/* Barra — largura total */}
+                  {/* Barra */}
                   <div className="relative h-7 rounded-md overflow-hidden bg-muted/30">
-                    {/* Fundo estimado */}
-                    <div
-                      className="absolute inset-y-0 left-0 rounded-md bg-muted-foreground/20 transition-all"
-                      style={{ width: `${barEstPct}%` }}
-                    />
-                    {/* Frente apontado */}
-                    <div
-                      className={`absolute inset-y-0 left-0 rounded-md opacity-80 transition-all ${barColor}`}
-                      style={{ width: `${barAptPct}%` }}
-                    />
-                    {/* KM apontado dentro da barra */}
+                    <div className="absolute inset-y-0 left-0 rounded-md bg-muted-foreground/20 transition-all" style={{ width: `${barEstPct}%` }} />
+                    <div className={`absolute inset-y-0 left-0 rounded-md opacity-80 transition-all ${barColor}`} style={{ width: `${barAptPct}%` }} />
                     <div className="absolute inset-0 flex items-center px-2.5">
                       <span className="text-[11px] font-bold text-white drop-shadow leading-none">
                         {item.kmApontado > 0 ? `${item.kmApontado.toLocaleString("pt-BR")} km apontado` : ""}
@@ -1911,85 +1943,84 @@ export default function RelatoriosPageSupabase() {
                     </div>
                   </div>
 
-                  {/* Linha de referência: KM estimado */}
-                  {item.kmEstimado > 0 && (
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-3 h-1.5 rounded-sm bg-muted-foreground/30 shrink-0" />
-                      <span className="text-[10px] text-muted-foreground">
-                        Estimativa: <span className="font-semibold text-foreground">{item.kmEstimado.toLocaleString("pt-BR")} km</span>
-                      </span>
+                  {/* Resumo agregado */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="bg-muted/30 rounded-lg px-3 py-2 flex flex-col gap-0.5">
+                      <span className="text-[10px] text-muted-foreground">Saldo inicial est.</span>
+                      <span className="text-xs font-semibold text-foreground">{item.totalSaldoInicial.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg px-3 py-2 flex flex-col gap-0.5">
+                      <span className="text-[10px] text-muted-foreground">Abastecido no período</span>
+                      <span className="text-xs font-semibold text-foreground">{item.totalLitros.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg px-3 py-2 flex flex-col gap-0.5">
+                      <span className="text-[10px] text-muted-foreground">KM estimado disponível</span>
+                      <span className="text-xs font-semibold text-foreground">{item.kmEstimado.toLocaleString("pt-BR")} km</span>
+                    </div>
+                    <div className="bg-muted/30 rounded-lg px-3 py-2 flex flex-col gap-0.5">
+                      <span className="text-[10px] text-muted-foreground">Saldo final est.</span>
+                      <span className="text-xs font-semibold text-foreground">{item.totalSaldoFinal.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span>
+                    </div>
+                  </div>
+
+                  {/* Detalhes por veículo */}
+                  {item.veiculos.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      {item.veiculos.map((v) => (
+                        <div key={v.frotaId} className="border border-border rounded-lg px-3 py-2 flex flex-col gap-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-semibold text-foreground flex items-center gap-1.5">
+                              <Car className="w-3 h-3 text-muted-foreground" />
+                              {v.placa}
+                              {v.estimativa && (
+                                <span className="text-[9px] text-muted-foreground font-normal italic">(média cadastrada)</span>
+                              )}
+                              {!v.dadosSuficientes && (
+                                <span className="text-[9px] text-warning font-normal italic">(dados insuficientes)</span>
+                              )}
+                            </span>
+                            {v.pctVeiculo !== null && (
+                              <span className={`text-[10px] font-semibold ${
+                                v.pctVeiculo >= 85 && v.pctVeiculo <= 115 ? "text-success"
+                                : v.pctVeiculo > 115 ? "text-warning" : "text-destructive"
+                              }`}>{v.pctVeiculo}%</span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-muted-foreground">
+                            <span>Consumo médio: <span className="font-medium text-foreground">{v.mediaUsada > 0 ? `${v.mediaUsada.toFixed(1)} km/L` : "—"}</span></span>
+                            <span>Saldo inicial: <span className="font-medium text-foreground">{v.saldoInicial.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span></span>
+                            <span>Abastecido: <span className="font-medium text-foreground">{v.litrosPeriodo.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span></span>
+                            <span>Disponível: <span className="font-medium text-foreground">{v.combustivelDisponivel.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span></span>
+                            <span>KM est.: <span className="font-medium text-foreground">{v.kmEstimado.toLocaleString("pt-BR")} km</span></span>
+                            <span>KM apontado: <span className="font-medium text-foreground">{v.kmApontadoVeiculo.toLocaleString("pt-BR")} km</span></span>
+                            <span>Diferença: <span className={`font-medium ${v.diferenca >= 0 ? "text-success" : "text-destructive"}`}>{v.diferenca >= 0 ? "+" : ""}{v.diferenca.toLocaleString("pt-BR")} km</span></span>
+                            <span>Saldo final: <span className="font-medium text-foreground">{v.saldoFinal.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span></span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
 
-                  {/* Subtexto: memorial de cálculo */}
-                  <div className="flex flex-col gap-1">
-                    {item.kmEstimado > 0 ? (
-                      <>
-                        {/* Linha resumo estimativa */}
-                        <p className="text-[10px] text-muted-foreground">
-                          Estimativa: <span className="font-medium text-foreground">{item.kmEstimado.toLocaleString("pt-BR")} km</span>
-                          {" "}·{" "}
-                          Total abastecido: <span className="font-medium text-foreground">{item.totalLitros.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L</span>
-                        </p>
-                        {/* Memorial detalhado por abastecimento */}
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                          {item.memorial.map((m, i) => (
-                            <span key={i} className="text-[10px] text-muted-foreground">
-                              {new Date(m.data + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
-                              {m.placa ? ` (${m.placa})` : ""}
-                              {": "}
-                              <span className="font-medium text-foreground">
-                                {m.litros.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L
-                                {" × "}
-                                {m.kmMedia} km/L
-                                {" = "}
-                                {Math.round(m.kmEstimadoParcial).toLocaleString("pt-BR")} km
-                              </span>
-                            </span>
-                          ))}
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-[10px] text-muted-foreground italic">
-                        Sem abastecimentos com litros e média KM/L cadastrados no período.
-                      </p>
+                  {/* Alertas de inconsistência */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {item.semAbastecimento && (
+                      <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-warning/8 border border-warning/20 text-warning">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                        <span>KM apontado sem abastecimento — verifique lançamentos de combustível</span>
+                      </div>
                     )}
-
-                    {/* KM/L real calculado + alertas de inconsistência */}
-                    <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                      {/* KM/L real apontado */}
-                      {item.kmLReal !== null && (
-                        <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border ${
-                          item.kmLReal >= (item.memorial[0]?.kmMedia ?? 0) * 0.85
-                            ? "bg-success/8 border-success/20 text-success"
-                            : "bg-warning/8 border-warning/20 text-warning"
-                        }`}>
-                          <span className="font-mono font-bold">{item.kmLReal.toFixed(2)} km/L</span>
-                          <span className="text-[9px] opacity-70">real apontado</span>
-                          {item.memorial[0]?.kmMedia > 0 && (
-                            <span className="text-[9px] opacity-70">
-                              · ref. veículo: {item.memorial[0].kmMedia} km/L
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Alerta: km apontado sem abastecimento cadastrado */}
-                      {item.semAbastecimento && (
-                        <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-warning/8 border border-warning/20 text-warning">
-                          <AlertTriangle className="w-3 h-3 shrink-0" />
-                          <span>KM apontado sem abastecimento no período — verifique lançamentos de combustível</span>
-                        </div>
-                      )}
-
-                      {/* Alerta: abastecimento sem km apontado */}
-                      {item.semViagem && (
-                        <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-destructive/8 border border-destructive/20 text-destructive">
-                          <AlertTriangle className="w-3 h-3 shrink-0" />
-                          <span>Abastecimento registrado sem viagens apontadas no período — verifique o controle de KM</span>
-                        </div>
-                      )}
-                    </div>
+                    {item.semViagem && (
+                      <div className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-medium bg-destructive/8 border border-destructive/20 text-destructive">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                        <span>Abastecimento sem viagens apontadas — verifique o controle de KM</span>
+                      </div>
+                    )}
+                    {item.kmLReal !== null && (
+                      <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border bg-muted/30 border-border">
+                        <span className="font-mono font-bold text-foreground">{item.kmLReal.toFixed(2)} km/L</span>
+                        <span className="text-muted-foreground">real apontado</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
