@@ -385,11 +385,10 @@ export default function FrotasPageSupabase() {
               : pct > 115 ? "text-warning"
               : "text-destructive";
 
-            // Origem da média
-            const origemMedia = !est ? "Dados insuficientes"
-              : !est.dadosSuficientes ? "Dados insuficientes"
-              : est.mediaKmLReal !== null ? "Média histórica"
-              : "Média cadastrada";
+            // km/L real apontado = kmApontado / litrosPeriodo — mesma fórmula do relatório
+            const kmLRealApontado = est && est.litrosPeriodo > 0 && est.kmApontado > 0
+              ? Math.round((est.kmApontado / est.litrosPeriodo) * 100) / 100
+              : null;
 
             const consumoMedioLabel = est && est.mediaUsada > 0
               ? `${est.mediaUsada.toFixed(1).replace(".", ",")} km/L`
@@ -579,9 +578,11 @@ export default function FrotasPageSupabase() {
                     </div>
                     {/* Col 2 */}
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-muted-foreground">Origem da média</span>
-                      <span className={`font-medium ${origemMedia === "Dados insuficientes" ? "text-muted-foreground italic" : "text-foreground"}`}>
-                        {origemMedia}
+                      <span className="text-muted-foreground">Estimado km/L (Real apontado)</span>
+                      <span className={`font-medium ${kmLRealApontado === null ? "text-muted-foreground italic" : "text-foreground"}`}>
+                        {kmLRealApontado !== null
+                          ? `${kmLRealApontado.toFixed(1).replace(".", ",")} km/L`
+                          : "—"}
                       </span>
                     </div>
                   </div>
