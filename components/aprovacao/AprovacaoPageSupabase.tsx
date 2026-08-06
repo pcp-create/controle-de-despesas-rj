@@ -8,16 +8,15 @@ import { useDespesas, useTiposDespesa, useProfiles, type Despesa } from "@/lib/s
 import { registrarAuditoria } from "@/lib/supabase/audit";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
+import DespesaExpandida from "@/components/despesas/DespesaExpandida";
 import {
   Search,
   Filter,
   CheckCircle,
   XCircle,
-  Eye,
   ChevronDown,
   MessageSquare,
   Layers,
-  CreditCard,
   Undo2,
 } from "lucide-react";
 
@@ -427,210 +426,104 @@ export default function AprovacaoPageSupabase() {
                   <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform shrink-0 ${isExpanded ? "rotate-180" : ""}`} />
                 </button>
 
-                {/* Detalhes expandidos */}
+                {/* Detalhes expandidos — usa o mesmo componente de Todas as Despesas */}
                 {isExpanded && (
-                  <div className="px-4 pb-4 border-t border-border pt-4 space-y-4">
-
-                    {/* Parcelas detalhadas */}
-                    {grupo.parcelado && (
-                      <div className="flex flex-col gap-1.5">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                          <CreditCard className="w-3.5 h-3.5" />
-                          Parcelas
-                        </p>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {grupo.parcelas.map((p) => (
-                            <div key={p.id} className="flex flex-col gap-0.5 p-2.5 rounded-lg bg-muted/40 border border-border text-xs">
-                              <span className="text-muted-foreground font-medium">
-                                {p.parcela_atual}/{grupo.numeroParcelas}
-                              </span>
-                              <span className="font-semibold text-foreground">{formatCurrency(Number(p.valor))}</span>
-                              {p.data_vencimento && (
-                                <span className="text-primary">
-                                  Vence: {new Date(p.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR")}
+                  <DespesaExpandida
+                    d={d}
+                    parcelas={grupo.parcelas}
+                    parcelado={grupo.parcelado}
+                    numeroParcelas={grupo.numeroParcelas}
+                    profiles={profiles}
+                    acoes={
+                      <div className="flex flex-col gap-3">
+                        {/* Formulário de reprovação */}
+                        {isReprovando && (
+                          <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20 space-y-2">
+                            <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                              <MessageSquare className="w-4 h-4" />
+                              Justificativa da Reprovação
+                              {grupo.parcelado && (
+                                <span className="text-xs font-normal text-muted-foreground ml-1">
+                                  (será aplicada às {grupo.numeroParcelas} parcelas)
                                 </span>
                               )}
+                            </label>
+                            <textarea
+                              value={justificativa}
+                              onChange={(e) => setJustificativa(e.target.value)}
+                              placeholder="Informe o motivo da reprovação..."
+                              rows={2}
+                              className="w-full px-3 py-2 rounded-lg border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => { setReprovandoChave(null); setJustificativa(""); }}
+                                className="flex-1 py-2 rounded-lg border border-input text-sm hover:bg-muted transition"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                onClick={() => handleReprovar(grupo)}
+                                className="flex-1 py-2 rounded-lg bg-destructive text-white text-sm hover:bg-destructive/90 transition font-medium"
+                              >
+                                Confirmar Reprovação
+                              </button>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                          </div>
+                        )}
 
-                    {/* Grid de informações */}
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Criado em</p>
-                        <p className="text-foreground">{new Date(d.created_at).toLocaleString("pt-BR")}</p>
-                      </div>
-                      {d.data_envio && (
-                        <div>
-                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Enviado em</p>
-                          <p className="text-foreground">{new Date(d.data_envio).toLocaleString("pt-BR")}</p>
-                        </div>
-                      )}
-                      {d.data_checkin && d.data_checkout && (
-                        <>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Check-in</p>
-                            <p className="text-foreground">{formatDate(d.data_checkin ?? "")}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Check-out</p>
-                            <p className="text-foreground">{formatDate(d.data_checkout ?? "")}</p>
-                          </div>
-                          {d.numero_diarias && (
-                            <div className="col-span-2 flex items-center justify-between p-2.5 rounded-lg bg-primary/5 border border-primary/15 text-sm">
-                              <span className="text-muted-foreground"><strong className="text-foreground">{d.numero_diarias}</strong> diária{d.numero_diarias > 1 ? "s" : ""}</span>
-                              <span className="text-muted-foreground"><strong className="text-foreground">{formatCurrency(Number(d.valor) / d.numero_diarias)}</strong> / diária</span>
-                            </div>
+                        {/* Botões de ação */}
+                        <div className="flex flex-wrap gap-2">
+                          {d.status_aprovacao === "AguardandoGestor" && !isReprovando && (
+                            <>
+                              <button
+                                onClick={() => setReprovandoChave(grupo.chave)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive text-sm hover:bg-destructive/10 transition"
+                              >
+                                <XCircle className="w-4 h-4" />
+                                {grupo.parcelado ? `Reprovar ${grupo.numeroParcelas} Parcelas` : "Reprovar"}
+                              </button>
+                              <button
+                                onClick={() => handleAprovar(grupo)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-success text-white text-sm hover:bg-success/90 transition font-medium"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                                {grupo.parcelado ? `Aprovar ${grupo.numeroParcelas} Parcelas` : "Aprovar"}
+                              </button>
+                            </>
                           )}
-                        </>
-                      )}
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Documento</p>
-                        <p className="text-foreground">{d.documento || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Comprovante</p>
-                        <p className="text-foreground">{d.comprovante_nome || "Não anexado"}</p>
-                      </div>
-                      {d.status_aprovacao === "AprovadoGestor" && d.data_aprovacao && (
-                        <>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Aprovado em</p>
-                            <p className="text-success font-medium">{new Date(d.data_aprovacao).toLocaleString("pt-BR")}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Aprovado por</p>
-                            <p className="text-success font-medium">
-                              {d.gestor_aprovador_id ? (gestor?.nome ?? d.gestor_aprovador_id) : "Aprovação automática"}
-                            </p>
-                          </div>
-                        </>
-                      )}
-                      {d.status_aprovacao === "Reprovado" && d.data_aprovacao && (
-                        <>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Reprovado em</p>
-                            <p className="text-destructive font-medium">{new Date(d.data_aprovacao).toLocaleString("pt-BR")}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Reprovado por</p>
-                            <p className="text-destructive font-medium">{gestor?.nome ?? d.gestor_aprovador_id ?? "-"}</p>
-                          </div>
-                        </>
-                      )}
-                      {d.observacao && (
-                        <div className="col-span-2">
-                          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Observação</p>
-                          <p className="text-foreground">{d.observacao}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Motivo reprovação */}
-                    {d.status_aprovacao === "Reprovado" && d.justificativa_reprovacao && (
-                      <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
-                        <p className="font-semibold mb-0.5">Motivo da reprovação</p>
-                        <p>{d.justificativa_reprovacao}</p>
-                      </div>
-                    )}
-
-                    {/* Formulário de reprovação */}
-                    {isReprovando && (
-                      <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20 space-y-2">
-                        <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                          <MessageSquare className="w-4 h-4" />
-                          Justificativa da Reprovação
-                          {grupo.parcelado && (
-                            <span className="text-xs font-normal text-muted-foreground ml-1">
-                              (será aplicada às {grupo.numeroParcelas} parcelas)
-                            </span>
+                          {/* Revogar — disponível para gestor/admin em qualquer status exceto Rascunho */}
+                          {isGestorOuAdmin && (d.status_aprovacao === "AguardandoGestor" || d.status_aprovacao === "AprovadoGestor" || d.status_aprovacao === "Reprovado") && !isReprovando && (
+                            revogandoChave === grupo.chave ? (
+                              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-warning/10 border border-warning/30 text-sm">
+                                <span className="text-warning font-medium">Confirmar revogação?</span>
+                                <button
+                                  onClick={() => handleRevogar(grupo)}
+                                  className="px-2 py-0.5 rounded bg-warning text-white text-xs font-medium hover:opacity-90 transition"
+                                >
+                                  Sim
+                                </button>
+                                <button
+                                  onClick={() => setRevogandoChave(null)}
+                                  className="px-2 py-0.5 rounded border border-input text-xs text-muted-foreground hover:bg-muted transition"
+                                >
+                                  Não
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setRevogandoChave(grupo.chave)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-warning/30 text-warning text-sm hover:bg-warning/10 transition"
+                              >
+                                <Undo2 className="w-4 h-4" />
+                                {grupo.parcelado ? `Revogar ${grupo.numeroParcelas} Parcelas` : "Revogar ao Criador"}
+                              </button>
+                            )
                           )}
-                        </label>
-                        <textarea
-                          value={justificativa}
-                          onChange={(e) => setJustificativa(e.target.value)}
-                          placeholder="Informe o motivo da reprovação..."
-                          rows={2}
-                          className="w-full px-3 py-2 rounded-lg border border-input bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => { setReprovandoChave(null); setJustificativa(""); }}
-                            className="flex-1 py-2 rounded-lg border border-input text-sm hover:bg-muted transition"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            onClick={() => handleReprovar(grupo)}
-                            className="flex-1 py-2 rounded-lg bg-destructive text-white text-sm hover:bg-destructive/90 transition font-medium"
-                          >
-                            Confirmar Reprovação
-                          </button>
                         </div>
                       </div>
-                    )}
-
-                    {/* Ações */}
-                    <div className="flex flex-wrap gap-2">
-                      {d.comprovante_url && (
-                        <button
-                          onClick={() => window.open(d.comprovante_url!, "_blank")}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition"
-                        >
-                          <Eye className="w-4 h-4" />
-                          Ver Comprovante
-                        </button>
-                      )}
-                      {d.status_aprovacao === "AguardandoGestor" && !isReprovando && (
-                        <>
-                          <button
-                            onClick={() => setReprovandoChave(grupo.chave)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive text-sm hover:bg-destructive/10 transition"
-                          >
-                            <XCircle className="w-4 h-4" />
-                            {grupo.parcelado ? `Reprovar ${grupo.numeroParcelas} Parcelas` : "Reprovar"}
-                          </button>
-                          <button
-                            onClick={() => handleAprovar(grupo)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-success text-white text-sm hover:bg-success/90 transition font-medium"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                            {grupo.parcelado ? `Aprovar ${grupo.numeroParcelas} Parcelas` : "Aprovar"}
-                          </button>
-                        </>
-                      )}
-                      {/* Revogar — disponível para gestor/admin em qualquer status exceto Rascunho */}
-                      {isGestorOuAdmin && (d.status_aprovacao === "AguardandoGestor" || d.status_aprovacao === "AprovadoGestor" || d.status_aprovacao === "Reprovado") && !isReprovando && (
-                        revogandoChave === grupo.chave ? (
-                          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-warning/10 border border-warning/30 text-sm">
-                            <span className="text-warning font-medium">Confirmar revogação?</span>
-                            <button
-                              onClick={() => handleRevogar(grupo)}
-                              className="px-2 py-0.5 rounded bg-warning text-white text-xs font-medium hover:opacity-90 transition"
-                            >
-                              Sim
-                            </button>
-                            <button
-                              onClick={() => setRevogandoChave(null)}
-                              className="px-2 py-0.5 rounded border border-input text-xs text-muted-foreground hover:bg-muted transition"
-                            >
-                              Não
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setRevogandoChave(grupo.chave)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-warning/30 text-warning text-sm hover:bg-warning/10 transition"
-                          >
-                            <Undo2 className="w-4 h-4" />
-                            {grupo.parcelado ? `Revogar ${grupo.numeroParcelas} Parcelas` : "Revogar ao Criador"}
-                          </button>
-                        )
-                      )}
-                    </div>
-                  </div>
+                    }
+                  />
                 )}
               </div>
             );
