@@ -1,8 +1,10 @@
 /**
  * consumo-frota.ts
- * Compara os apontamentos de KM (controle_km) com o total esperado
- * para o combustível abastecido. Retorna alerta quando o km apontado
- * fica abaixo de 80% do km esperado (litros × km_media_litro da frota).
+ * Compara os apontamentos de KM (controle_km) com o KM esperado entre os dois
+ * últimos abastecimentos de cada veículo. A janela de referência é definida
+ * exclusivamente pela quilometragem registrada nos abastecimentos (km_atual) —
+ * nunca por data/hora — ver calcularJanelaKmFrota. Gera alerta quando o KM
+ * apontado fica abaixo de 80% do KM esperado (kmFinalFaixa - kmInicialFaixa).
  */
 
 import type { Despesa, ControleKm } from "@/lib/supabase/hooks";
@@ -23,108 +25,100 @@ export interface AlertaConsumo {
   valor: number;
 }
 
-export interface ResultadoConsumo {
+export interface ResultadoJanelaKm {
   frotaId: string;
   placa: string;
   modelo: string;
-  dataFim: string;       // ISO — limite superior da janela (data/hora do novo abastecimento)
+  /** data_despesa do abastecimento que fechou a janela (o de maior km_atual) */
+  data: string;
   litros: number;
+  valor: number;
+  /** km_atual do abastecimento anterior (limite inferior da faixa) */
+  kmInicialFaixa: number;
+  /** km_atual do abastecimento mais recente (limite superior da faixa) */
+  kmFinalFaixa: number;
   kmApontado: number;
   kmEsperado: number;
   percentual: number;
-  temAlerta: boolean;    // true se percentual < LIMITE_CONSUMO
-  valor: number;
+  temAlerta: boolean; // true se percentual < LIMITE_CONSUMO
 }
 
 /**
- * Calcula o consumo da frota ao registrar um novo abastecimento.
- * Avalia o abastecimento ANTERIOR (não o atual) comparando:
- *   - kmEsperado = litros do abastecimento anterior × km_media_litro da frota
- *   - kmApontado = soma de apontamentos finalizados entre a data/hora do
- *     abastecimento anterior e a data/hora do novo abastecimento
+ * FONTE ÚNICA DE CÁLCULO da janela "Último cálculo: X% apontado (X / X km)".
  *
- * Usa horário LOCAL (sem Z) para as datas digitadas pelo usuário.
- * Aceita km_percorrido ou calcula km_final - km_inicial como fallback.
+ * Baseia-se exclusivamente na quilometragem registrada nos abastecimentos e nos
+ * apontamentos de KM — nunca em data/hora. Regra:
  *
- * Retorna null se não houver abastecimento anterior ou km_media_litro.
+ *   1. Considera os abastecimentos do veículo com `km_atual` preenchido (> 0).
+ *   2. Ordena por `km_atual` DESC — os dois maiores definem a faixa:
+ *        kmFinalFaixa   = maior km_atual
+ *        kmInicialFaixa = segundo maior km_atual
+ *   3. kmEsperado = kmFinalFaixa - kmInicialFaixa (deslocamento físico do veículo).
+ *   4. Apontamentos de controle_km do mesmo veículo (qualquer usuário) cujo
+ *      `km_inicial` esteja em [kmInicialFaixa, kmFinalFaixa] participam do cálculo.
+ *   5. kmApontado = soma de km_percorrido (ou km_final - km_inicial) desses apontamentos.
+ *   6. percentual = kmApontado / kmEsperado.
+ *
+ * Retorna null quando não há pelo menos 2 abastecimentos válidos com km_atual,
+ * ou quando kmFinalFaixa <= kmInicialFaixa (faixa inválida/degenerada).
  */
-export function calcularConsumoFrota(opts: {
-  frotaId: string;
-  placa: string;
-  modelo: string;
-  kmMediaLitro: number;
-  valorAbastecimento: number;
-  novoAbastecimentoId: string;
-  /** "YYYY-MM-DD" */
-  novaDataDespesa: string;
-  /** "HH:MM" — horário local digitado pelo usuário */
-  novaHoraDespesa: string | null;
-  despesas: Despesa[];
-  apontamentos: ControleKm[];
-}): ResultadoConsumo | null {
-  const {
-    frotaId, placa, modelo, kmMediaLitro, valorAbastecimento,
-    novoAbastecimentoId, novaDataDespesa, novaHoraDespesa,
-    despesas, apontamentos,
-  } = opts;
+export function calcularJanelaKmFrota(
+  frotaId: string,
+  despesas: Despesa[],
+  apontamentos: ControleKm[],
+): ResultadoJanelaKm | null {
+  const abastecimentos = despesas.filter(
+    (d) =>
+      d.frota_id === frotaId &&
+      isAbastecimento(d) &&
+      typeof d.km_atual === "number" &&
+      d.km_atual > 0,
+  );
 
-  if (!kmMediaLitro || kmMediaLitro <= 0) return null;
+  if (abastecimentos.length < 2) return null;
 
-  const fimJanelaMs = abastecimentoUtcMs(novaDataDespesa, novaHoraDespesa);
+  // Ordena pelo KM registrado — não pela data/hora do lançamento
+  const ordenadosPorKm = [...abastecimentos].sort(
+    (a, b) => (b.km_atual as number) - (a.km_atual as number),
+  );
 
-  // Abastecimento anterior (mais recente antes do atual)
-  const ultimoAbast = despesas
-    .filter(
-      (d) =>
-        d.frota_id === frotaId &&
-        d.id !== novoAbastecimentoId &&
-        typeof d.litros_abastecidos === "number" &&
-        d.litros_abastecidos > 0,
-    )
-    .sort(
-      (a, b) =>
-        new Date(b.data_despesa ?? b.created_at).getTime() -
-        new Date(a.data_despesa ?? a.created_at).getTime(),
-    )[0] ?? null;
+  const abastMaior = ordenadosPorKm[0];
+  const abastSegundo = ordenadosPorKm[1];
 
-  if (!ultimoAbast) return null;
+  const kmFinalFaixa = abastMaior.km_atual as number;
+  const kmInicialFaixa = abastSegundo.km_atual as number;
 
-  const horaInicio = (ultimoAbast as Despesa & { hora_despesa?: string | null }).hora_despesa;
-  const inicioJanelaMs = abastecimentoUtcMs(ultimoAbast.data_despesa.slice(0, 10), horaInicio);
+  // Faixa inválida/degenerada — evita divisão por zero, NaN, Infinity ou percentual negativo
+  if (kmFinalFaixa <= kmInicialFaixa) return null;
 
-  const litros = ultimoAbast.litros_abastecidos as number;
-  const kmEsperado = litros * kmMediaLitro;
+  const kmEsperado = kmFinalFaixa - kmInicialFaixa;
 
-  // Filtra apontamentos dentro da janela com fallback km_final - km_inicial
-  const kmPorApontamento = (a: ControleKm): number => {
-    if (typeof a.km_percorrido === "number" && a.km_percorrido > 0) return a.km_percorrido;
-    if (typeof a.km_final === "number" && typeof a.km_inicial === "number") return a.km_final - a.km_inicial;
-    return 0;
-  };
-
+  // Seleção pelo km_inicial do apontamento — qualquer usuário/responsável
   const kmApontado = apontamentos
     .filter((a) => {
       if (a.frota_id !== frotaId) return false;
       if (a.status !== "finalizado") return false;
-      if (kmPorApontamento(a) <= 0) return false;
-      const dataApontMs = apontamentoUtcMs(a);
-      return dataApontMs > inicioJanelaMs && dataApontMs <= fimJanelaMs;
+      if (typeof a.km_inicial !== "number") return false;
+      if (a.km_inicial < kmInicialFaixa || a.km_inicial > kmFinalFaixa) return false;
+      return kmPercorridoApontamento(a) > 0;
     })
-    .reduce((sum, a) => sum + kmPorApontamento(a), 0);
+    .reduce((sum, a) => sum + kmPercorridoApontamento(a), 0);
 
-  const percentual = kmEsperado > 0 ? kmApontado / kmEsperado : 0;
+  const percentual = kmApontado / kmEsperado;
 
   return {
     frotaId,
-    placa,
-    modelo,
-    dataFim: new Date(fimJanelaMs).toISOString(),
-    litros,
+    placa: abastMaior.frota?.placa ?? abastSegundo.frota?.placa ?? "—",
+    modelo: abastMaior.frota?.modelo ?? abastSegundo.frota?.modelo ?? "",
+    data: abastMaior.data_despesa ?? abastMaior.created_at,
+    litros: (abastMaior.litros_abastecidos as number) ?? 0,
+    valor: abastMaior.valor,
+    kmInicialFaixa,
+    kmFinalFaixa,
     kmApontado,
     kmEsperado,
     percentual,
     temAlerta: percentual < LIMITE_CONSUMO,
-    valor: valorAbastecimento,
   };
 }
 
@@ -526,21 +520,36 @@ export function avaliarAbastecimento(
 }
 
 /**
- * Persiste os alertas calculados no banco via API route.
+ * Persiste o resultado do "Último cálculo" (km apontado/esperado/percentual) e o
+ * estado do alerta de consumo no banco via API route.
  *
- * Deve ser chamado após um abastecimento ser salvo ou um apontamento ser finalizado.
- * Os dados passados já devem estar atualizados (incluindo o novo registro).
+ * Deve ser chamado apenas quando um NOVO abastecimento é registrado — é somente
+ * nesse momento que a faixa entre os dois últimos abastecimentos (por KM) fica
+ * definida. Não deve ser chamado ao finalizar um apontamento de KM.
+ *
+ * Para cada frota avaliada:
+ *   - Se houver faixa de KM válida (>= 2 abastecimentos com km_atual): persiste
+ *     ultimo_calculo_* via POST /api/alertas-consumo sempre, mesmo quando o percentual
+ *     está OK (>= 80%) — o card de Frotas deve refletir o cálculo mais recente.
+ *     O alerta só fica ativo (`ativo: true`) quando percentual < LIMITE_CONSUMO.
+ *   - Se não houver faixa válida (< 2 abastecimentos com km_atual, ou faixa degenerada):
+ *     apenas limpa o alerta_ativo da frota via /api/alertas-consumo/limpar — não há
+ *     dados suficientes para atualizar ultimo_calculo_*.
  *
  * @param frotaId — quando fornecido, processa apenas esse veículo; caso contrário,
  *   processa todas as frotas com abastecimentos. Use sempre que possível para evitar
- *   sobrescrever alertas de outros veículos.
+ *   sobrescrever o cálculo de outros veículos.
+ * @returns o resultado calculado para `frotaId` (ou null se não houver faixa válida
+ *   ou `frotaId` não for informado) — útil para feedback imediato na UI sem duplicar cálculo.
  */
 export async function persistirAlertasConsumo(
   despesas: Despesa[],
   apontamentos: ControleKm[],
   frotaId?: string,
-): Promise<void> {
-  const alertas = gerarAlertasConsumo(despesas, apontamentos);
+): Promise<AlertaConsumo | null> {
+  const resultadosPorFrota = new Map(
+    gerarAlertasConsumo(despesas, apontamentos).map((r) => [r.frotaId, r]),
+  );
 
   // Coleta as frotas a avaliar: somente a especificada, ou todas com abastecimentos
   const todasFrotasComAbast = new Set(
@@ -550,31 +559,27 @@ export async function persistirAlertasConsumo(
     ? (todasFrotasComAbast.has(frotaId) ? new Set([frotaId]) : new Set<string>())
     : todasFrotasComAbast;
 
-  // Alertas com problema (abaixo de 80%) — um por frota (o mais recente)
-  const alertasPorFrota = new Map<string, AlertaConsumo>();
-  for (const a of alertas) {
-    if (!alertasPorFrota.has(a.frotaId)) alertasPorFrota.set(a.frotaId, a);
-  }
-
-  // Para cada frota avaliada: persiste alerta se houver, ou limpa se estiver OK
+  // Para cada frota avaliada: persiste o último cálculo sempre que houver faixa válida,
+  // ou limpa o alerta se não houver dados suficientes para calcular
   const resultados = await Promise.allSettled(
-    Array.from(frotasAvaliadas).map((frotaId) => {
-      const alerta = alertasPorFrota.get(frotaId);
-      if (alerta) {
-        // Frota com problema: persiste ou atualiza alerta via POST (fluxo normal).
-        // POST protege alertas já tratados manualmente (resolvido_por != null) e
-        // atualiza km_apontado/km_esperado/percentual quando o alerta ainda está ativo.
+    Array.from(frotasAvaliadas).map((fId) => {
+      const resultado = resultadosPorFrota.get(fId);
+      if (resultado) {
+        // Faixa de KM válida: persiste/atualiza ultimo_calculo_* via POST (fluxo normal).
+        // POST protege alertas já tratados manualmente (resolvido_por != null), sempre
+        // atualiza km_apontado/km_esperado/percentual na frota, e ativa o alerta somente
+        // quando o percentual estiver abaixo de LIMITE_CONSUMO.
         return fetch("/api/alertas-consumo", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ alerta, ativo: true }),
+          body: JSON.stringify({ alerta: resultado, ativo: resultado.percentual < LIMITE_CONSUMO }),
         });
       } else {
-        // Frota OK (acima de 80%): limpa alerta_ativo na frota via API
+        // Sem faixa válida (< 2 abastecimentos com km_atual): limpa alerta_ativo na frota
         return fetch("/api/alertas-consumo/limpar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ frotaId }),
+          body: JSON.stringify({ frotaId: fId }),
         });
       }
     }),
@@ -586,6 +591,8 @@ export async function persistirAlertasConsumo(
       console.error("[persistirAlertasConsumo] Falha ao persistir alerta:", r.reason);
     }
   }
+
+  return frotaId ? (resultadosPorFrota.get(frotaId) ?? null) : null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -661,15 +668,20 @@ function apontamentoUtcMs(a: ControleKm): number {
 }
 
 /**
- * Gera alertas de consumo avaliando cada veículo com pelo menos dois abastecimentos.
+ * Gera o resultado do "Último cálculo" para cada veículo com pelo menos dois
+ * abastecimentos válidos (com km_atual preenchido).
  *
- * Regra da janela (com fuso horário correto):
- *  - iniMs = hora local BRT do penúltimo abastecimento convertida para UTC
- *  - fimMs = hora local BRT do último abastecimento + 59s (cobre todo o minuto digitado)
- *  - Apontamento incluído quando: apontamentoUtcMs > iniMs && apontamentoUtcMs <= fimMs
+ * Regra da janela — exclusivamente por KM, nunca por data/hora (ver calcularJanelaKmFrota):
+ *  - kmFinalFaixa/kmInicialFaixa = os dois maiores km_atual dos abastecimentos do veículo
+ *  - kmEsperado = kmFinalFaixa - kmInicialFaixa
+ *  - kmApontado = soma de km_percorrido dos apontamentos cujo km_inicial esteja na faixa
  *
- * KM esperado = litros do penúltimo × km_media_litro da frota.
- * Alerta apenas quando percentual < 80% (LIMITE_CONSUMO).
+ * Retorna UM resultado por veículo (mesmo quando percentual >= LIMITE_CONSUMO), pois o
+ * card "Último cálculo" da tela Frotas deve sempre refletir o cálculo mais recente —
+ * apenas a persistência do alerta ativo depende do percentual (ver persistirAlertasConsumo).
+ *
+ * Não gera resultado se houver apontamento em aberto para o veículo (ainda não é possível
+ * fechar a janela com segurança) ou se calcularJanelaKmFrota retornar null.
  */
 export function gerarAlertasConsumo(
   despesas: Despesa[],
@@ -679,85 +691,31 @@ export function gerarAlertasConsumo(
     ...new Set(despesas.filter(isAbastecimento).map((d) => d.frota_id as string)),
   ];
 
-  const alertas: AlertaConsumo[] = [];
+  const resultados: AlertaConsumo[] = [];
 
   for (const frotaId of frotaIds) {
-    // Ordena abastecimentos por data+hora local BRT (asc).
-    // Usa abastecimentoUtcMs para garantir ordenação correta em dias iguais.
-    const abastecimentos = despesas
-      .filter((d) => d.frota_id === frotaId && isAbastecimento(d))
-      .sort((a, b) => {
-        const tsA = abastecimentoUtcMs(
-          a.data_despesa ?? a.created_at.slice(0, 10),
-          a.hora_despesa,
-        );
-        const tsB = abastecimentoUtcMs(
-          b.data_despesa ?? b.created_at.slice(0, 10),
-          b.hora_despesa,
-        );
-        return tsA - tsB;
-      });
-
-    if (abastecimentos.length < 2) continue;
-
-    const penultimo = abastecimentos[abastecimentos.length - 2];
-    const ultimo    = abastecimentos[abastecimentos.length - 1];
-
-    // Não gera alerta se existir apontamento aberto para o veículo
+    // Não calcula se existir apontamento aberto para o veículo
     const temAberto = apontamentos.some(
       (a) => a.frota_id === frotaId && a.status === "aberto",
     );
     if (temAberto) continue;
 
-    const kmMediaLitro = ultimo.frota?.km_media_litro ?? penultimo.frota?.km_media_litro ?? null;
-    if (!kmMediaLitro || kmMediaLitro <= 0) continue;
+    const janela = calcularJanelaKmFrota(frotaId, despesas, apontamentos);
+    if (!janela) continue;
 
-    const litros = penultimo.litros_abastecidos as number;
-    const kmEsperado = litros * kmMediaLitro;
-    if (kmEsperado <= 0) continue;
-
-    // Converte abastecimentos para UTC para comparação com data_fim dos apontamentos (UTC)
-    const iniMs = abastecimentoUtcMs(
-      penultimo.data_despesa ?? penultimo.created_at.slice(0, 10),
-      penultimo.hora_despesa,
-    );
-    const fimMs = abastecimentoUtcMs(
-      ultimo.data_despesa ?? ultimo.created_at.slice(0, 10),
-      ultimo.hora_despesa,
-    );
-
-    const dataRef = ultimo.data_despesa ?? ultimo.created_at.slice(0, 10);
-
-    // Soma apontamentos finalizados cujo data_fim UTC cai dentro da janela.
-    // Regra: data_fim > iniMs (posterior ao penúltimo abastecimento)
-    //        data_fim <= fimMs (anterior ou igual ao último abastecimento + 59s)
-    const kmApontado = apontamentos
-      .filter((a) => {
-        if (a.frota_id !== frotaId) return false;
-        if (a.status !== "finalizado") return false;
-        if (kmPercorridoApontamento(a) <= 0) return false;
-        const dMs = apontamentoUtcMs(a);
-        return dMs > iniMs && dMs <= fimMs;
-      })
-      .reduce((sum, a) => sum + kmPercorridoApontamento(a), 0);
-
-    const percentual = kmApontado / kmEsperado;
-
-    if (percentual >= LIMITE_CONSUMO) continue;
-
-    alertas.push({
-      id: `${frotaId}_${dataRef}`,
+    resultados.push({
+      id: `${frotaId}_${janela.data.slice(0, 10)}`,
       frotaId,
-      placa: ultimo.frota?.placa ?? "—",
-      modelo: ultimo.frota?.modelo ?? "",
-      data: dataRef,
-      litros,
-      kmApontado: Math.round(kmApontado),
-      kmEsperado: Math.round(kmEsperado),
-      percentual: Math.round(percentual * 100) / 100,
-      valor: penultimo.valor,
+      placa: janela.placa,
+      modelo: janela.modelo,
+      data: janela.data,
+      litros: janela.litros,
+      kmApontado: Math.round(janela.kmApontado),
+      kmEsperado: Math.round(janela.kmEsperado),
+      percentual: Math.round(janela.percentual * 100) / 100,
+      valor: janela.valor,
     });
   }
 
-  return alertas.sort((a, b) => a.percentual - b.percentual);
+  return resultados.sort((a, b) => a.percentual - b.percentual);
 }

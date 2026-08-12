@@ -321,12 +321,27 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
       } else {
-        // O cálculo e a persistência do alerta de consumo são feitos exclusivamente
-        // por addDespesa → persistirAlertasConsumo → gerarAlertasConsumo → POST /api/alertas-consumo.
-        // Não há cálculo nem chamada de API aqui.
-        setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
-        setTimeout(() => onBack(), 1500);
+        // O cálculo e a persistência do "Último cálculo" (km apontado/esperado/percentual
+        // e alerta_ativo da frota) são feitos exclusivamente por
+        // addDespesa → persistirAlertasConsumo → gerarAlertasConsumo → POST /api/alertas-consumo.
+        // Aqui apenas lemos o resultado já calculado para exibir feedback imediato —
+        // sem duplicar a fórmula no front-end.
+        const consumo = (result as any).consumoResultado as AlertaConsumo | null | undefined;
+
+        if (isCombustivel && consumo && consumo.percentual < LIMITE_CONSUMO) {
+          setAlertaConsumo(
+            `Os apontamentos de KM parecem insuficientes entre os dois últimos abastecimentos. ` +
+            `Apontado ${consumo.kmApontado.toLocaleString("pt-BR")} km de ` +
+            `${consumo.kmEsperado.toLocaleString("pt-BR")} km esperados ` +
+            `(${Math.round(consumo.percentual * 100)}%). ` +
+            `A despesa foi registrada e os gestores serão notificados para verificação.`,
+          );
+        } else {
+          setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
+          setTimeout(() => onBack(), 1500);
+        }
       }
+    }
 
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
