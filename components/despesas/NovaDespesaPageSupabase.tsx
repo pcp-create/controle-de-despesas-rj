@@ -2,8 +2,9 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useAppStore } from "@/lib/store";
-import { useDespesas, useTiposDespesa, useCartoes, useFrotas, useControleKm, type Despesa } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
+import { LIMITE_CONSUMO, type AlertaConsumo } from "@/lib/consumo-frota";
 import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2, Receipt, Search } from "lucide-react";
 import { formatCurrency } from "@/lib/helpers";
 
@@ -30,9 +31,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   const { currentUser } = useAppStore();
   const { tiposDespesa } = useTiposDespesa();
   const { cartoes } = useCartoes(currentUser?.id);
-  const { addDespesa, updateDespesa, despesas } = useDespesas(currentUser?.id);
+  const { addDespesa, updateDespesa } = useDespesas(currentUser?.id);
   const { frotas } = useFrotas();
-  const { registros: apontamentosKm } = useControleKm();
 
   const [form, setForm] = useState({
     tipoDespesaId: editDespesa?.tipo_despesa_id || "",
@@ -321,81 +321,21 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
       } else {
-        // O cálculo e a persistência do alerta de consumo são feitos exclusivamente
-        // por addDespesa → persistirAlertasConsumo → gerarAlertasConsumo → POST /api/alertas-consumo.
-        // Não há cálculo nem chamada de API aqui.
-        setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
-        setTimeout(() => onBack(), 1500);
-      }
+        // O cálculo e a persistência do "Último cálculo" (km apontado/esperado/percentual
+        // e alerta_ativo da frota) são feitos exclusivamente por
+        // addDespesa → persistirAlertasConsumo → gerarAlertasConsumo → POST /api/alertas-consumo.
+        // Aqui apenas lemos o resultado já calculado para exibir feedback imediato —
+        // sem duplicar a fórmula no front-end.
+        const consumo = (result as any).consumoResultado as AlertaConsumo | null | undefined;
 
-      if (result.error) {
-        setFeedback({ type: "error", msg: result.error });
-      } else {
-        // ─── Regra de alerta de KM ────────────────────────────────────────────
-        // Avalia o abastecimento anterior usando a função centralizada.
-        // Sempre persiste o resultado no banco (atualiza ultimo_calculo_* da frota).
-        // ─────────────────��───────────────────────────────────────────────────
-        if (isCombustivel && form.frotaId) {
-          const frotaSelecionada = frotas.find((f) => f.id === form.frotaId);
-          const novoId = result.data?.id ?? "";
-
-          const consumo = frotaSelecionada?.km_media_litro
-            ? calcularConsumoFrota({
-                frotaId: frotaSelecionada.id,
-                placa: frotaSelecionada.placa,
-                modelo: frotaSelecionada.modelo,
-                kmMediaLitro: frotaSelecionada.km_media_litro,
-                valorAbastecimento: Number(form.valor) || 0,
-                novoAbastecimentoId: novoId,
-                novaDataDespesa: form.dataDespesa,
-                novaHoraDespesa: form.horaDespesa,
-                despesas,
-                apontamentos: apontamentosKm,
-              })
-            : null;
-
-          if (consumo) {
-            // Sempre persiste no banco — atualiza ultimo_calculo_* e alerta_ativo da frota
-            fetch("/api/alertas-consumo", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                alerta: {
-                  id: `${consumo.frotaId}_${new Date(consumo.dataFim).getTime()}`,
-                  frotaId: consumo.frotaId,
-                  placa: consumo.placa,
-                  modelo: consumo.modelo,
-                  data: consumo.dataFim,
-                  litros: consumo.litros,
-                  kmApontado: consumo.kmApontado,
-                  kmEsperado: consumo.kmEsperado,
-                  percentual: consumo.percentual,
-                  valor: consumo.valor,
-                },
-                ativo: consumo.temAlerta,
-              }),
-            }).catch(() => {/* silencioso */});
-
-            if (consumo.temAlerta) {
-              const kmRealPorLitro = consumo.litros > 0
-                ? (consumo.kmApontado / consumo.litros).toFixed(1)
-                : "0";
-              setAlertaConsumo(
-                `Os apontamentos de KM parecem insuficientes para o total abastecido. ` +
-                `Rodou ${consumo.kmApontado.toLocaleString("pt-BR")} km com ` +
-                `${consumo.litros.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L ` +
-                `(${kmRealPorLitro} km/l), abaixo da média esperada de ` +
-                `${frotaSelecionada!.km_media_litro} km/l. ` +
-                `A despesa foi registrada e os gestores serão notificados para verificação.`,
-              );
-            } else {
-              setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
-              setTimeout(() => onBack(), 1500);
-            }
-          } else {
-            setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
-            setTimeout(() => onBack(), 1500);
-          }
+        if (isCombustivel && consumo && consumo.percentual < LIMITE_CONSUMO) {
+          setAlertaConsumo(
+            `Os apontamentos de KM parecem insuficientes entre os dois últimos abastecimentos. ` +
+            `Apontado ${consumo.kmApontado.toLocaleString("pt-BR")} km de ` +
+            `${consumo.kmEsperado.toLocaleString("pt-BR")} km esperados ` +
+            `(${Math.round(consumo.percentual * 100)}%). ` +
+            `A despesa foi registrada e os gestores serão notificados para verificação.`,
+          );
         } else {
           setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
           setTimeout(() => onBack(), 1500);

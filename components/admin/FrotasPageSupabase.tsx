@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { mutate as swrMutate } from "swr";
 import { useFrotas, useDespesas, useControleKm, type Frota } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
-import { calcularEstimativaVeiculo, type EstimativaVeiculoResult } from "@/lib/consumo-frota";
+import { calcularEstimativaVeiculo, persistirAlertasConsumo, type EstimativaVeiculoResult } from "@/lib/consumo-frota";
 import {
   Car,
   Plus,
@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   Gauge,
   CalendarDays,
+  RefreshCw,
 } from "lucide-react";
 
 const TIPOS_VEICULO = ["Carro", "Moto", "Caminhão", "Van", "Pickup", "Utilitário", "Outro"];
@@ -40,7 +41,7 @@ const EMPTY_FORM = {
 };
 
 export default function FrotasPageSupabase() {
-  const { frotas, isLoading, addFrota, updateFrota, deleteFrota } = useFrotas();
+  const { frotas, isLoading, addFrota, updateFrota, deleteFrota, mutate: mutateFrotas } = useFrotas();
   const currentUser = useAppStore((s) => s.currentUser);
   const { despesas } = useDespesas();
   const { registros: apontamentosKm } = useControleKm();
@@ -150,6 +151,30 @@ export default function FrotasPageSupabase() {
       setFeedback({ type: "error", msg: "Erro ao tratar alerta. Tente novamente." });
     } finally {
       setTratandoAlerta(false);
+    }
+  }
+
+  // Recálculo em massa do "Último cálculo" de todos os veículos.
+  // Reutiliza EXATAMENTE a mesma função/regra chamada ao registrar um novo abastecimento
+  // (persistirAlertasConsumo → gerarAlertasConsumo → calcularJanelaKmFrota) — nenhuma
+  // fórmula nova é criada aqui. Sem frotaId, ela processa todos os veículos que possuem
+  // abastecimento: recalcula e persiste ultimo_calculo_* + alerta_ativo para os que têm
+  // faixa de KM válida, e limpa o alerta dos que não têm (< 2 abastecimentos com km_atual).
+  const [recalculando, setRecalculando] = useState(false);
+
+  async function handleRecalcularTudo() {
+    setRecalculando(true);
+    setFeedback(null);
+    try {
+      await persistirAlertasConsumo(despesas, apontamentosKm);
+      await mutateFrotas();
+      await swrMutate("controle_km");
+      setFeedback({ type: "success", msg: "Recálculo concluído para todos os veículos." });
+      setTimeout(() => setFeedback(null), 3000);
+    } catch {
+      setFeedback({ type: "error", msg: "Erro ao recalcular. Tente novamente." });
+    } finally {
+      setRecalculando(false);
     }
   }
 
@@ -321,13 +346,26 @@ export default function FrotasPageSupabase() {
           <h1 className="text-xl font-bold text-foreground">Frotas</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Gerencie os veículos da empresa</p>
         </div>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          Novo Veículo
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {currentUser?.perfil === "administrador" && (
+            <button
+              onClick={handleRecalcularTudo}
+              disabled={recalculando}
+              title="Recalcula o último cálculo de consumo de todos os veículos usando a regra atual (faixa de KM entre os dois últimos abastecimentos)"
+              className="flex items-center gap-2 px-4 py-2 bg-background border border-input text-foreground rounded-lg text-sm font-medium hover:bg-muted transition disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-4 h-4 ${recalculando ? "animate-spin" : ""}`} />
+              {recalculando ? "Recalculando..." : "Recalcular Tudo"}
+            </button>
+          )}
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition"
+          >
+            <Plus className="w-4 h-4" />
+            Novo Veículo
+          </button>
+        </div>
       </div>
 
       {/* Barra de busca + período + toggle */}

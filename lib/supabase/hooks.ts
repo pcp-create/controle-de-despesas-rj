@@ -547,20 +547,26 @@ export function useDespesas(userId?: string, perfil?: string) {
 
     mutate();
 
-    // Se for um abastecimento, recalcula e persiste os alertas de consumo.
+    // Se for um abastecimento, recalcula e persiste a janela de KM entre os dois
+    // últimos abastecimentos (por KM, não por data/hora — ver lib/consumo-frota.ts).
     // O novo abastecimento já está no banco (mutate() foi chamado acima), por isso
-    // fetchDespesas retornará os dados atualizados incluindo o novo registro —
-    // que será corretamente tratado como o "último abastecimento" em gerarAlertasConsumo.
+    // fetchDespesas retornará os dados atualizados incluindo o novo registro, que será
+    // corretamente considerado em calcularJanelaKmFrota via gerarAlertasConsumo.
+    // Aguarda o resultado (em vez de fire-and-forget) para que a UI possa exibir
+    // feedback imediato sem duplicar o cálculo em outro lugar.
+    let consumoResultado: Awaited<ReturnType<typeof persistirAlertasConsumo>> = null;
     if (isAbastecimento(data as Despesa)) {
       const frotaId = (data as Despesa).frota_id ?? undefined;
-      const todasDespesas: Despesa[] = await fetchDespesas(undefined, "administrador");
-      const kmAdmin = await fetchControleKm();
-      persistirAlertasConsumo(todasDespesas, kmAdmin, frotaId).catch((err) => {
+      try {
+        const todasDespesas: Despesa[] = await fetchDespesas(undefined, "administrador");
+        const kmAdmin = await fetchControleKm();
+        consumoResultado = await persistirAlertasConsumo(todasDespesas, kmAdmin, frotaId);
+      } catch (err) {
         console.error("[addDespesa] Erro ao persistir alertas de consumo:", err);
-      });
+      }
     }
 
-    return { data };
+    return { data, consumoResultado };
   };
 
   const updateDespesa = async (id: string, updates: Partial<Despesa>) => {
@@ -593,6 +599,18 @@ export function useDespesas(userId?: string, perfil?: string) {
     const { error } = await supabase
       .from("despesas")
       .update({ documento, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return { error: error.message };
+    mutate();
+    return { error: null };
+  };
+
+  const updateDespesaTipo = async (id: string, tipo_despesa_id: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { error } = await supabase
+      .from("despesas")
+      .update({ tipo_despesa_id, updated_at: new Date().toISOString() })
       .eq("id", id);
     if (error) return { error: error.message };
     mutate();
@@ -1070,6 +1088,7 @@ export function useDespesas(userId?: string, perfil?: string) {
     addDespesa,
     updateDespesa,
     updateDespesaDocumento,
+    updateDespesaTipo,
     updateDespesaVencimento,
     deleteDespesa,
     enviarDespesa,
@@ -1362,23 +1381,11 @@ export function useControleKm(userId?: string) {
     mutate();
     swrMutate("controle_km"); // invalida a chave global usada pelo FrotasPage
 
-    // Após finalizar um apontamento, recalcula os alertas de consumo apenas para
-    // esse veículo — evita sobrescrever alertas já tratados de outros veículos.
-    // Nota: finalizarKm só ocorre antes do próximo abastecimento (o bloqueio de KM aberto
-    // impede abastecimento enquanto há apontamento em aberto), portanto gerarAlertasConsumo
-    // ainda não terá o próximo abastecimento — o recálculo aqui pode não gerar alerta novo,
-    // mas garantirá limpeza de alerta falso caso o apontamento finalizado complete a janela.
-    if (frota_id) {
-      fetchDespesas(undefined, "administrador")
-        .then((todasDespesas) =>
-          fetchControleKm().then((kmAdmin) =>
-            persistirAlertasConsumo(todasDespesas, kmAdmin, frota_id),
-          ),
-        )
-        .catch((err) => {
-          console.error("[finalizarKm] Erro ao recalcular alertas de consumo:", err);
-        });
-    }
+    // Não recalcula o "Último cálculo" de consumo aqui. A janela entre os dois últimos
+    // abastecimentos só pode ser fechada corretamente quando existir o PRÓXIMO
+    // abastecimento (ver lib/consumo-frota.ts → calcularJanelaKmFrota) — é nesse momento
+    // que os dois km_atual que delimitam a faixa ficam definidos. O recálculo é
+    // disparado exclusivamente por addDespesa ao registrar um novo abastecimento.
 
     return { error: null };
   };
