@@ -353,25 +353,12 @@ export default function FinanceiroPageSupabase() {
     );
   });
 
-  // Contadores dos status ERP (sobre todas as despesas do período filtrado, excluindo cancelados por padrão)
-  const despesasNaoCanceladas = despesasFiltradas.filter((d) => !d.lancamento_cancelado);
-  const qtdErpPendente  = despesasNaoCanceladas.filter((d) => !d.lancado_sistema).length;
-  const qtdErpLancado   = despesasNaoCanceladas.filter((d) => d.lancado_sistema && d.erp_status !== "integrado").length;
-  const qtdErpIntegrado = despesasNaoCanceladas.filter((d) => d.erp_status === "integrado").length;
-  const qtdCancelado    = despesasFiltradas.filter((d) => d.lancamento_cancelado).length;
-
-  // Aplica filtros por coluna e ordenação
-  const despesasExibidas = useMemo(() => {
+  // Aplica os filtros por coluna (colFilters) — mesma lógica usada pela tabela,
+  // mas SEM o filtro de status/lançamento (filtroLancamento) e sem excluir cancelados.
+  // Essa é a base compartilhada: cards e tabela partem dela, evitando lógicas divergentes.
+  const despesasComFiltrosColuna = useMemo(() => {
     let list = despesasFiltradas;
 
-    // Filtro lançamento — 4 status
-    if (filtroLancamento === "cancelado")  list = list.filter((d) => d.lancamento_cancelado);
-    else list = list.filter((d) => !d.lancamento_cancelado); // oculta cancelados nos demais filtros
-    if (filtroLancamento === "pendente")  list = list.filter((d) => !d.lancado_sistema);
-    if (filtroLancamento === "lancado")   list = list.filter((d) => d.lancado_sistema && d.erp_status !== "integrado");
-    if (filtroLancamento === "integrado") list = list.filter((d) => d.erp_status === "integrado");
-
-    // Filtros por coluna — cada chave tem um Set de valores permitidos
     Object.entries(colFilters).forEach(([key, selected]) => {
       if (!selected || selected.size === 0) return;
       list = list.filter((d) => {
@@ -401,6 +388,29 @@ export default function FinanceiroPageSupabase() {
         return selected.has(cellVal);
       });
     });
+
+    return list;
+  }, [despesasFiltradas, colFilters, tiposDespesa, profiles]);
+
+  // Contadores dos cards — calculados sobre a MESMA base filtrada da tabela
+  // (período + busca + filtros por coluna), garantindo que os cards sempre reflitam
+  // exatamente os filtros aplicados, incluindo combinações de múltiplos filtros.
+  const despesasNaoCanceladas = despesasComFiltrosColuna.filter((d) => !d.lancamento_cancelado);
+  const qtdErpPendente  = despesasNaoCanceladas.filter((d) => !d.lancado_sistema).length;
+  const qtdErpLancado   = despesasNaoCanceladas.filter((d) => d.lancado_sistema && d.erp_status !== "integrado").length;
+  const qtdErpIntegrado = despesasNaoCanceladas.filter((d) => d.erp_status === "integrado").length;
+  const qtdCancelado    = despesasComFiltrosColuna.filter((d) => d.lancamento_cancelado).length;
+
+  // Aplica o filtro de status/lançamento e ordenação — usa a mesma base dos cards
+  const despesasExibidas = useMemo(() => {
+    let list = despesasComFiltrosColuna;
+
+    // Filtro lançamento — 4 status
+    if (filtroLancamento === "cancelado")  list = list.filter((d) => d.lancamento_cancelado);
+    else list = list.filter((d) => !d.lancamento_cancelado); // oculta cancelados nos demais filtros
+    if (filtroLancamento === "pendente")  list = list.filter((d) => !d.lancado_sistema);
+    if (filtroLancamento === "lancado")   list = list.filter((d) => d.lancado_sistema && d.erp_status !== "integrado");
+    if (filtroLancamento === "integrado") list = list.filter((d) => d.erp_status === "integrado");
 
     // Ordenação
     if (sortKey) {
@@ -436,7 +446,7 @@ export default function FinanceiroPageSupabase() {
       });
     }
     return list;
-  }, [despesasFiltradas, colFilters, sortKey, sortDir, tiposDespesa, profiles, filtroLancamento]);
+  }, [despesasComFiltrosColuna, sortKey, sortDir, tiposDespesa, profiles, filtroLancamento]);
 
   const totalFiltrado = despesasExibidas.reduce((s, d) => s + Number(d.valor), 0);
 
