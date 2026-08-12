@@ -54,8 +54,10 @@ export interface ResultadoJanelaKm {
  *        kmFinalFaixa   = maior km_atual
  *        kmInicialFaixa = segundo maior km_atual
  *   3. kmEsperado = kmFinalFaixa - kmInicialFaixa (deslocamento físico do veículo).
- *   4. Apontamentos de controle_km do mesmo veículo (qualquer usuário) cujo
- *      `km_inicial` esteja em [kmInicialFaixa, kmFinalFaixa] participam do cálculo.
+ *   4. Apontamentos de controle_km do mesmo veículo (qualquer usuário), finalizados e
+ *      com km_final preenchido, participam do cálculo somente quando estiverem
+ *      COMPLETAMENTE contidos na faixa: km_inicial >= kmInicialFaixa E km_final <= kmFinalFaixa.
+ *      Apontamentos que começam antes ou terminam depois da faixa são descartados.
  *   5. kmApontado = soma de km_percorrido (ou km_final - km_inicial) desses apontamentos.
  *   6. percentual = kmApontado / kmEsperado.
  *
@@ -93,13 +95,18 @@ export function calcularJanelaKmFrota(
 
   const kmEsperado = kmFinalFaixa - kmInicialFaixa;
 
-  // Seleção pelo km_inicial do apontamento — qualquer usuário/responsável
+  // Seleção pela faixa COMPLETA do apontamento — qualquer usuário/responsável.
+  // O apontamento só é considerado quando estiver inteiramente contido entre os
+  // dois abastecimentos: km_inicial >= kmInicialFaixa E km_final <= kmFinalFaixa.
+  // Apontamentos que começam antes ou terminam depois da faixa são descartados,
+  // mesmo que parcialmente sobrepostos a ela.
   const kmApontado = apontamentos
     .filter((a) => {
       if (a.frota_id !== frotaId) return false;
       if (a.status !== "finalizado") return false;
       if (typeof a.km_inicial !== "number") return false;
-      if (a.km_inicial < kmInicialFaixa || a.km_inicial > kmFinalFaixa) return false;
+      if (typeof a.km_final !== "number") return false;
+      if (a.km_inicial < kmInicialFaixa || a.km_final > kmFinalFaixa) return false;
       return kmPercorridoApontamento(a) > 0;
     })
     .reduce((sum, a) => sum + kmPercorridoApontamento(a), 0);
