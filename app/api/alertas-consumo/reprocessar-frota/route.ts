@@ -126,7 +126,9 @@ export async function POST(req: Request) {
         ultimo_calculo_km_apontado: km_apontado,
         ultimo_calculo_km_esperado: km_esperado,
         ultimo_calculo_percentual: percentual,
-        ultimo_calculo_em: alertaAtual.data,
+        // Momento em que este reprocessamento pontual foi executado — nunca a data
+        // do abastecimento/apontamento usado como fonte do cálculo.
+        ultimo_calculo_em: new Date().toISOString(),
       })
       .eq("id", frota_id);
 

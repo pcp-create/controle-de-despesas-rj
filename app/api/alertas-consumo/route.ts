@@ -84,7 +84,9 @@ export async function POST(req: Request) {
       .from("frotas")
       .update({
         alerta_ativo: temAlertaAtivo,
-        ultimo_calculo_em: alerta.data,
+        // ultimo_calculo_em representa o MOMENTO EM QUE ESTE CÁLCULO FOI EXECUTADO,
+        // nunca a data dos abastecimentos/apontamentos usados como fonte do cálculo.
+        ultimo_calculo_em: new Date().toISOString(),
         ultimo_calculo_km_apontado: alerta.kmApontado,
         ultimo_calculo_km_esperado: alerta.kmEsperado,
         ultimo_calculo_percentual: alerta.percentual,
@@ -201,7 +203,8 @@ export async function PUT(req: Request) {
       .from("frotas")
       .update({
         alerta_ativo: temAlertaAtivo,
-        ultimo_calculo_em: alerta.data,
+        // Momento em que este reprocessamento foi executado — nunca a data do abastecimento.
+        ultimo_calculo_em: new Date().toISOString(),
         ultimo_calculo_km_apontado: alerta.kmApontado,
         ultimo_calculo_km_esperado: alerta.kmEsperado,
         ultimo_calculo_percentual: alerta.percentual,
