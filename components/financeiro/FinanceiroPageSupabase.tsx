@@ -17,7 +17,7 @@ const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", 
 type ModoFiltro = "mes" | "periodo";
 
 export default function FinanceiroPageSupabase() {
-  const { despesas, isLoading, updateDespesaDocumento, updateDespesaVencimento, lancarSistema, lancarERP, tentarNovamenteERP, estornarLancamento, cancelarLancamento, estornarCancelamento } = useDespesas();
+  const { despesas, isLoading, updateDespesaDocumento, updateDespesaTipo, updateDespesaVencimento, lancarSistema, lancarERP, tentarNovamenteERP, estornarLancamento, cancelarLancamento, estornarCancelamento } = useDespesas();
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
 
@@ -183,6 +183,25 @@ export default function FinanceiroPageSupabase() {
     setSalvandoDocumento((prev) => { const next = { ...prev }; delete next[id]; return next; });
     handleCancelarDocumento(id);
   };
+
+  // Estado para edição inline de tipo: { [despesaId]: tipo_despesa_id }
+  const [editandoTipo, setEditandoTipo] = useState<Record<string, string>>({});
+  const [salvandoTipo, setSalvandoTipo] = useState<Record<string, boolean>>({});
+
+  const handleEditarTipo = (id: string, valorAtual: string | null) => {
+    setEditandoTipo((prev) => ({ ...prev, [id]: valorAtual || "" }));
+  };
+  const handleCancelarTipo = (id: string) => {
+    setEditandoTipo((prev) => { const next = { ...prev }; delete next[id]; return next; });
+  };
+  const handleSalvarTipo = async (id: string) => {
+    const novoTipo = editandoTipo[id];
+    setSalvandoTipo((prev) => ({ ...prev, [id]: true }));
+    await updateDespesaTipo(id, novoTipo);
+    setSalvandoTipo((prev) => { const next = { ...prev }; delete next[id]; return next; });
+    handleCancelarTipo(id);
+  };
+
   const now = new Date();
   const { filtrosSalvos: filtrosFin, carregado: carregadoFin, salvar: salvarFin } = useFiltrosPersistidos<FiltrosFinanceiro>(currentUser?.id, "financeiro");
   const aplicadoFin = useRef(false);
@@ -1284,21 +1303,62 @@ export default function FinanceiroPageSupabase() {
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">{tecnico?.nome.split(" ")[0] || "-"}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
-                      <span>{tipo?.nome || "-"}</span>
-                      {d.parcelado && d.numero_parcelas > 1 && (
-                        <span className="ml-1.5 text-xs font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
-                          {d.parcela_atual}/{d.numero_parcelas}
-                        </span>
-                      )}
-                      {d.pagamento_tipo === "faturado" && (
-                        <span className="ml-1.5 text-xs font-semibold text-accent bg-accent/10 px-1.5 py-0.5 rounded-full">
-                          Faturado
-                        </span>
-                      )}
-                      {d.pagamento_tipo === "boleto" && (
-                        <span className="ml-1.5 text-xs font-semibold text-warning bg-warning/10 px-1.5 py-0.5 rounded-full">
-                          Boleto
-                        </span>
+                      {editandoTipo[d.id] !== undefined ? (
+                        <div className="flex items-center gap-1">
+                          <select
+                            value={editandoTipo[d.id]}
+                            onChange={(e) => setEditandoTipo((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                            className="px-2 py-1 rounded border border-input bg-background text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                          >
+                            <option value="">Selecione...</option>
+                            {tiposDespesa.map((t) => (
+                              <option key={t.id} value={t.id}>{t.nome}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => handleSalvarTipo(d.id)}
+                            disabled={salvandoTipo[d.id]}
+                            title="Salvar"
+                            className="p-1 rounded hover:bg-success/10 text-success disabled:opacity-40 transition"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleCancelarTipo(d.id)}
+                            title="Cancelar"
+                            className="p-1 rounded hover:bg-destructive/10 text-destructive transition"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 group">
+                          <span>{tipo?.nome || "-"}</span>
+                          {d.parcelado && d.numero_parcelas > 1 && (
+                            <span className="ml-1.5 text-xs font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                              {d.parcela_atual}/{d.numero_parcelas}
+                            </span>
+                          )}
+                          {d.pagamento_tipo === "faturado" && (
+                            <span className="ml-1.5 text-xs font-semibold text-accent bg-accent/10 px-1.5 py-0.5 rounded-full">
+                              Faturado
+                            </span>
+                          )}
+                          {d.pagamento_tipo === "boleto" && (
+                            <span className="ml-1.5 text-xs font-semibold text-warning bg-warning/10 px-1.5 py-0.5 rounded-full">
+                              Boleto
+                            </span>
+                          )}
+                          {!d.lancado_sistema && (currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro" || currentUser?.perfil === "gestor") && (
+                            <button
+                              onClick={() => handleEditarTipo(d.id, d.tipo_despesa_id)}
+                              title="Editar tipo"
+                              className="p-0.5 rounded opacity-0 group-hover:opacity-100 transition hover:bg-muted text-muted-foreground"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="px-3 py-2 whitespace-nowrap">

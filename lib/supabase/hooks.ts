@@ -599,6 +599,18 @@ export function useDespesas(userId?: string, perfil?: string) {
     return { error: null };
   };
 
+  const updateDespesaTipo = async (id: string, tipo_despesa_id: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { error } = await supabase
+      .from("despesas")
+      .update({ tipo_despesa_id, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return { error: error.message };
+    mutate();
+    return { error: null };
+  };
+
   const updateDespesaVencimento = async (id: string, data_vencimento: string) => {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
@@ -1070,6 +1082,7 @@ export function useDespesas(userId?: string, perfil?: string) {
     addDespesa,
     updateDespesa,
     updateDespesaDocumento,
+    updateDespesaTipo,
     updateDespesaVencimento,
     deleteDespesa,
     enviarDespesa,
