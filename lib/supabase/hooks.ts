@@ -1400,6 +1400,38 @@ export function useControleKm(userId?: string) {
     return { error: null };
   };
 
+  // Ajusta um apontamento já lançado (km_inicial, km_final, destino, motivo,
+  // observação, ocorrência). Usado por Gestor/Administrador para corrigir
+  // registros com erro de digitação. Passa pela rota server-side (service role)
+  // para não depender de permissão de UPDATE direta na tabela (RLS).
+  const editarKm = async (
+    id: string,
+    payload: {
+      km_inicial: number;
+      km_final: number | null;
+      destino?: string;
+      motivo?: string;
+      observacao?: string;
+      ocorrencia?: string;
+    },
+  ) => {
+    try {
+      const res = await fetch("/api/controle-km-admin", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...payload }),
+      });
+      const json = await res.json();
+      if (!res.ok) return { error: json.error || "Erro ao ajustar apontamento" };
+
+      mutate();
+      swrMutate("controle_km"); // invalida a chave global usada pelo FrotasPage
+      return { data: json.data, error: null };
+    } catch {
+      return { error: "Erro ao ajustar apontamento" };
+    }
+  };
+
   return {
     registros: data as ControleKm[] || [],
     isLoading,
@@ -1408,5 +1440,6 @@ export function useControleKm(userId?: string) {
     iniciarKm,
     finalizarKm,
     deleteControleKm,
+    editarKm,
   };
 }

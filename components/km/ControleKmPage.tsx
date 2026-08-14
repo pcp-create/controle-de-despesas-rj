@@ -22,6 +22,7 @@ import {
   CalendarDays,
   User,
   Download,
+  Pencil,
 } from "lucide-react";
 
 function formatDuracao(minutos: number | null): string {
@@ -62,7 +63,7 @@ function ElapsedTimer({ start }: { start: string }) {
   return <span className="font-mono text-sm text-warning font-semibold">{elapsed}</span>;
 }
 
-type ModalType = "iniciar" | "finalizar" | "delete" | null;
+type ModalType = "iniciar" | "finalizar" | "delete" | "editar" | null;
 
 const EMPTY_FORM = {
   frota_id: "",
@@ -79,6 +80,15 @@ const EMPTY_FIN = {
   houve_ocorrencia: false,
 };
 
+const EMPTY_EDIT = {
+  km_inicial: "",
+  km_final: "",
+  destino: "",
+  motivo: "",
+  observacao: "",
+  ocorrencia: "",
+};
+
 export default function ControleKmPage() {
   const { currentUser } = useAppStore();
 
@@ -88,7 +98,7 @@ export default function ControleKmPage() {
   const isFinanceiro = currentUser?.perfil === "financeiro";
   const podeVerTodos = isGestorOuAdmin || isFinanceiro;
 
-  const { registros, isLoading, iniciarKm, finalizarKm, deleteControleKm } = useControleKm(
+  const { registros, isLoading, iniciarKm, finalizarKm, deleteControleKm, editarKm } = useControleKm(
     podeVerTodos ? undefined : currentUser?.id
   );
   const { frotas } = useFrotas();
@@ -105,6 +115,7 @@ export default function ControleKmPage() {
   const [targetRegistro, setTargetRegistro] = useState<ControleKm | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [fin, setFin] = useState({ ...EMPTY_FIN });
+  const [edit, setEdit] = useState({ ...EMPTY_EDIT });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -251,6 +262,23 @@ export default function ControleKmPage() {
     setModal("delete");
   };
 
+  // Somente Gestor/Administrador podem ajustar um apontamento já lançado
+  // (corrigir km_inicial/km_final digitados errado, destino, motivo, etc.)
+  const openEditar = (r: ControleKm) => {
+    setTargetRegistro(r);
+    setEdit({
+      km_inicial: String(r.km_inicial),
+      km_final: r.km_final != null ? String(r.km_final) : "",
+      destino: r.destino ?? "",
+      motivo: r.motivo ?? "",
+      observacao: r.observacao ?? "",
+      ocorrencia: r.ocorrencia ?? "",
+    });
+    setErrors({});
+    setFeedback(null);
+    setModal("editar");
+  };
+
   const closeModal = () => {
     setModal(null);
     setTargetRegistro(null);
@@ -323,6 +351,45 @@ export default function ControleKmPage() {
       setFeedback({ type: "error", msg: result.error });
     } else {
       setFeedback({ type: "success", msg: "Viagem finalizada com sucesso!" });
+      setTimeout(() => closeModal(), 1200);
+    }
+  };
+
+  const validateEditar = () => {
+    const e: Record<string, string> = {};
+    if (!edit.km_inicial.trim() || isNaN(Number(edit.km_inicial)) || Number(edit.km_inicial) < 0)
+      e.km_inicial = "Informe o KM inicial válido";
+    if (edit.km_final.trim()) {
+      if (isNaN(Number(edit.km_final)) || Number(edit.km_final) < 0) {
+        e.km_final = "Informe o KM final válido";
+      } else if (Number(edit.km_final) < Number(edit.km_inicial)) {
+        e.km_final = "KM final deve ser maior ou igual ao KM inicial";
+      }
+    }
+    return e;
+  };
+
+  const handleEditar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const errs = validateEditar();
+    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    if (!targetRegistro) return;
+
+    setLoading(true);
+    const result = await editarKm(targetRegistro.id, {
+      km_inicial: Number(edit.km_inicial),
+      km_final: edit.km_final.trim() ? Number(edit.km_final) : null,
+      destino: edit.destino,
+      motivo: edit.motivo,
+      observacao: edit.observacao,
+      ocorrencia: edit.ocorrencia,
+    });
+    setLoading(false);
+
+    if (result.error) {
+      setFeedback({ type: "error", msg: result.error });
+    } else {
+      setFeedback({ type: "success", msg: "Apontamento ajustado com sucesso!" });
       setTimeout(() => closeModal(), 1200);
     }
   };
@@ -775,6 +842,15 @@ export default function ControleKmPage() {
                   )}
                   {isGestorOuAdmin && (
                     <button
+                      onClick={() => openEditar(r)}
+                      className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition"
+                      title="Editar apontamento"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {isGestorOuAdmin && (
+                    <button
                       onClick={() => openDelete(r)}
                       className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
                       title="Excluir registro"
@@ -1150,6 +1226,152 @@ export default function ControleKmPage() {
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4" />}
                   {loading ? "Finalizando..." : "Finalizar Viagem"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* ── Modal Editar Apontamento (Gestor/Administrador) ── */}
+    {modal === "editar" && targetRegistro && (() => {
+      const frota = frotas.find((f) => f.id === targetRegistro.frota_id);
+      const usuario = profiles.find((p) => p.id === targetRegistro.usuario_id);
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-center gap-2.5">
+                <Pencil className="w-5 h-5 text-primary" />
+                <h2 className="font-bold text-foreground">Editar Apontamento</h2>
+              </div>
+              <button onClick={closeModal} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Resumo somente leitura */}
+            <div className="mx-5 mt-4 p-3 rounded-lg bg-muted/50 border border-border text-xs flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Veículo</span>
+                <span className="font-semibold">{frota?.placa} — {frota?.marca} {frota?.modelo}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Funcionário</span>
+                <span className="font-semibold">{usuario?.nome ?? "—"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Início</span>
+                <span className="font-semibold">{new Date(targetRegistro.data_inicio).toLocaleString("pt-BR")}</span>
+              </div>
+              {targetRegistro.data_fim && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Fim</span>
+                  <span className="font-semibold">{new Date(targetRegistro.data_fim).toLocaleString("pt-BR")}</span>
+                </div>
+              )}
+            </div>
+
+            {feedback && (
+              <div className={`mx-5 mt-3 flex items-center gap-2 px-4 py-3 rounded-lg text-sm border ${
+                feedback.type === "success"
+                  ? "bg-success/10 border-success/20 text-success"
+                  : "bg-destructive/10 border-destructive/20 text-destructive"
+              }`}>
+                {feedback.type === "success" ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                {feedback.msg}
+              </div>
+            )}
+
+            <form onSubmit={handleEditar} className="p-5 flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">KM Inicial <span className="text-destructive">*</span></label>
+                  <input
+                    type="number"
+                    value={edit.km_inicial}
+                    onChange={(e) => setEdit({ ...edit, km_inicial: e.target.value })}
+                    step={0.1}
+                    autoFocus
+                    className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  {errors.km_inicial && <span className="text-xs text-destructive">{errors.km_inicial}</span>}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">
+                    KM Final {targetRegistro.status === "finalizado" && <span className="text-destructive">*</span>}
+                  </label>
+                  <input
+                    type="number"
+                    value={edit.km_final}
+                    onChange={(e) => setEdit({ ...edit, km_final: e.target.value })}
+                    placeholder={targetRegistro.status === "aberto" ? "Em andamento" : undefined}
+                    step={0.1}
+                    className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  {errors.km_final && <span className="text-xs text-destructive">{errors.km_final}</span>}
+                </div>
+              </div>
+              {edit.km_final && !errors.km_final && Number(edit.km_final) >= Number(edit.km_inicial || 0) && (
+                <span className="text-xs text-success font-medium -mt-2">
+                  Percorrido: {formatKm(Number(edit.km_final) - Number(edit.km_inicial))}
+                </span>
+              )}
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Destino</label>
+                <input
+                  type="text"
+                  value={edit.destino}
+                  onChange={(e) => setEdit({ ...edit, destino: e.target.value })}
+                  placeholder="Ex: Cliente XPTO"
+                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Motivo</label>
+                <input
+                  type="text"
+                  value={edit.motivo}
+                  onChange={(e) => setEdit({ ...edit, motivo: e.target.value })}
+                  placeholder="Ex: Visita técnica"
+                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Observação</label>
+                <textarea
+                  value={edit.observacao}
+                  onChange={(e) => setEdit({ ...edit, observacao: e.target.value })}
+                  rows={2}
+                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Ocorrência</label>
+                <textarea
+                  value={edit.ocorrencia}
+                  onChange={(e) => setEdit({ ...edit, ocorrencia: e.target.value })}
+                  rows={2}
+                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" onClick={closeModal} className="px-4 py-2 rounded-lg border border-input bg-background text-sm font-medium hover:bg-muted transition">
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-4 h-4" />}
+                  {loading ? "Salvando..." : "Salvar Ajuste"}
                 </button>
               </div>
             </form>
