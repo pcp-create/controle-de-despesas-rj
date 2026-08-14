@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { mutate as swrMutate } from "swr";
-import { useFrotas, useDespesas, useControleKm, type Frota } from "@/lib/supabase/hooks";
+import { useFrotas, useDespesas, useControleKm, useProfiles, type Frota, type ControleKm, type Despesa } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
-import { calcularEstimativaVeiculo, persistirAlertasConsumo, type EstimativaVeiculoResult } from "@/lib/consumo-frota";
+import { calcularEstimativaVeiculo, persistirAlertasConsumo, isAbastecimento, type EstimativaVeiculoResult } from "@/lib/consumo-frota";
+import { formatCurrency } from "@/lib/helpers";
 import {
   Car,
   Plus,
@@ -23,6 +24,8 @@ import {
   Gauge,
   CalendarDays,
   RefreshCw,
+  Route,
+  Fuel,
 } from "lucide-react";
 
 const TIPOS_VEICULO = ["Carro", "Moto", "Caminhão", "Van", "Pickup", "Utilitário", "Outro"];
@@ -45,6 +48,7 @@ export default function FrotasPageSupabase() {
   const currentUser = useAppStore((s) => s.currentUser);
   const { despesas } = useDespesas();
   const { registros: apontamentosKm } = useControleKm();
+  const { profiles } = useProfiles();
 
   // Filtro de período — inativo por padrão (todo o histórico)
   const [filtroPeriodoAtivo, setFiltroPeriodoAtivo] = useState(false);
@@ -111,6 +115,25 @@ export default function FrotasPageSupabase() {
   const [modalTratarFrota, setModalTratarFrota] = useState<Frota | null>(null);
   const [justificativaAlerta, setJustificativaAlerta] = useState("");
   const [tratandoAlerta, setTratandoAlerta] = useState(false);
+
+  // Modais de histórico (somente leitura) — reaproveitam despesas/apontamentosKm
+  // já carregados nesta página para os cálculos de estimativa/alerta.
+  const [modalApontamentosFrota, setModalApontamentosFrota] = useState<Frota | null>(null);
+  const [modalAbastecimentosFrota, setModalAbastecimentosFrota] = useState<Frota | null>(null);
+
+  const apontamentosDaFrota = useMemo(() => {
+    if (!modalApontamentosFrota) return [];
+    return apontamentosKm
+      .filter((a: ControleKm) => a.frota_id === modalApontamentosFrota.id)
+      .sort((a, b) => new Date(b.data_inicio).getTime() - new Date(a.data_inicio).getTime());
+  }, [apontamentosKm, modalApontamentosFrota]);
+
+  const abastecimentosDaFrota = useMemo(() => {
+    if (!modalAbastecimentosFrota) return [];
+    return despesas
+      .filter((d: Despesa) => d.frota_id === modalAbastecimentosFrota.id && isAbastecimento(d))
+      .sort((a, b) => new Date(b.data_despesa).getTime() - new Date(a.data_despesa).getTime());
+  }, [despesas, modalAbastecimentosFrota]);
 
   async function handleTratarAlerta() {
     if (!modalTratarFrota || !justificativaAlerta.trim()) return;
@@ -719,6 +742,20 @@ export default function FrotasPageSupabase() {
                     Editar
                   </button>
                   <button
+                    onClick={() => setModalApontamentosFrota(frota)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 text-foreground transition"
+                  >
+                    <Route className="w-3.5 h-3.5" />
+                    Apontamentos
+                  </button>
+                  <button
+                    onClick={() => setModalAbastecimentosFrota(frota)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 text-foreground transition"
+                  >
+                    <Fuel className="w-3.5 h-3.5" />
+                    Abastecimentos
+                  </button>
+                  <button
                     onClick={() => handleToggleAtivo(frota)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-muted hover:bg-muted/80 text-foreground transition"
                   >
@@ -1024,6 +1061,169 @@ export default function FrotasPageSupabase() {
                   : <ShieldCheck className="w-4 h-4" />
                 }
                 Confirmar Tratamento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Histórico de Apontamentos (somente leitura) ── */}
+      {modalApontamentosFrota && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-background rounded-2xl shadow-xl border border-border w-full max-w-lg max-h-[85vh] flex flex-col">
+            <div className="flex items-start justify-between gap-3 p-6 pb-4 border-b border-border">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <Route className="w-4 h-4 text-primary" />
+                  Histórico de Apontamentos
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {modalApontamentosFrota.placa} — {modalApontamentosFrota.modelo}
+                </p>
+              </div>
+              <button
+                onClick={() => setModalApontamentosFrota(null)}
+                className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 pt-4 flex flex-col gap-3">
+              {apontamentosDaFrota.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic text-center py-8">
+                  Nenhum apontamento registrado para este veículo.
+                </p>
+              ) : (
+                apontamentosDaFrota.map((a: ControleKm) => {
+                  const usuario = profiles.find((p) => p.id === a.usuario_id);
+                  const percorrido = a.km_percorrido ?? (a.km_final != null ? a.km_final - a.km_inicial : null);
+                  return (
+                    <div key={a.id} className="border border-border rounded-lg p-3 flex flex-col gap-1.5 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-foreground">{usuario?.nome ?? "—"}</span>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          a.status === "finalizado"
+                            ? "bg-success/10 text-success"
+                            : "bg-warning/10 text-warning"
+                        }`}>
+                          {a.status === "finalizado" ? "Finalizado" : "Em andamento"}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(a.data_inicio).toLocaleString("pt-BR")}
+                        {a.data_fim && <> → {new Date(a.data_fim).toLocaleString("pt-BR")}</>}
+                      </div>
+                      <div className="text-xs text-foreground">
+                        KM {a.km_inicial.toLocaleString("pt-BR")}
+                        {a.km_final != null && <> → {a.km_final.toLocaleString("pt-BR")}</>}
+                        {percorrido != null && (
+                          <span className="text-muted-foreground"> ({percorrido.toLocaleString("pt-BR")} km percorridos)</span>
+                        )}
+                      </div>
+                      {(a.destino || a.motivo) && (
+                        <div className="text-xs text-muted-foreground">
+                          {a.destino && <>Destino: {a.destino}</>}
+                          {a.destino && a.motivo && " · "}
+                          {a.motivo && <>Motivo: {a.motivo}</>}
+                        </div>
+                      )}
+                      {a.observacao && (
+                        <p className="text-xs text-muted-foreground italic">Obs: {a.observacao}</p>
+                      )}
+                      {a.ocorrencia && (
+                        <p className="text-xs text-destructive italic">Ocorrência: {a.ocorrencia}</p>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex justify-end p-6 pt-4 border-t border-border">
+              <button
+                onClick={() => setModalApontamentosFrota(null)}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-input hover:bg-muted transition"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Histórico de Abastecimentos (somente leitura) ── */}
+      {modalAbastecimentosFrota && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-background rounded-2xl shadow-xl border border-border w-full max-w-lg max-h-[85vh] flex flex-col">
+            <div className="flex items-start justify-between gap-3 p-6 pb-4 border-b border-border">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  <Fuel className="w-4 h-4 text-primary" />
+                  Histórico de Abastecimentos
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  {modalAbastecimentosFrota.placa} — {modalAbastecimentosFrota.modelo}
+                </p>
+              </div>
+              <button
+                onClick={() => setModalAbastecimentosFrota(null)}
+                className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 pt-4 flex flex-col gap-3">
+              {abastecimentosDaFrota.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic text-center py-8">
+                  Nenhum abastecimento registrado para este veículo.
+                </p>
+              ) : (
+                abastecimentosDaFrota.map((d: Despesa) => {
+                  const usuario = d.tecnico ?? profiles.find((p) => p.id === d.tecnico_id);
+                  const statusLabel =
+                    d.status_aprovacao === "AprovadoGestor" ? "Aprovado"
+                    : d.status_aprovacao === "Reprovado" ? "Reprovado"
+                    : "Aguardando";
+                  const statusClass =
+                    d.status_aprovacao === "AprovadoGestor" ? "bg-success/10 text-success"
+                    : d.status_aprovacao === "Reprovado" ? "bg-destructive/10 text-destructive"
+                    : "bg-warning/10 text-warning";
+                  return (
+                    <div key={d.id} className="border border-border rounded-lg p-3 flex flex-col gap-1.5 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-foreground">{usuario?.nome ?? "—"}</span>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusClass}`}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(d.data_despesa).toLocaleDateString("pt-BR")}
+                        {d.hora_despesa && <> às {d.hora_despesa.slice(0, 5)}</>}
+                      </div>
+                      <div className="text-xs text-foreground">
+                        {d.litros_abastecidos?.toLocaleString("pt-BR", { maximumFractionDigits: 3 })} L
+                        {d.valor_litro != null && <> · {formatCurrency(d.valor_litro)}/L</>}
+                        {" · "}{formatCurrency(d.valor)}
+                      </div>
+                      {d.km_atual != null && (
+                        <div className="text-xs text-muted-foreground">
+                          KM apontado: {d.km_atual.toLocaleString("pt-BR")}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex justify-end p-6 pt-4 border-t border-border">
+              <button
+                onClick={() => setModalAbastecimentosFrota(null)}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-input hover:bg-muted transition"
+              >
+                Fechar
               </button>
             </div>
           </div>
