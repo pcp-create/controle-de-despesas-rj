@@ -1047,10 +1047,11 @@ export default function RelatoriosPageSupabase() {
           y += 3;
 
           const cols = [
-            { label: "ERP ID", w: CW * 0.12 },
-            { label: "Data", w: CW * 0.13 },
-            { label: "Funcionario", w: CW * 0.25 },
-            { label: "Complemento", w: CW * 0.32 },
+            { label: "ERP ID", w: CW * 0.10 },
+            { label: "Data", w: CW * 0.11 },
+            { label: "Tipo", w: CW * 0.17 },
+            { label: "Funcionario", w: CW * 0.20 },
+            { label: "Complemento", w: CW * 0.24 },
             { label: "Valor", w: CW * 0.18, align: "right" as const },
           ];
           tblHeader(cols);
@@ -1058,9 +1059,10 @@ export default function RelatoriosPageSupabase() {
             tblRow([
               { val: item.despesa.erp_id ?? "—", w: cols[0].w },
               { val: item.dataRef ? formatDate(item.dataRef) : "—", w: cols[1].w },
-              { val: item.tecnicoNome, w: cols[2].w },
-              { val: item.complemento, w: cols[3].w },
-              { val: formatCurrency(Number(item.despesa.valor)), w: cols[4].w, align: "right", bold: true },
+              { val: item.tipoNome, w: cols[2].w },
+              { val: item.tecnicoNome, w: cols[3].w },
+              { val: item.complemento, w: cols[4].w },
+              { val: formatCurrency(Number(item.despesa.valor)), w: cols[5].w, align: "right", bold: true },
             ], i % 2 !== 0);
           });
           y += 3;
@@ -1561,20 +1563,36 @@ export default function RelatoriosPageSupabase() {
       .sort((a, b) => b.valor - a.valor);
   }, [despesasIntegradas]);
 
+  // Rótulo de um centro de custo: código + todos os tipos de despesa distintos
+  // que caem nele (mesmo código pode ter sido cadastrado para tipos diferentes).
+  const labelCentroCusto = (codigo: string | null, tipos: Set<string>) => {
+    const tiposOrdenados = Array.from(tipos).sort();
+    return codigo
+      ? `${codigo} - ${tiposOrdenados.join(" / ")}`
+      : `Sem centro de custo - ${tiposOrdenados.join(" / ")}`;
+  };
+
   const ccByCentroCusto = useMemo(() => {
-    const map = new Map<string, { label: string; valor: number }>();
+    const map = new Map<string, { codigo: string | null; tipos: Set<string>; valor: number }>();
     despesasIntegradas.forEach((item) => {
-      const label = item.centroCustoErp ? `${item.centroCustoErp} - ${item.tipoNome}` : `Sem centro de custo - ${item.tipoNome}`;
-      if (!map.has(label)) map.set(label, { label, valor: 0 });
-      map.get(label)!.valor += Number(item.despesa.valor);
+      const key = item.centroCustoErp ?? "__sem__";
+      if (!map.has(key)) map.set(key, { codigo: item.centroCustoErp, tipos: new Set(), valor: 0 });
+      const node = map.get(key)!;
+      node.tipos.add(item.tipoNome);
+      node.valor += Number(item.despesa.valor);
     });
-    return Array.from(map.values()).sort((a, b) => b.valor - a.valor);
+    return Array.from(map.values())
+      .map((node) => ({ label: labelCentroCusto(node.codigo, node.tipos), valor: node.valor }))
+      .sort((a, b) => b.valor - a.valor);
   }, [despesasIntegradas]);
 
-  // Estrutura hierárquica Empresa → Centro de Custo → despesas, com subtotais em cada nível
+  // Estrutura hierárquica Empresa → Centro de Custo → despesas, com subtotais em cada nível.
+  // O agrupamento do Centro de Custo usa somente o código (centroCustoErp), ignorando o
+  // tipo de despesa — assim códigos duplicados cadastrados para tipos diferentes (ex: o
+  // mesmo "142" usado em Alimentação e Assistência) aparecem juntos num único grupo.
   const ccArvore = useMemo(() => {
     type ItemCC = typeof despesasIntegradas[0];
-    const empresasMap = new Map<string, { empresaId: number | null; nome: string; total: number; centros: Map<string, { label: string; total: number; itens: ItemCC[] }> }>();
+    const empresasMap = new Map<string, { empresaId: number | null; nome: string; total: number; centros: Map<string, { codigo: string | null; tipos: Set<string>; total: number; itens: ItemCC[] }> }>();
 
     despesasIntegradas.forEach((item) => {
       const empresaKey = String(item.empresaId ?? "—");
@@ -1584,15 +1602,12 @@ export default function RelatoriosPageSupabase() {
       const empresaNode = empresasMap.get(empresaKey)!;
       empresaNode.total += Number(item.despesa.valor);
 
-      const ccKey = item.centroCustoErp ? `${item.centroCustoErp}__${item.tipoNome}` : `sem__${item.tipoNome}`;
+      const ccKey = item.centroCustoErp ?? "__sem__";
       if (!empresaNode.centros.has(ccKey)) {
-        empresaNode.centros.set(ccKey, {
-          label: item.centroCustoErp ? `${item.centroCustoErp} - ${item.tipoNome}` : `Sem centro de custo - ${item.tipoNome}`,
-          total: 0,
-          itens: [],
-        });
+        empresaNode.centros.set(ccKey, { codigo: item.centroCustoErp, tipos: new Set(), total: 0, itens: [] });
       }
       const ccNode = empresaNode.centros.get(ccKey)!;
+      ccNode.tipos.add(item.tipoNome);
       ccNode.total += Number(item.despesa.valor);
       ccNode.itens.push(item);
     });
@@ -1606,7 +1621,7 @@ export default function RelatoriosPageSupabase() {
         centros: Array.from(node.centros.entries())
           .map(([ccKey, cc]) => ({
             ccKey,
-            label: cc.label,
+            label: labelCentroCusto(cc.codigo, cc.tipos),
             total: cc.total,
             itens: cc.itens.slice().sort((a, b) => a.dataRef.localeCompare(b.dataRef)),
           }))
@@ -2659,6 +2674,7 @@ export default function RelatoriosPageSupabase() {
                                   <tr className="bg-muted/30 text-muted-foreground">
                                     <th className="text-left font-medium px-5 py-2">ERP ID</th>
                                     <th className="text-left font-medium px-2 py-2">Data</th>
+                                    <th className="text-left font-medium px-2 py-2">Tipo</th>
                                     <th className="text-left font-medium px-2 py-2">Funcionário</th>
                                     <th className="text-left font-medium px-2 py-2">Complemento</th>
                                     <th className="text-right font-medium px-5 py-2">Valor</th>
@@ -2669,6 +2685,7 @@ export default function RelatoriosPageSupabase() {
                                     <tr key={item.despesa.id} className={idx % 2 === 1 ? "bg-muted/20" : ""}>
                                       <td className="px-5 py-2 text-muted-foreground">{item.despesa.erp_id ?? "—"}</td>
                                       <td className="px-2 py-2 text-muted-foreground">{item.dataRef ? formatDate(item.dataRef) : "—"}</td>
+                                      <td className="px-2 py-2 text-foreground">{item.tipoNome}</td>
                                       <td className="px-2 py-2 text-foreground">{item.tecnicoNome}</td>
                                       <td className="px-2 py-2 text-muted-foreground max-w-[220px] truncate" title={item.complemento}>{item.complemento}</td>
                                       <td className="px-5 py-2 text-right font-medium text-foreground">{formatCurrency(Number(item.despesa.valor))}</td>
