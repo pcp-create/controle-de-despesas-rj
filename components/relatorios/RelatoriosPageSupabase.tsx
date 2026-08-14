@@ -171,6 +171,7 @@ export default function RelatoriosPageSupabase() {
 
   // ── Tabela de despesas colapsável ──
   const [tabelaAberta, setTabelaAberta] = useState(false);
+ const [abaRelatorio, setAbaRelatorio] = useState<"despesas" | "km">("despesas");
 
   // ── Exportação PDF ──
   const [exportando, setExportando] = useState(false);
@@ -583,7 +584,7 @@ export default function RelatoriosPageSupabase() {
       pdf.setTextColor(17, 24, 39);
       y += BAR_MAX_H + 10;
 
-      // ════════════════════════════════════════
+      // ═══════════════════════════════��════════
       // 5. TABELA AGRUPADA POR FUNCIONÁRIO
       // ════════════════════════════════════════
       sectionLine(`Despesas do Periodo (${despesasTabela.length} registros)`);
@@ -1258,7 +1259,9 @@ export default function RelatoriosPageSupabase() {
         <div className="flex-1">
           <h1 className="text-xl font-bold text-foreground">Relatórios</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {isFuncionario ? "Suas despesas aprovadas" : "Análise de despesas aprovadas"} &mdash;{" "}
+            {abaRelatorio === "despesas"
+              ? isFuncionario ? "Suas despesas aprovadas" : "Análise de despesas aprovadas"
+              : isFuncionario ? "Seus apontamentos de quilometragem" : "Análise de apontamentos de quilometragem"} &mdash;{" "}
             <span className="text-accent font-medium">
               {modoFiltro === "mes"
                 ? `${MESES_FULL[mesSelecionado]} ${anoSelecionado}`
@@ -1267,23 +1270,42 @@ export default function RelatoriosPageSupabase() {
                 : "Período personalizado"}
             </span>
           </p>
+
+          <div className="flex items-center gap-1 p-1 bg-muted rounded-lg w-fit overflow-x-auto mt-3">
+            <button
+              onClick={() => setAbaRelatorio("despesas")}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium transition whitespace-nowrap ${abaRelatorio === "despesas" ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <DollarSign className="w-3.5 h-3.5" />
+              Despesas
+            </button>
+            <button
+              onClick={() => setAbaRelatorio("km")}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium transition whitespace-nowrap ${abaRelatorio === "km" ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <Gauge className="w-3.5 h-3.5" />
+              Controle de KM
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col gap-2 sm:items-end">
           <div className="flex items-center gap-2 sm:self-end flex-wrap justify-end">
-            {/* Seletor: Período baseado em */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-border rounded-lg text-xs text-muted-foreground">
-              <CalendarDays className="w-3.5 h-3.5 shrink-0" />
-              <span className="font-medium text-foreground/70 hidden sm:inline">Baseado em</span>
-              <select
-                value={campoPeriodo}
-                onChange={(e) => setCampoPeriodo(e.target.value as "data_despesa" | "data_vencimento")}
-                className="bg-transparent text-xs font-medium text-foreground focus:outline-none cursor-pointer"
-              >
-                <option value="data_despesa">Data da Despesa</option>
-                <option value="data_vencimento">Data de Vencimento</option>
-              </select>
-            </div>
+            {/* Seletor: Período baseado em (só aplicável a Despesas) */}
+            {abaRelatorio === "despesas" && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-border rounded-lg text-xs text-muted-foreground">
+                <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+                <span className="font-medium text-foreground/70 hidden sm:inline">Baseado em</span>
+                <select
+                  value={campoPeriodo}
+                  onChange={(e) => setCampoPeriodo(e.target.value as "data_despesa" | "data_vencimento")}
+                  className="bg-transparent text-xs font-medium text-foreground focus:outline-none cursor-pointer"
+                >
+                  <option value="data_despesa">Data da Despesa</option>
+                  <option value="data_vencimento">Data de Vencimento</option>
+                </select>
+              </div>
+            )}
 
             {/* Seletor: Por Mês / Período */}
             <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
@@ -1301,57 +1323,59 @@ export default function RelatoriosPageSupabase() {
               </button>
             </div>
 
-            {/* Dropdown Exportar PDF */}
-            <div className="relative" ref={pdfMenuRef}>
-              <button
-                onClick={() => setPdfMenuAberto((v) => !v)}
-                disabled={exportando || exportandoReembolso}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input bg-white text-xs hover:bg-muted transition disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {(exportando || exportandoReembolso) ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-                    Gerando...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-3.5 h-3.5" />
-                    Exportar PDF
-                    <ChevronDown className="w-3 h-3 text-muted-foreground" />
-                  </>
-                )}
-              </button>
+            {/* Dropdown Exportar PDF (só aplicável a Despesas — não há exportação de KM) */}
+            {abaRelatorio === "despesas" && (
+              <div className="relative" ref={pdfMenuRef}>
+                <button
+                  onClick={() => setPdfMenuAberto((v) => !v)}
+                  disabled={exportando || exportandoReembolso}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input bg-white text-xs hover:bg-muted transition disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {(exportando || exportandoReembolso) ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                      Gerando...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5" />
+                      Exportar PDF
+                      <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                    </>
+                  )}
+                </button>
 
-              {pdfMenuAberto && (
-                <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-border rounded-xl shadow-lg z-30 overflow-hidden">
-                  <button
-                    onClick={() => { setPdfMenuAberto(false); handleExportarPDF(); }}
-                    className="w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-muted transition"
-                  >
-                    <FileText className="w-4 h-4 text-accent mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-xs font-semibold text-foreground">Exportação Completa</p>
-                      <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
-                        Todas as despesas pelo {campoPeriodo === "data_despesa" ? "data da despesa" : "data de vencimento"}
-                      </p>
-                    </div>
-                  </button>
-                  <div className="border-t border-border" />
-                  <button
-                    onClick={handleExportarReembolsos}
-                    className="w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-muted transition"
-                  >
-                    <DollarSign className="w-4 h-4 text-success mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-xs font-semibold text-foreground">Exportação de Reembolsos</p>
-                      <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
-                        Somente pagamentos em dinheiro · sempre por vencimento
-                      </p>
-                    </div>
-                  </button>
-                </div>
-              )}
-            </div>
+                {pdfMenuAberto && (
+                  <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-border rounded-xl shadow-lg z-30 overflow-hidden">
+                    <button
+                      onClick={() => { setPdfMenuAberto(false); handleExportarPDF(); }}
+                      className="w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-muted transition"
+                    >
+                      <FileText className="w-4 h-4 text-accent mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">Exportação Completa</p>
+                        <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+                          Todas as despesas pelo {campoPeriodo === "data_despesa" ? "data da despesa" : "data de vencimento"}
+                        </p>
+                      </div>
+                    </button>
+                    <div className="border-t border-border" />
+                    <button
+                      onClick={handleExportarReembolsos}
+                      className="w-full flex items-start gap-2.5 px-4 py-3 text-left hover:bg-muted transition"
+                    >
+                      <DollarSign className="w-4 h-4 text-success mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">Exportação de Reembolsos</p>
+                        <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+                          Somente pagamentos em dinheiro · sempre por vencimento
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {modoFiltro === "mes" ? (
@@ -1380,8 +1404,8 @@ export default function RelatoriosPageSupabase() {
         </div>
       </div>
 
-      {/* Banner de filtros cruzados ativos */}
-      {temFiltroAtivo && (
+      {/* Banner de filtros cruzados ativos (específico de Despesas) */}
+      {abaRelatorio === "despesas" && temFiltroAtivo && (
         <div className="flex items-center gap-2 px-4 py-2.5 bg-primary/5 border border-primary/20 rounded-xl text-sm flex-wrap">
           <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide mr-1">Filtrando por:</span>
           {filtroFuncionarioNome && (
@@ -1407,6 +1431,8 @@ export default function RelatoriosPageSupabase() {
         </div>
       )}
 
+      {abaRelatorio === "despesas" && (
+      <>
       {/* Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -1750,7 +1776,11 @@ export default function RelatoriosPageSupabase() {
           );
         })()}
       </div>
+      </>
+      )}
 
+      {abaRelatorio === "km" && (
+      <>
       {/* ── Seção KM ── */}
       <div className="flex items-center gap-3 pt-2">
         <div className="w-8 h-8 rounded-lg bg-accent/10 text-accent flex items-center justify-center">
@@ -2040,6 +2070,8 @@ export default function RelatoriosPageSupabase() {
             </span>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
