@@ -6,6 +6,7 @@ import { useFrotas, useDespesas, useControleKm, useProfiles, type Frota, type Co
 import { useAppStore } from "@/lib/store";
 import { calcularEstimativaVeiculo, persistirAlertasConsumo, isAbastecimento, type EstimativaVeiculoResult } from "@/lib/consumo-frota";
 import { formatCurrency } from "@/lib/helpers";
+import { registrarAuditoria } from "@/lib/supabase/audit";
 import {
   Car,
   Plus,
@@ -47,7 +48,8 @@ export default function FrotasPageSupabase() {
   const { frotas, isLoading, addFrota, updateFrota, deleteFrota, mutate: mutateFrotas } = useFrotas();
   const currentUser = useAppStore((s) => s.currentUser);
   const { despesas } = useDespesas();
-  const { registros: apontamentosKm } = useControleKm();
+  const { registros: apontamentosKm, editarKm } = useControleKm();
+  const isGestorOuAdmin = currentUser?.perfil === "administrador" || currentUser?.perfil === "gestor";
   const { profiles } = useProfiles();
 
   // Filtro de período — inativo por padrão (todo o histórico)
@@ -127,6 +129,190 @@ export default function FrotasPageSupabase() {
       .filter((a: ControleKm) => a.frota_id === modalApontamentosFrota.id)
       .sort((a, b) => new Date(b.data_inicio).getTime() - new Date(a.data_inicio).getTime());
   }, [apontamentosKm, modalApontamentosFrota]);
+
+  // Indicadores de conferência sobre TODO o histórico do veículo (sem filtro de período).
+  const indicadoresApontamentos = useMemo(() => {
+    const finalizados = apontamentosDaFrota.filter((a) => a.status === "finalizado" && a.km_final != null);
+    const kmTotalPercorrido = finalizados.reduce(
+      (soma, a) => soma + (a.km_percorrido ?? (a.km_final! - a.km_inicial)),
+      0,
+    );
+    const kmIniciais = apontamentosDaFrota.map((a) => a.km_inicial);
+    const kmFinais = finalizados.map((a) => a.km_final as number);
+    const menorKmInicial = kmIniciais.length ? Math.min(...kmIniciais) : null;
+    const maiorKmFinal = kmFinais.length ? Math.max(...kmFinais) : null;
+    const kmAtualVeiculo = modalApontamentosFrota?.quilometragem ?? null;
+    const diferenca =
+      maiorKmFinal != null && kmAtualVeiculo != null ? kmAtualVeiculo - maiorKmFinal : null;
+    return { kmTotalPercorrido, menorKmInicial, maiorKmFinal, kmAtualVeiculo, diferenca };
+  }, [apontamentosDaFrota, modalApontamentosFrota]);
+
+  // Detecta inconsistências entre apontamentos: sobreposição de período, retrocesso/gap
+  // de odômetro entre registros consecutivos, e KM final menor que o inicial no próprio
+  // registro. Calculado sobre todo o histórico do veículo carregado no modal.
+  const inconsistenciasPorId = useMemo(() => {
+    const mapa = new Map<string, string[]>();
+    if (apontamentosDaFrota.length === 0) return mapa;
+
+    const cronologico = [...apontamentosDaFrota].sort(
+      (a, b) => new Date(a.data_inicio).getTime() - new Date(b.data_inicio).getTime(),
+    );
+
+    const addProblema = (id: string, msg: string) => {
+      const atual = mapa.get(id) ?? [];
+      atual.push(msg);
+      mapa.set(id, atual);
+    };
+
+    for (let i = 0; i < cronologico.length; i++) {
+      const atual = cronologico[i];
+
+      // KM final menor que KM inicial dentro do próprio registro
+      if (atual.km_final != null && atual.km_final < atual.km_inicial) {
+        addProblema(
+          atual.id,
+          `KM final (${atual.km_final.toLocaleString("pt-BR")}) é menor que o KM inicial (${atual.km_inicial.toLocaleString("pt-BR")})`,
+        );
+      }
+
+      // Apontamento em andamento há mais de 2 dias
+      if (atual.status !== "finalizado") {
+        const horas = (Date.now() - new Date(atual.data_inicio).getTime()) / 36e5;
+        if (horas > 48) {
+          addProblema(atual.id, "Apontamento em andamento há mais de 2 dias");
+        }
+      }
+
+      if (i === 0) continue;
+      const anterior = cronologico[i - 1];
+
+      // Sobreposição de período: início do atual antes do fim do anterior
+      if (anterior.data_fim) {
+        const inicioAtual = new Date(atual.data_inicio).getTime();
+        const fimAnterior = new Date(anterior.data_fim).getTime();
+        if (inicioAtual < fimAnterior) {
+          const dataAnteriorFmt = new Date(anterior.data_fim).toLocaleDateString("pt-BR");
+          addProblema(atual.id, `Sobrepõe período com apontamento de ${dataAnteriorFmt}`);
+          addProblema(anterior.id, `Sobrepõe período com apontamento de ${new Date(atual.data_inicio).toLocaleDateString("pt-BR")}`);
+        }
+      }
+
+      // Quebra de sequência de KM: KM inicial do atual é menor que o KM final do anterior
+      if (anterior.km_final != null && atual.km_inicial < anterior.km_final) {
+        addProblema(
+          atual.id,
+          `KM inicial (${atual.km_inicial.toLocaleString("pt-BR")}) é menor que o KM final do apontamento anterior (${anterior.km_final.toLocaleString("pt-BR")})`,
+        );
+      }
+    }
+
+    return mapa;
+  }, [apontamentosDaFrota]);
+
+  const totalInconsistencias = inconsistenciasPorId.size;
+
+  // Edição inline de apontamento (Gestor/Administrador) — reaproveita editarKm() já usado
+  // pela tela Controle de KM. Registra auditoria após salvar, o que o fluxo original não faz.
+  const [editandoApontamento, setEditandoApontamento] = useState<ControleKm | null>(null);
+  const [editApontamentoForm, setEditApontamentoForm] = useState({
+    km_inicial: "",
+    km_final: "",
+    destino: "",
+    motivo: "",
+    observacao: "",
+    ocorrencia: "",
+  });
+  const [editApontamentoErrors, setEditApontamentoErrors] = useState<Record<string, string>>({});
+  const [salvandoApontamento, setSalvandoApontamento] = useState(false);
+  const [feedbackApontamento, setFeedbackApontamento] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+
+  function abrirEdicaoApontamento(a: ControleKm) {
+    setEditandoApontamento(a);
+    setEditApontamentoForm({
+      km_inicial: String(a.km_inicial ?? ""),
+      km_final: a.km_final != null ? String(a.km_final) : "",
+      destino: a.destino ?? "",
+      motivo: a.motivo ?? "",
+      observacao: a.observacao ?? "",
+      ocorrencia: a.ocorrencia ?? "",
+    });
+    setEditApontamentoErrors({});
+    setFeedbackApontamento(null);
+  }
+
+  function validarEdicaoApontamento() {
+    const e: Record<string, string> = {};
+    if (!editApontamentoForm.km_inicial.trim() || isNaN(Number(editApontamentoForm.km_inicial)) || Number(editApontamentoForm.km_inicial) < 0) {
+      e.km_inicial = "Informe o KM inicial válido";
+    }
+    if (editApontamentoForm.km_final.trim()) {
+      if (isNaN(Number(editApontamentoForm.km_final)) || Number(editApontamentoForm.km_final) < 0) {
+        e.km_final = "Informe o KM final válido";
+      } else if (Number(editApontamentoForm.km_final) < Number(editApontamentoForm.km_inicial)) {
+        e.km_final = "KM final deve ser maior ou igual ao KM inicial";
+      }
+    }
+    return e;
+  }
+
+  async function salvarEdicaoApontamento(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editandoApontamento || !isGestorOuAdmin) return;
+    const errs = validarEdicaoApontamento();
+    if (Object.keys(errs).length > 0) {
+      setEditApontamentoErrors(errs);
+      return;
+    }
+
+    setSalvandoApontamento(true);
+    const payload = {
+      km_inicial: Number(editApontamentoForm.km_inicial),
+      km_final: editApontamentoForm.km_final.trim() ? Number(editApontamentoForm.km_final) : null,
+      destino: editApontamentoForm.destino,
+      motivo: editApontamentoForm.motivo,
+      observacao: editApontamentoForm.observacao,
+      ocorrencia: editApontamentoForm.ocorrencia,
+    };
+    const result = await editarKm(editandoApontamento.id, payload);
+    setSalvandoApontamento(false);
+
+    if (result.error) {
+      setFeedbackApontamento({ type: "error", msg: result.error });
+      return;
+    }
+
+    // Auditoria: registra valores antigo → novo dos campos alterados
+    const mudancas: string[] = [];
+    if (Number(editandoApontamento.km_inicial) !== payload.km_inicial) {
+      mudancas.push(`km_inicial: ${editandoApontamento.km_inicial} → ${payload.km_inicial}`);
+    }
+    if ((editandoApontamento.km_final ?? null) !== payload.km_final) {
+      mudancas.push(`km_final: ${editandoApontamento.km_final ?? "—"} → ${payload.km_final ?? "—"}`);
+    }
+    if ((editandoApontamento.destino ?? "") !== payload.destino) {
+      mudancas.push(`destino: "${editandoApontamento.destino ?? ""}" → "${payload.destino}"`);
+    }
+    if ((editandoApontamento.motivo ?? "") !== payload.motivo) {
+      mudancas.push(`motivo: "${editandoApontamento.motivo ?? ""}" → "${payload.motivo}"`);
+    }
+    if ((editandoApontamento.observacao ?? "") !== payload.observacao) {
+      mudancas.push(`observação alterada`);
+    }
+    if ((editandoApontamento.ocorrencia ?? "") !== payload.ocorrencia) {
+      mudancas.push(`ocorrência alterada`);
+    }
+
+    await registrarAuditoria({
+      acao: "UPDATE",
+      entidade: "controle_km",
+      entidadeId: editandoApontamento.id,
+      usuarioId: currentUser?.id,
+      detalhes: mudancas.length > 0 ? `Ajuste de apontamento: ${mudancas.join("; ")}` : "Apontamento ajustado (sem alteração de valores)",
+    });
+
+    setFeedbackApontamento({ type: "success", msg: "Apontamento ajustado com sucesso!" });
+    setTimeout(() => setEditandoApontamento(null), 1200);
+  }
 
   const abastecimentosDaFrota = useMemo(() => {
     if (!modalAbastecimentosFrota) return [];
@@ -1089,6 +1275,51 @@ export default function FrotasPageSupabase() {
               </button>
             </div>
 
+            {apontamentosDaFrota.length > 0 && (
+              <div className="px-6 pt-4 flex flex-col gap-2">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-lg bg-muted/50 border border-border p-2.5 flex flex-col gap-0.5">
+                    <span className="text-muted-foreground">KM total percorrido</span>
+                    <span className="font-semibold text-foreground">
+                      {indicadoresApontamentos.kmTotalPercorrido.toLocaleString("pt-BR")} km
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 border border-border p-2.5 flex flex-col gap-0.5">
+                    <span className="text-muted-foreground">Intervalo coberto</span>
+                    <span className="font-semibold text-foreground">
+                      {indicadoresApontamentos.menorKmInicial?.toLocaleString("pt-BR") ?? "—"}
+                      {" → "}
+                      {indicadoresApontamentos.maiorKmFinal?.toLocaleString("pt-BR") ?? "—"}
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 border border-border p-2.5 flex flex-col gap-0.5">
+                    <span className="text-muted-foreground">KM atual do veículo</span>
+                    <span className="font-semibold text-foreground">
+                      {indicadoresApontamentos.kmAtualVeiculo?.toLocaleString("pt-BR") ?? "—"} km
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 border border-border p-2.5 flex flex-col gap-0.5">
+                    <span className="text-muted-foreground">Diferença vs. último apontamento</span>
+                    <span className={`font-semibold ${
+                      indicadoresApontamentos.diferenca != null && indicadoresApontamentos.diferenca < 0
+                        ? "text-destructive"
+                        : "text-foreground"
+                    }`}>
+                      {indicadoresApontamentos.diferenca != null
+                        ? `${indicadoresApontamentos.diferenca > 0 ? "+" : ""}${indicadoresApontamentos.diferenca.toLocaleString("pt-BR")} km`
+                        : "—"}
+                    </span>
+                  </div>
+                </div>
+                {totalInconsistencias > 0 && (
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    {totalInconsistencias} {totalInconsistencias === 1 ? "inconsistência encontrada" : "inconsistências encontradas"}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex-1 overflow-y-auto p-6 pt-4 flex flex-col gap-3">
               {apontamentosDaFrota.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic text-center py-8">
@@ -1098,17 +1329,31 @@ export default function FrotasPageSupabase() {
                 apontamentosDaFrota.map((a: ControleKm) => {
                   const usuario = profiles.find((p) => p.id === a.usuario_id);
                   const percorrido = a.km_percorrido ?? (a.km_final != null ? a.km_final - a.km_inicial : null);
+                  const problemas = inconsistenciasPorId.get(a.id) ?? [];
                   return (
-                    <div key={a.id} className="border border-border rounded-lg p-3 flex flex-col gap-1.5 text-sm">
+                    <div key={a.id} className={`border rounded-lg p-3 flex flex-col gap-1.5 text-sm ${
+                      problemas.length > 0 ? "border-destructive/40" : "border-border"
+                    }`}>
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-medium text-foreground">{usuario?.nome ?? "—"}</span>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          a.status === "finalizado"
-                            ? "bg-success/10 text-success"
-                            : "bg-warning/10 text-warning"
-                        }`}>
-                          {a.status === "finalizado" ? "Finalizado" : "Em andamento"}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            a.status === "finalizado"
+                              ? "bg-success/10 text-success"
+                              : "bg-warning/10 text-warning"
+                          }`}>
+                            {a.status === "finalizado" ? "Finalizado" : "Em andamento"}
+                          </span>
+                          {isGestorOuAdmin && (
+                            <button
+                              onClick={() => abrirEdicaoApontamento(a)}
+                              className="p-1 rounded-md hover:bg-muted transition text-muted-foreground"
+                              title="Editar apontamento"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {new Date(a.data_inicio).toLocaleString("pt-BR")}
@@ -1134,6 +1379,16 @@ export default function FrotasPageSupabase() {
                       {a.ocorrencia && (
                         <p className="text-xs text-destructive italic">Ocorrência: {a.ocorrencia}</p>
                       )}
+                      {problemas.length > 0 && (
+                        <div className="mt-1 rounded-md bg-destructive/10 border border-destructive/20 p-2 flex flex-col gap-1">
+                          {problemas.map((msg, idx) => (
+                            <div key={idx} className="flex items-start gap-1.5 text-xs text-destructive">
+                              <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                              <span>{msg}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -1148,6 +1403,153 @@ export default function FrotasPageSupabase() {
                 Fechar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal Editar Apontamento (Gestor/Administrador) ── */}
+      {editandoApontamento && isGestorOuAdmin && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-center gap-2.5">
+                <Pencil className="w-5 h-5 text-primary" />
+                <h2 className="font-bold text-foreground">Editar Apontamento</h2>
+              </div>
+              <button
+                onClick={() => setEditandoApontamento(null)}
+                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mx-5 mt-4 p-3 rounded-lg bg-muted/50 border border-border text-xs flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Funcionário</span>
+                <span className="font-semibold">
+                  {profiles.find((p) => p.id === editandoApontamento.usuario_id)?.nome ?? "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Início</span>
+                <span className="font-semibold">{new Date(editandoApontamento.data_inicio).toLocaleString("pt-BR")}</span>
+              </div>
+              {editandoApontamento.data_fim && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Fim</span>
+                  <span className="font-semibold">{new Date(editandoApontamento.data_fim).toLocaleString("pt-BR")}</span>
+                </div>
+              )}
+            </div>
+
+            {feedbackApontamento && (
+              <div className={`mx-5 mt-3 flex items-center gap-2 px-4 py-3 rounded-lg text-sm border ${
+                feedbackApontamento.type === "success"
+                  ? "bg-success/10 border-success/20 text-success"
+                  : "bg-destructive/10 border-destructive/20 text-destructive"
+              }`}>
+                {feedbackApontamento.type === "success" ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                {feedbackApontamento.msg}
+              </div>
+            )}
+
+            <form onSubmit={salvarEdicaoApontamento} className="p-5 flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">
+                    KM Inicial <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={editApontamentoForm.km_inicial}
+                    onChange={(e) => setEditApontamentoForm({ ...editApontamentoForm, km_inicial: e.target.value })}
+                    step={0.1}
+                    autoFocus
+                    className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  {editApontamentoErrors.km_inicial && (
+                    <span className="text-xs text-destructive">{editApontamentoErrors.km_inicial}</span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">
+                    KM Final {editandoApontamento.status === "finalizado" && <span className="text-destructive">*</span>}
+                  </label>
+                  <input
+                    type="number"
+                    value={editApontamentoForm.km_final}
+                    onChange={(e) => setEditApontamentoForm({ ...editApontamentoForm, km_final: e.target.value })}
+                    placeholder={editandoApontamento.status === "aberto" ? "Em andamento" : undefined}
+                    step={0.1}
+                    className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  {editApontamentoErrors.km_final && (
+                    <span className="text-xs text-destructive">{editApontamentoErrors.km_final}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Destino</label>
+                <input
+                  type="text"
+                  value={editApontamentoForm.destino}
+                  onChange={(e) => setEditApontamentoForm({ ...editApontamentoForm, destino: e.target.value })}
+                  placeholder="Ex: Cliente XPTO"
+                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Motivo</label>
+                <input
+                  type="text"
+                  value={editApontamentoForm.motivo}
+                  onChange={(e) => setEditApontamentoForm({ ...editApontamentoForm, motivo: e.target.value })}
+                  placeholder="Ex: Visita técnica"
+                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Observação</label>
+                <textarea
+                  value={editApontamentoForm.observacao}
+                  onChange={(e) => setEditApontamentoForm({ ...editApontamentoForm, observacao: e.target.value })}
+                  rows={2}
+                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-foreground">Ocorrência</label>
+                <textarea
+                  value={editApontamentoForm.ocorrencia}
+                  onChange={(e) => setEditApontamentoForm({ ...editApontamentoForm, ocorrencia: e.target.value })}
+                  rows={2}
+                  className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEditandoApontamento(null)}
+                  className="px-4 py-2 rounded-lg border border-input bg-background text-sm font-medium hover:bg-muted transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={salvandoApontamento}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition disabled:opacity-50"
+                >
+                  {salvandoApontamento ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pencil className="w-4 h-4" />}
+                  {salvandoApontamento ? "Salvando..." : "Salvar Ajuste"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
