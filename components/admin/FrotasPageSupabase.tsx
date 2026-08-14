@@ -141,11 +141,16 @@ export default function FrotasPageSupabase() {
     const kmFinais = finalizados.map((a) => a.km_final as number);
     const menorKmInicial = kmIniciais.length ? Math.min(...kmIniciais) : null;
     const maiorKmFinal = kmFinais.length ? Math.max(...kmFinais) : null;
-    const kmAtualVeiculo = modalApontamentosFrota?.quilometragem ?? null;
-    const diferenca =
-      maiorKmFinal != null && kmAtualVeiculo != null ? kmAtualVeiculo - maiorKmFinal : null;
-    return { kmTotalPercorrido, menorKmInicial, maiorKmFinal, kmAtualVeiculo, diferenca };
-  }, [apontamentosDaFrota, modalApontamentosFrota]);
+    // Intervalo coberto: diferença entre o maior KM final e o menor KM inicial dos
+    // apontamentos exibidos (respeita os filtros aplicados na lista).
+    const intervaloCoberto =
+      maiorKmFinal != null && menorKmInicial != null ? maiorKmFinal - menorKmInicial : null;
+    // Diferença entre o que foi de fato percorrido (soma dos apontamentos) e o intervalo
+    // físico que eles deveriam cobrir. Não usa o KM atual do veículo — é uma conferência
+    // interna dos próprios registros, apenas para sinalizar, nunca corrige nada automaticamente.
+    const diferenca = intervaloCoberto != null ? kmTotalPercorrido - intervaloCoberto : null;
+    return { kmTotalPercorrido, menorKmInicial, maiorKmFinal, intervaloCoberto, diferenca };
+  }, [apontamentosDaFrota]);
 
   // Detecta inconsistências entre apontamentos: sobreposição de período, retrocesso/gap
   // de odômetro entre registros consecutivos, e KM final menor que o inicial no próprio
@@ -1293,15 +1298,17 @@ export default function FrotasPageSupabase() {
                     </span>
                   </div>
                   <div className="rounded-lg bg-muted/50 border border-border p-2.5 flex flex-col gap-0.5">
-                    <span className="text-muted-foreground">KM atual do veículo</span>
+                    <span className="text-muted-foreground">KM do intervalo</span>
                     <span className="font-semibold text-foreground">
-                      {indicadoresApontamentos.kmAtualVeiculo?.toLocaleString("pt-BR") ?? "—"} km
+                      {indicadoresApontamentos.intervaloCoberto != null
+                        ? `${indicadoresApontamentos.intervaloCoberto.toLocaleString("pt-BR")} km`
+                        : "—"}
                     </span>
                   </div>
                   <div className="rounded-lg bg-muted/50 border border-border p-2.5 flex flex-col gap-0.5">
-                    <span className="text-muted-foreground">Diferença vs. último apontamento</span>
+                    <span className="text-muted-foreground">Diferença</span>
                     <span className={`font-semibold ${
-                      indicadoresApontamentos.diferenca != null && indicadoresApontamentos.diferenca < 0
+                      indicadoresApontamentos.diferenca != null && indicadoresApontamentos.diferenca !== 0
                         ? "text-destructive"
                         : "text-foreground"
                     }`}>
@@ -1311,6 +1318,37 @@ export default function FrotasPageSupabase() {
                     </span>
                   </div>
                 </div>
+
+                {/* Conferência: soma dos km percorridos vs. intervalo físico coberto pelos apontamentos. */}
+                {indicadoresApontamentos.diferenca != null && (
+                  <div className={`flex items-start gap-1.5 text-xs font-medium rounded-md px-2.5 py-2 border ${
+                    indicadoresApontamentos.diferenca === 0
+                      ? "text-success bg-success/10 border-success/20"
+                      : "text-destructive bg-destructive/10 border-destructive/20"
+                  }`}>
+                    {indicadoresApontamentos.diferenca === 0 ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span>Apontamentos consistentes</span>
+                      </>
+                    ) : indicadoresApontamentos.diferenca < 0 ? (
+                      <>
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span>
+                          Possível falta de apontamento — {Math.abs(indicadoresApontamentos.diferenca).toLocaleString("pt-BR")} km não cobertos
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span>
+                          Possível inconsistência — {indicadoresApontamentos.diferenca.toLocaleString("pt-BR")} km excedentes
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {totalInconsistencias > 0 && (
                   <div className="flex items-center gap-1.5 text-xs font-medium text-destructive">
                     <AlertTriangle className="w-3.5 h-3.5" />
