@@ -6,7 +6,7 @@ import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } fro
 import { uploadComprovante } from "@/lib/supabase/storage";
 import { LIMITE_CONSUMO, type AlertaConsumo } from "@/lib/consumo-frota";
 import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2, Receipt, Search } from "lucide-react";
-import { formatCurrency } from "@/lib/helpers";
+import { formatCurrency, getLocalDateString, getLocalTimeString } from "@/lib/helpers";
 
 
 interface Props {
@@ -42,12 +42,15 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     valor: editDespesa?.valor?.toString() || "",
     documento: editDespesa?.documento || "",
     observacao: editDespesa?.observacao || "",
+    // Data/Hora da Despesa: ao criar uma nova despesa, o padrão deve ser a data e
+    // hora LOCAIS de agora (não o instante convertido para UTC), para que registrar
+    // uma despesa após as 21:00 no horário do Brasil não "vire" o dia seguinte.
     dataDespesa: editDespesa?.data_despesa
       ? editDespesa.data_despesa.slice(0, 10)
-      : new Date().toISOString().slice(0, 10),
+      : getLocalDateString(),
     horaDespesa: editDespesa?.hora_despesa
       ? editDespesa.hora_despesa.slice(0, 5)
-      : new Date().toTimeString().slice(0, 5),
+      : getLocalTimeString(),
     // Campos de hospedagem
     dataCheckin:  editDespesa?.data_checkin  || "",
     dataCheckout: editDespesa?.data_checkout || "",
