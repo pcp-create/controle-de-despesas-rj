@@ -4,10 +4,11 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import useSWR from "swr";
 import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosRelatorio } from "@/lib/supabase/use-filtros-persistidos";
-import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas, ControleKm } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas, useTiposDespesaCentroCustoTodos, ControleKm } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { formatCurrency } from "@/lib/helpers";
 import { calcularEstimativaVeiculo } from "@/lib/consumo-frota";
+import { EMPRESAS_ERP, extrairEmpresaErpId, extrairEmpresaErpNome, extrairComplementoErp } from "@/lib/erp-payload";
 import {
   BarChart,
   Bar,
@@ -24,7 +25,7 @@ import {
   LabelList,
   CartesianGrid,
 } from "recharts";
-import { Calendar, Download, TrendingUp, DollarSign, Users, FileText, CalendarDays, Gauge, Route, Clock, Car, X, ChevronDown, ChevronUp, Table2, AlertTriangle } from "lucide-react";
+import { Calendar, Download, TrendingUp, DollarSign, Users, FileText, CalendarDays, Gauge, Route, Clock, Car, X, ChevronDown, ChevronUp, Table2, AlertTriangle, Building2 } from "lucide-react";
 import { formatDate } from "@/lib/helpers";
 
 const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -126,6 +127,7 @@ export default function RelatoriosPageSupabase() {
   const { profiles } = useProfiles();
   const { registros: registrosKm } = useControleKm(isFuncionario ? currentUser?.id : undefined);
   const { frotas } = useFrotas();
+  const { centrosCustoTodos } = useTiposDespesaCentroCustoTodos();
 
   const now = new Date();
 
@@ -171,11 +173,25 @@ export default function RelatoriosPageSupabase() {
 
   // ── Tabela de despesas colapsável ──
   const [tabelaAberta, setTabelaAberta] = useState(false);
- const [abaRelatorio, setAbaRelatorio] = useState<"despesas" | "km">("despesas");
+ const [abaRelatorio, setAbaRelatorio] = useState<"despesas" | "km" | "centrocusto">("despesas");
+
+  // ── Filtros específicos da aba Centro de Custo ──
+  const [campoPeriodoCC, setCampoPeriodoCC] = useState<"data_despesa" | "data_vencimento" | "data_envio">("data_envio");
+  const [filtroEmpresaCC, setFiltroEmpresaCC] = useState<number | null>(null);
+  const [ccGruposAbertos, setCcGruposAbertos] = useState<Set<string>>(new Set());
+  const toggleCcGrupo = (chave: string) => {
+    setCcGruposAbertos((prev) => {
+      const next = new Set(prev);
+      if (next.has(chave)) next.delete(chave);
+      else next.add(chave);
+      return next;
+    });
+  };
 
   // ── Exportação PDF ──
   const [exportando, setExportando] = useState(false);
   const [exportandoReembolso, setExportandoReembolso] = useState(false);
+  const [exportandoCC, setExportandoCC] = useState(false);
   const [pdfMenuAberto, setPdfMenuAberto] = useState(false);
   const pdfMenuRef = useRef<HTMLDivElement>(null);
 
@@ -844,6 +860,221 @@ export default function RelatoriosPageSupabase() {
     }
   };
 
+  // ── Exportação PDF — Centro de Custo ──
+  // Respeita 100% os filtros já aplicados (período, "Baseado em", empresa) usando
+  // diretamente ccArvore/ccCardsTotais já calculados — sem reconsultar nada.
+  const handleExportarPDFCentroCusto = async () => {
+    setExportandoCC(true);
+    try {
+      const { default: jsPDF } = await import("jspdf");
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const PW = 210;
+      const PH = 297;
+      const ML = 12;
+      const MR = 12;
+      const CW = PW - ML - MR;
+      const BOT = 14;
+
+      const NAVY:   [number,number,number] = [22,  45,  95];
+      const AZURE:  [number,number,number] = [44, 105, 210];
+      const C_GREEN:[number,number,number] = [22, 163,  74];
+      const C_ORG:  [number,number,number] = [195,110,  10];
+      const LIGHT:  [number,number,number] = [230, 238, 252];
+      const GREY:   [number,number,number] = [245, 247, 250];
+      const BORDER: [number,number,number] = [218, 226, 242];
+
+      let y = 0;
+
+      const t = (str: string, x: number, yy: number, opts?: Parameters<typeof pdf.text>[3]) =>
+        pdf.text(str, x, yy, opts);
+
+      const checkY = (needed: number) => {
+        if (y + needed > PH - BOT) { pdf.addPage(); y = BOT; }
+      };
+
+      const cx = (startX: number, w: number, align?: string) => {
+        if (align === "right")  return startX + w;
+        if (align === "center") return startX + w / 2;
+        return startX + 2;
+      };
+
+      const sectionLine = (label: string) => {
+        checkY(12);
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...NAVY);
+        t(label, ML, y);
+        y += 1.5;
+        pdf.setDrawColor(...AZURE);
+        pdf.setLineWidth(0.5);
+        pdf.line(ML, y, ML + CW, y);
+        pdf.setTextColor(17, 24, 39);
+        y += 5;
+      };
+
+      const tblHeader = (cols: { label: string; w: number; align?: "left"|"right"|"center" }[], startX = ML, totalW = CW) => {
+        checkY(7);
+        pdf.setFillColor(...LIGHT);
+        pdf.rect(startX, y, totalW, 6, "F");
+        pdf.setFontSize(7.5);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...NAVY);
+        let x = startX;
+        cols.forEach((col) => {
+          t(col.label.toUpperCase(), cx(x, col.w, col.align), y + 4.2, { align: col.align ?? "left" });
+          x += col.w;
+        });
+        pdf.setTextColor(17, 24, 39);
+        y += 6;
+      };
+
+      const tblRow = (
+        cols: { val: string; w: number; align?: "left"|"right"|"center"; bold?: boolean }[],
+        odd: boolean,
+        startX = ML
+      ) => {
+        checkY(6);
+        if (odd) { pdf.setFillColor(...GREY); pdf.rect(startX, y, CW, 5.5, "F"); }
+        let x = startX;
+        cols.forEach((col) => {
+          pdf.setFont("helvetica", col.bold ? "bold" : "normal");
+          pdf.setFontSize(8);
+          pdf.setTextColor(17, 24, 39);
+          const maxW = col.w - 3;
+          const lines = pdf.splitTextToSize(col.val, maxW) as string[];
+          t(lines[0], cx(x, col.w, col.align), y + 3.8, { align: col.align ?? "left" });
+          x += col.w;
+        });
+        pdf.setDrawColor(...BORDER);
+        pdf.setLineWidth(0.1);
+        pdf.line(startX, y + 5.5, startX + CW, y + 5.5);
+        y += 5.5;
+      };
+
+      const campoPeriodoCCLabel = campoPeriodoCC === "data_envio"
+        ? "Data do Envio"
+        : campoPeriodoCC === "data_vencimento"
+        ? "Data de Vencimento"
+        : "Data da Despesa";
+      const empresaLabel = filtroEmpresaCC != null ? EMPRESAS_ERP[filtroEmpresaCC] ?? `Empresa ${filtroEmpresaCC}` : "Todas as empresas";
+
+      // ── 1. Cabeçalho ──
+      pdf.setFillColor(...NAVY);
+      pdf.rect(0, 0, PW, 32, "F");
+
+      pdf.setFontSize(17);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(255, 255, 255);
+      t("Relatorio de Centro de Custo", ML, 14);
+      pdf.setFontSize(9);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(185, 205, 240);
+      t(periodoLabel, ML, 22);
+
+      const boxW = 42; const boxH = 16; const boxX = PW - MR - boxW; const boxY = 8;
+      pdf.setFillColor(35, 65, 145);
+      pdf.roundedRect(boxX, boxY, boxW, boxH, 2, 2, "F");
+      pdf.setFontSize(7);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(185, 205, 240);
+      t("Gerado em", boxX + boxW / 2, boxY + 5.5, { align: "center" });
+      pdf.setFontSize(8.5);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(255, 255, 255);
+      const agora = new Date();
+      t(
+        `${agora.toLocaleDateString("pt-BR")} as ${agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`,
+        boxX + boxW / 2, boxY + 12, { align: "center" }
+      );
+
+      pdf.setFontSize(7);
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(185, 205, 240);
+      t(`Baseado em: ${campoPeriodoCCLabel}  |  Empresa: ${empresaLabel}`, ML, 29);
+
+      y = 38;
+
+      // ── 2. Cards de resumo ──
+      const cardsData = [
+        { label: "Valor Total", val: formatCurrency(ccCardsTotais.valorTotal), color: AZURE },
+        { label: "Total de Lancamentos", val: String(ccCardsTotais.totalLancamentos), color: C_GREEN },
+        { label: "Funcionarios Ativos", val: String(ccCardsTotais.funcionariosAtivos), color: C_ORG },
+      ];
+      const cardW = CW / cardsData.length;
+      const cardH = 20;
+      cardsData.forEach((card, i) => {
+        const cx2 = ML + i * cardW;
+        pdf.setFillColor(255, 255, 255);
+        pdf.roundedRect(cx2, y, cardW - 2, cardH, 2, 2, "F");
+        pdf.setDrawColor(...BORDER);
+        pdf.setLineWidth(0.3);
+        pdf.roundedRect(cx2, y, cardW - 2, cardH, 2, 2, "S");
+        pdf.setFillColor(...card.color);
+        pdf.rect(cx2, y, cardW - 2, 1.5, "F");
+        pdf.setFontSize(7);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(107, 114, 128);
+        t(card.label, cx2 + (cardW - 2) / 2, y + 7, { align: "center" });
+        pdf.setFontSize(12);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(...card.color);
+        t(card.val, cx2 + (cardW - 2) / 2, y + 15, { align: "center" });
+      });
+      pdf.setTextColor(17, 24, 39);
+      y += cardH + 8;
+
+      // ── 3. Empresa → Centro de Custo → despesas, com subtotais ──
+      if (ccArvore.length === 0) {
+        pdf.setFontSize(10);
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(107, 114, 128);
+        t("Nenhuma despesa integrada ao ERP neste periodo.", ML, y);
+      }
+
+      ccArvore.forEach((empresaNode) => {
+        sectionLine(`${empresaNode.nome}  —  ${formatCurrency(empresaNode.total)}`);
+
+        empresaNode.centros.forEach((ccNode) => {
+          checkY(10);
+          pdf.setFontSize(8.5);
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(...NAVY);
+          t(ccNode.label, ML + 2, y);
+          pdf.setFont("helvetica", "normal");
+          pdf.setTextColor(17, 24, 39);
+          t(formatCurrency(ccNode.total), ML + CW, y, { align: "right" });
+          y += 3;
+
+          const cols = [
+            { label: "ERP ID", w: CW * 0.12 },
+            { label: "Data", w: CW * 0.13 },
+            { label: "Funcionario", w: CW * 0.25 },
+            { label: "Complemento", w: CW * 0.32 },
+            { label: "Valor", w: CW * 0.18, align: "right" as const },
+          ];
+          tblHeader(cols);
+          ccNode.itens.forEach((item, i) => {
+            tblRow([
+              { val: item.despesa.erp_id ?? "—", w: cols[0].w },
+              { val: item.dataRef ? formatDate(item.dataRef) : "—", w: cols[1].w },
+              { val: item.tecnicoNome, w: cols[2].w },
+              { val: item.complemento, w: cols[3].w },
+              { val: formatCurrency(Number(item.despesa.valor)), w: cols[4].w, align: "right", bold: true },
+            ], i % 2 !== 0);
+          });
+          y += 3;
+        });
+      });
+
+      pdf.save(`centro-de-custo-${periodoLabel.replace(/[\s/]/g, "-").toLowerCase()}.pdf`);
+    } catch (err) {
+      console.error("[v0] Erro ao exportar PDF de centro de custo:", err);
+    } finally {
+      setExportandoCC(false);
+    }
+  };
+
       const checkY = (needed: number) => {
         if (y + needed > PH - BOTTOM_MARGIN) newPage();
       };
@@ -1244,6 +1475,146 @@ export default function RelatoriosPageSupabase() {
   const filtroTipoNome = filtroTipo ? tiposDespesa.find((t) => t.id === filtroTipo)?.nome : null;
   const temFiltroAtivo = !!filtroFuncionario || !!filtroTipo;
 
+  // ── Centro de Custo (visão gerencial: gestor/admin) ──
+
+  // Índices O(1) para evitar buscas repetidas dentro do map principal
+  const profilesPorId = useMemo(() => {
+    const map = new Map<string, typeof profiles[0]>();
+    profiles.forEach((p) => map.set(p.id, p));
+    return map;
+  }, [profiles]);
+
+  const centrosCustoPorChave = useMemo(() => {
+    const map = new Map<string, typeof centrosCustoTodos[0]>();
+    centrosCustoTodos.forEach((c) => map.set(`${c.tipo_despesa_id}__${c.area}`, c));
+    return map;
+  }, [centrosCustoTodos]);
+
+  // Data de referência conforme o seletor "Baseado em" desta aba
+  const getDataRefCC = (d: typeof despesas[0]): string => {
+    if (campoPeriodoCC === "data_envio") return (d.lancado_erp_em || d.data_envio || "").slice(0, 10);
+    if (campoPeriodoCC === "data_vencimento") return (d.data_vencimento || d.data_despesa || "").slice(0, 10);
+    return (d.data_despesa || "").slice(0, 10);
+  };
+
+  // Despesas integradas ao ERP, dentro do período/empresa selecionados, já
+  // enriquecidas com área do funcionário, centro de custo e dados do erp_payload.
+  const despesasIntegradas = useMemo(() => {
+    if (!isGestorOuAdmin) return [];
+    return despesas
+      .filter((d) => d.erp_status === "integrado")
+      .filter((d) => {
+        const dataStr = getDataRefCC(d);
+        if (!dataStr) return false;
+        if (modoFiltro === "mes") {
+          const dt = new Date(dataStr + "T12:00:00");
+          return dt.getMonth() === mesSelecionado && dt.getFullYear() === anoSelecionado;
+        }
+        if (dataInicial && dataStr < dataInicial) return false;
+        if (dataFinal && dataStr > dataFinal) return false;
+        return true;
+      })
+      .filter((d) => filtroEmpresaCC == null || extrairEmpresaErpId(d) === filtroEmpresaCC)
+      .map((d) => {
+        const tecnico = profilesPorId.get(d.tecnico_id);
+        const area = tecnico?.area ?? null;
+        const centroCusto = area ? centrosCustoPorChave.get(`${d.tipo_despesa_id}__${area}`) : undefined;
+        const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
+        return {
+          despesa: d,
+          tecnicoNome: tecnico?.nome ?? "Sem funcionário",
+          area: area ?? "Sem área",
+          centroCustoErp: centroCusto?.centro_custo_erp ?? null,
+          tipoNome: tipo?.nome ?? "—",
+          empresaId: extrairEmpresaErpId(d),
+          empresaNome: extrairEmpresaErpNome(d),
+          complemento: extrairComplementoErp(d),
+          dataRef: getDataRefCC(d),
+        };
+      });
+  }, [despesas, isGestorOuAdmin, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, campoPeriodoCC, filtroEmpresaCC, profilesPorId, centrosCustoPorChave, tiposDespesa]);
+
+  const ccCardsTotais = useMemo(() => {
+    const valorTotal = despesasIntegradas.reduce((s, item) => s + Number(item.despesa.valor), 0);
+    const totalLancamentos = despesasIntegradas.length;
+    const funcionariosAtivos = new Set(despesasIntegradas.map((item) => item.despesa.tecnico_id)).size;
+    return { valorTotal, totalLancamentos, funcionariosAtivos };
+  }, [despesasIntegradas]);
+
+  const ccByEmpresa = useMemo(() => {
+    const map = new Map<string, { empresaId: number | null; nome: string; valor: number }>();
+    despesasIntegradas.forEach((item) => {
+      const key = String(item.empresaId ?? "—");
+      if (!map.has(key)) map.set(key, { empresaId: item.empresaId, nome: item.empresaNome, valor: 0 });
+      map.get(key)!.valor += Number(item.despesa.valor);
+    });
+    return Array.from(map.values()).sort((a, b) => b.valor - a.valor);
+  }, [despesasIntegradas]);
+
+  const ccByArea = useMemo(() => {
+    const map = new Map<string, number>();
+    despesasIntegradas.forEach((item) => {
+      map.set(item.area, (map.get(item.area) ?? 0) + Number(item.despesa.valor));
+    });
+    return Array.from(map.entries())
+      .map(([area, valor]) => ({ area, valor }))
+      .sort((a, b) => b.valor - a.valor);
+  }, [despesasIntegradas]);
+
+  const ccByCentroCusto = useMemo(() => {
+    const map = new Map<string, { label: string; valor: number }>();
+    despesasIntegradas.forEach((item) => {
+      const label = item.centroCustoErp ? `${item.centroCustoErp} - ${item.tipoNome}` : `Sem centro de custo - ${item.tipoNome}`;
+      if (!map.has(label)) map.set(label, { label, valor: 0 });
+      map.get(label)!.valor += Number(item.despesa.valor);
+    });
+    return Array.from(map.values()).sort((a, b) => b.valor - a.valor);
+  }, [despesasIntegradas]);
+
+  // Estrutura hierárquica Empresa → Centro de Custo → despesas, com subtotais em cada nível
+  const ccArvore = useMemo(() => {
+    type ItemCC = typeof despesasIntegradas[0];
+    const empresasMap = new Map<string, { empresaId: number | null; nome: string; total: number; centros: Map<string, { label: string; total: number; itens: ItemCC[] }> }>();
+
+    despesasIntegradas.forEach((item) => {
+      const empresaKey = String(item.empresaId ?? "—");
+      if (!empresasMap.has(empresaKey)) {
+        empresasMap.set(empresaKey, { empresaId: item.empresaId, nome: item.empresaNome, total: 0, centros: new Map() });
+      }
+      const empresaNode = empresasMap.get(empresaKey)!;
+      empresaNode.total += Number(item.despesa.valor);
+
+      const ccKey = item.centroCustoErp ? `${item.centroCustoErp}__${item.tipoNome}` : `sem__${item.tipoNome}`;
+      if (!empresaNode.centros.has(ccKey)) {
+        empresaNode.centros.set(ccKey, {
+          label: item.centroCustoErp ? `${item.centroCustoErp} - ${item.tipoNome}` : `Sem centro de custo - ${item.tipoNome}`,
+          total: 0,
+          itens: [],
+        });
+      }
+      const ccNode = empresaNode.centros.get(ccKey)!;
+      ccNode.total += Number(item.despesa.valor);
+      ccNode.itens.push(item);
+    });
+
+    return Array.from(empresasMap.entries())
+      .map(([empresaKey, node]) => ({
+        empresaKey,
+        empresaId: node.empresaId,
+        nome: node.nome,
+        total: node.total,
+        centros: Array.from(node.centros.entries())
+          .map(([ccKey, cc]) => ({
+            ccKey,
+            label: cc.label,
+            total: cc.total,
+            itens: cc.itens.slice().sort((a, b) => a.dataRef.localeCompare(b.dataRef)),
+          }))
+          .sort((a, b) => b.total - a.total),
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [despesasIntegradas]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1261,7 +1632,9 @@ export default function RelatoriosPageSupabase() {
           <p className="text-sm text-muted-foreground mt-0.5">
             {abaRelatorio === "despesas"
               ? isFuncionario ? "Suas despesas aprovadas" : "Análise de despesas aprovadas"
-              : isFuncionario ? "Seus apontamentos de quilometragem" : "Análise de apontamentos de quilometragem"} &mdash;{" "}
+              : abaRelatorio === "km"
+              ? isFuncionario ? "Seus apontamentos de quilometragem" : "Análise de apontamentos de quilometragem"
+              : "Despesas integradas ao ERP por empresa e centro de custo"} &mdash;{" "}
             <span className="text-accent font-medium">
               {modoFiltro === "mes"
                 ? `${MESES_FULL[mesSelecionado]} ${anoSelecionado}`
@@ -1286,6 +1659,15 @@ export default function RelatoriosPageSupabase() {
               <Gauge className="w-3.5 h-3.5" />
               Controle de KM
             </button>
+            {isGestorOuAdmin && (
+              <button
+                onClick={() => setAbaRelatorio("centrocusto")}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium transition whitespace-nowrap ${abaRelatorio === "centrocusto" ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                Centro de Custo
+              </button>
+            )}
           </div>
         </div>
 
@@ -1305,6 +1687,39 @@ export default function RelatoriosPageSupabase() {
                   <option value="data_vencimento">Data de Vencimento</option>
                 </select>
               </div>
+            )}
+
+            {/* Seletores próprios da aba Centro de Custo */}
+            {abaRelatorio === "centrocusto" && (
+              <>
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-border rounded-lg text-xs text-muted-foreground">
+                  <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+                  <span className="font-medium text-foreground/70 hidden sm:inline">Baseado em</span>
+                  <select
+                    value={campoPeriodoCC}
+                    onChange={(e) => setCampoPeriodoCC(e.target.value as "data_despesa" | "data_vencimento" | "data_envio")}
+                    className="bg-transparent text-xs font-medium text-foreground focus:outline-none cursor-pointer"
+                  >
+                    <option value="data_envio">Data do Envio</option>
+                    <option value="data_despesa">Data da Despesa</option>
+                    <option value="data_vencimento">Data de Vencimento</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-border rounded-lg text-xs text-muted-foreground">
+                  <Building2 className="w-3.5 h-3.5 shrink-0" />
+                  <span className="font-medium text-foreground/70 hidden sm:inline">Empresa</span>
+                  <select
+                    value={filtroEmpresaCC ?? ""}
+                    onChange={(e) => setFiltroEmpresaCC(e.target.value === "" ? null : Number(e.target.value))}
+                    className="bg-transparent text-xs font-medium text-foreground focus:outline-none cursor-pointer"
+                  >
+                    <option value="">Todas</option>
+                    {Object.entries(EMPRESAS_ERP).map(([id, nome]) => (
+                      <option key={id} value={id}>{nome}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
             )}
 
             {/* Seletor: Por Mês / Período */}
@@ -1375,6 +1790,27 @@ export default function RelatoriosPageSupabase() {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* Exportar PDF — aba Centro de Custo */}
+            {abaRelatorio === "centrocusto" && (
+              <button
+                onClick={handleExportarPDFCentroCusto}
+                disabled={exportandoCC}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input bg-white text-xs hover:bg-muted transition disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {exportandoCC ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                    Gerando...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" />
+                    Exportar PDF
+                  </>
+                )}
+              </button>
             )}
           </div>
 
@@ -2070,6 +2506,189 @@ export default function RelatoriosPageSupabase() {
             </span>
           </div>
         </div>
+      )}
+      </>
+      )}
+
+      {abaRelatorio === "centrocusto" && isGestorOuAdmin && (
+      <>
+      {/* Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        {[
+          { icon: <DollarSign className="w-5 h-5" />, value: formatCurrency(ccCardsTotais.valorTotal), label: "Valor Total", bg: "bg-primary/10", color: "text-primary" },
+          { icon: <FileText className="w-5 h-5" />, value: ccCardsTotais.totalLancamentos, label: "Total de Lançamentos", bg: "bg-accent/10", color: "text-accent" },
+          { icon: <Users className="w-5 h-5" />, value: ccCardsTotais.funcionariosAtivos, label: "Funcionários Ativos", bg: "bg-warning/10", color: "text-warning" },
+        ].map(({ icon, value, label, bg, color }) => (
+          <div key={label} className="bg-white rounded-xl border border-border shadow-sm p-4">
+            <div className={`w-9 h-9 rounded-lg ${bg} ${color} flex items-center justify-center mb-3`}>{icon}</div>
+            <p className="text-2xl font-bold text-foreground">{value}</p>
+            <p className="text-xs text-muted-foreground mt-1">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {ccCardsTotais.totalLancamentos === 0 ? (
+        <div className="bg-white rounded-xl border border-border shadow-sm p-10 flex flex-col items-center justify-center text-center gap-2">
+          <Building2 className="w-8 h-8 text-muted-foreground/40" />
+          <p className="text-sm font-medium text-foreground">Nenhuma despesa integrada ao ERP neste período</p>
+          <p className="text-xs text-muted-foreground">Ajuste o período, a empresa ou o campo &quot;Baseado em&quot; para ver resultados.</p>
+        </div>
+      ) : (
+      <>
+      {/* Gráficos: Empresa / Área / Centro de Custo */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {ccByEmpresa.length > 0 && (
+          <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+            <h2 className="text-sm font-semibold text-foreground mb-1">Valores por Empresa</h2>
+            <p className="text-xs text-muted-foreground mb-4">Clique para filtrar por empresa</p>
+            <ResponsiveContainer width="100%" height={Math.max(160, ccByEmpresa.length * 42)}>
+              <BarChart data={ccByEmpresa} layout="vertical" barSize={22} margin={{ right: 90, left: 0 }}>
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="nome" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={110} />
+                <Tooltip formatter={(v: number) => [formatCurrency(v), "Total"]} contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }} />
+                <Bar
+                  dataKey="valor"
+                  radius={[0, 6, 6, 0]}
+                  cursor="pointer"
+                  onClick={(data) => setFiltroEmpresaCC(filtroEmpresaCC === data.empresaId ? null : data.empresaId)}
+                >
+                  <LabelList dataKey="valor" content={<CustomBarLabel />} />
+                  {ccByEmpresa.map((entry, i) => (
+                    <Cell
+                      key={entry.nome}
+                      fill={TIPO_COLORS[Math.min(i, TIPO_COLORS.length - 1)]}
+                      opacity={filtroEmpresaCC != null && filtroEmpresaCC !== entry.empresaId ? 0.3 : 1}
+                      stroke={filtroEmpresaCC === entry.empresaId ? "oklch(0.35 0.22 255)" : "transparent"}
+                      strokeWidth={filtroEmpresaCC === entry.empresaId ? 2 : 0}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {ccByArea.length > 0 && (
+          <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+            <h2 className="text-sm font-semibold text-foreground mb-1">Valores por Área</h2>
+            <p className="text-xs text-muted-foreground mb-4">Área do funcionário responsável</p>
+            <ResponsiveContainer width="100%" height={Math.max(160, ccByArea.length * 42)}>
+              <BarChart data={ccByArea} layout="vertical" barSize={22} margin={{ right: 90, left: 0 }}>
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="area" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={110} />
+                <Tooltip formatter={(v: number) => [formatCurrency(v), "Total"]} contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }} />
+                <Bar dataKey="valor" radius={[0, 6, 6, 0]}>
+                  <LabelList dataKey="valor" content={<CustomBarLabel />} />
+                  {ccByArea.map((entry, i) => (
+                    <Cell key={entry.area} fill={FUNC_COLORS[Math.min(i, FUNC_COLORS.length - 1)]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {ccByCentroCusto.length > 0 && (
+          <div className="bg-white rounded-xl border border-border shadow-sm p-5">
+            <h2 className="text-sm font-semibold text-foreground mb-1">Valores por Centro de Custo</h2>
+            <p className="text-xs text-muted-foreground mb-4">Centro de custo ERP + tipo de despesa</p>
+            <ResponsiveContainer width="100%" height={Math.max(160, ccByCentroCusto.length * 42)}>
+              <BarChart data={ccByCentroCusto} layout="vertical" barSize={22} margin={{ right: 90, left: 0 }}>
+                <XAxis type="number" hide />
+                <YAxis type="category" dataKey="label" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} width={130} />
+                <Tooltip formatter={(v: number) => [formatCurrency(v), "Total"]} contentStyle={{ borderRadius: 8, border: "1px solid var(--border)", fontSize: 12 }} />
+                <Bar dataKey="valor" radius={[0, 6, 6, 0]}>
+                  <LabelList dataKey="valor" content={<CustomBarLabel />} />
+                  {ccByCentroCusto.map((entry, i) => (
+                    <Cell key={entry.label} fill={TIPO_COLORS[Math.min(i, TIPO_COLORS.length - 1)]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      {/* Tabela hierárquica: Empresa → Centro de Custo → despesas */}
+      <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4">
+          <h2 className="text-sm font-semibold text-foreground">Despesas por Empresa e Centro de Custo</h2>
+          <span className="text-xs text-muted-foreground">
+            Total: <span className="font-semibold text-foreground">{formatCurrency(ccCardsTotais.valorTotal)}</span>
+          </span>
+        </div>
+        <div className="border-t border-border">
+          {ccArvore.map((empresaNode) => {
+            const empresaAberta = ccGruposAbertos.has(empresaNode.empresaKey);
+            return (
+              <div key={empresaNode.empresaKey} className="border-b border-border last:border-b-0">
+                <button
+                  onClick={() => toggleCcGrupo(empresaNode.empresaKey)}
+                  className="w-full flex items-center justify-between gap-3 px-5 py-3 bg-muted/40 hover:bg-muted/70 transition text-left"
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    {empresaAberta ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                    <Building2 className="w-4 h-4 text-primary" />
+                    {empresaNode.nome}
+                  </span>
+                  <span className="text-sm font-semibold text-foreground">{formatCurrency(empresaNode.total)}</span>
+                </button>
+
+                {empresaAberta && (
+                  <div className="pl-4">
+                    {empresaNode.centros.map((ccNode) => {
+                      const ccKeyCompleta = `${empresaNode.empresaKey}__${ccNode.ccKey}`;
+                      const ccAberto = ccGruposAbertos.has(ccKeyCompleta);
+                      return (
+                        <div key={ccKeyCompleta} className="border-t border-border">
+                          <button
+                            onClick={() => toggleCcGrupo(ccKeyCompleta)}
+                            className="w-full flex items-center justify-between gap-3 px-5 py-2.5 hover:bg-muted/40 transition text-left"
+                          >
+                            <span className="flex items-center gap-2 text-xs font-medium text-foreground">
+                              {ccAberto ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+                              {ccNode.label}
+                            </span>
+                            <span className="text-xs font-semibold text-foreground">{formatCurrency(ccNode.total)}</span>
+                          </button>
+
+                          {ccAberto && (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="bg-muted/30 text-muted-foreground">
+                                    <th className="text-left font-medium px-5 py-2">ERP ID</th>
+                                    <th className="text-left font-medium px-2 py-2">Data</th>
+                                    <th className="text-left font-medium px-2 py-2">Funcionário</th>
+                                    <th className="text-left font-medium px-2 py-2">Complemento</th>
+                                    <th className="text-right font-medium px-5 py-2">Valor</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {ccNode.itens.map((item, idx) => (
+                                    <tr key={item.despesa.id} className={idx % 2 === 1 ? "bg-muted/20" : ""}>
+                                      <td className="px-5 py-2 text-muted-foreground">{item.despesa.erp_id ?? "—"}</td>
+                                      <td className="px-2 py-2 text-muted-foreground">{item.dataRef ? formatDate(item.dataRef) : "—"}</td>
+                                      <td className="px-2 py-2 text-foreground">{item.tecnicoNome}</td>
+                                      <td className="px-2 py-2 text-muted-foreground max-w-[220px] truncate" title={item.complemento}>{item.complemento}</td>
+                                      <td className="px-5 py-2 text-right font-medium text-foreground">{formatCurrency(Number(item.despesa.valor))}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      </>
       )}
       </>
       )}

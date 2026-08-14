@@ -141,6 +141,7 @@ export interface Profile {
   usuario: string;
   perfil: "funcionario" | "gestor" | "financeiro" | "administrador";
   ativo: boolean;
+  area: string | null;
   gestor_id: string | null;
   frota_padrao_id: string | null;
   primeiro_acesso: boolean;
@@ -401,6 +402,31 @@ export function useTipoDespesaCentroCusto(tipoDespesaId: string | null) {
     mutate,
     upsertCentroCusto,
     deleteCentroCusto,
+  };
+}
+
+// Busca todas as linhas de tipos_despesa_centro_custo de uma vez (tabela de
+// configuração pequena), usada no relatório gerencial de Centro de Custo.
+export function useTiposDespesaCentroCustoTodos() {
+  const { data, error, isLoading, mutate } = useSWR(
+    "tipos_despesa_centro_custo-todos",
+    async () => {
+      const supabase = getSupabase();
+      if (!supabase) return [];
+      const { data, error } = await supabase
+        .from("tipos_despesa_centro_custo")
+        .select("*");
+      if (error) throw error;
+      return (data || []) as TipoDespesaCentroCusto[];
+    },
+    { revalidateOnFocus: false }
+  );
+
+  return {
+    centrosCustoTodos: data || [],
+    isLoading,
+    error,
+    mutate,
   };
 }
 
