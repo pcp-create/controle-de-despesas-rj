@@ -141,6 +141,7 @@ export interface Profile {
   usuario: string;
   perfil: "funcionario" | "gestor" | "financeiro" | "administrador";
   ativo: boolean;
+  area: string | null;
   gestor_id: string | null;
   frota_padrao_id: string | null;
   primeiro_acesso: boolean;
@@ -401,6 +402,31 @@ export function useTipoDespesaCentroCusto(tipoDespesaId: string | null) {
     mutate,
     upsertCentroCusto,
     deleteCentroCusto,
+  };
+}
+
+// Busca todas as linhas de tipos_despesa_centro_custo de uma vez (tabela de
+// configuração pequena), usada no relatório gerencial de Centro de Custo.
+export function useTiposDespesaCentroCustoTodos() {
+  const { data, error, isLoading, mutate } = useSWR(
+    "tipos_despesa_centro_custo-todos",
+    async () => {
+      const supabase = getSupabase();
+      if (!supabase) return [];
+      const { data, error } = await supabase
+        .from("tipos_despesa_centro_custo")
+        .select("*");
+      if (error) throw error;
+      return (data || []) as TipoDespesaCentroCusto[];
+    },
+    { revalidateOnFocus: false }
+  );
+
+  return {
+    centrosCustoTodos: data || [],
+    isLoading,
+    error,
+    mutate,
   };
 }
 
@@ -1400,6 +1426,38 @@ export function useControleKm(userId?: string) {
     return { error: null };
   };
 
+  // Ajusta um apontamento já lançado (km_inicial, km_final, destino, motivo,
+  // observação, ocorrência). Usado por Gestor/Administrador para corrigir
+  // registros com erro de digitação. Passa pela rota server-side (service role)
+  // para não depender de permissão de UPDATE direta na tabela (RLS).
+  const editarKm = async (
+    id: string,
+    payload: {
+      km_inicial: number;
+      km_final: number | null;
+      destino?: string;
+      motivo?: string;
+      observacao?: string;
+      ocorrencia?: string;
+    },
+  ) => {
+    try {
+      const res = await fetch("/api/controle-km-admin", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...payload }),
+      });
+      const json = await res.json();
+      if (!res.ok) return { error: json.error || "Erro ao ajustar apontamento" };
+
+      mutate();
+      swrMutate("controle_km"); // invalida a chave global usada pelo FrotasPage
+      return { data: json.data, error: null };
+    } catch {
+      return { error: "Erro ao ajustar apontamento" };
+    }
+  };
+
   return {
     registros: data as ControleKm[] || [],
     isLoading,
@@ -1408,5 +1466,6 @@ export function useControleKm(userId?: string) {
     iniciarKm,
     finalizarKm,
     deleteControleKm,
+    editarKm,
   };
 }

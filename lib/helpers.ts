@@ -18,6 +18,26 @@ export function formatDateTime(dateStr: string): string {
   return d.toLocaleString("pt-BR");
 }
 
+// ─── Data/hora local (para valores de NEGÓCIO como Data/Hora da Despesa) ────
+// NUNCA usar `new Date().toISOString().slice(0, 10)` para obter "a data de hoje":
+// toISOString() converte o instante atual para UTC antes de extrair a data, e no
+// fuso do Brasil (UTC-3) qualquer horário a partir das 21:00 local já corresponde
+// ao dia seguinte em UTC. Isso faz a data "virar" incorretamente.
+// Estas funções usam os componentes de data/hora LOCAIS (getFullYear/getMonth/...),
+// preservando o dia correto no fuso do usuário.
+export function getLocalDateString(date: Date = new Date()): string {
+  const ano = date.getFullYear();
+  const mes = String(date.getMonth() + 1).padStart(2, "0");
+  const dia = String(date.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
+export function getLocalTimeString(date: Date = new Date()): string {
+  const horas = String(date.getHours()).padStart(2, "0");
+  const minutos = String(date.getMinutes()).padStart(2, "0");
+  return `${horas}:${minutos}`;
+}
+
 // Status geral unificado — combina status_erp + status_aprovacao numa sequência lógica
 export type StatusGeral = "nao_enviado" | "enviado" | "aguardando_aprovacao" | "aprovado" | "reprovado";
 
