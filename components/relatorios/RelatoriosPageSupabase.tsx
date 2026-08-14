@@ -1623,7 +1623,14 @@ export default function RelatoriosPageSupabase() {
             ccKey,
             label: labelCentroCusto(cc.codigo, cc.tipos),
             total: cc.total,
-            itens: cc.itens.slice().sort((a, b) => a.dataRef.localeCompare(b.dataRef)),
+            itens: cc.itens.slice().sort((a, b) => {
+              const idA = Number(a.despesa.erp_id);
+              const idB = Number(b.despesa.erp_id);
+              if (Number.isNaN(idA) && Number.isNaN(idB)) return 0;
+              if (Number.isNaN(idA)) return 1;
+              if (Number.isNaN(idB)) return -1;
+              return idA - idB;
+            }),
           }))
           .sort((a, b) => b.total - a.total),
       }))
