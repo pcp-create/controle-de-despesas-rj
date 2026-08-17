@@ -41,6 +41,13 @@ export function usePendenciasCount(): PendenciasCount {
       : 0;
 
     // Financeiro/ERP: aprovadas ainda não lançadas, excluindo "Não enviado" (Rascunho), dinheiro e canceladas
+    // E com Data de Vencimento dentro do mês atual (comparação por string "YYYY-MM" para
+    // evitar que conversões de timezone excluam incorretamente o 1º/último dia do mês).
+    const mesAtualStr = (() => {
+      const hoje = new Date();
+      const mes = String(hoje.getMonth() + 1).padStart(2, "0");
+      return `${hoje.getFullYear()}-${mes}`;
+    })();
     const financeiro = isFinanceiroOuAdmin
       ? despesas.filter(
           (d) =>
@@ -49,7 +56,9 @@ export function usePendenciasCount(): PendenciasCount {
             d.pagamento_tipo !== "dinheiro" &&
             d.status_erp !== "Rascunho" &&
             d.status_erp != null &&
-            !d.lancamento_cancelado
+            !d.lancamento_cancelado &&
+            !!d.data_vencimento &&
+            d.data_vencimento.slice(0, 7) === mesAtualStr
         ).length
       : 0;
 
