@@ -5,6 +5,7 @@ import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
 import { LIMITE_CONSUMO, type AlertaConsumo } from "@/lib/consumo-frota";
+import { salvarRascunhoDespesa, carregarRascunhoDespesa, limparRascunhoDespesa, rascunhoEstaVazio, type DespesaDraftData } from "@/lib/despesa-draft";
 import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2, Receipt, Search } from "lucide-react";
 import { formatCurrency, getLocalDateString, getLocalTimeString } from "@/lib/helpers";
 
@@ -78,17 +79,73 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "warning"; msg: string } | null>(null);
   const [migrationSql, setMigrationSql] = useState<string | null>(null);
 
-  // Modal de bloqueio por KM aberto
-  const [kmAbertoInfo, setKmAbertoInfo] = useState<{
-    id: string;
-    frota_id: string;
-    usuario_id: string;
-    km_inicial: number;
-    data_inicio: string;
-    responsavel_nome: string;
-    frota_placa: string;
-    frota_modelo: string;
-  } | null>(null);
+  // ─── Rascunho local (localStorage) ───────────────────────────────────────────
+  // Só se aplica à criação de novas despesas (nunca à edição). Restaura os dados
+  // digitados ao voltar para esta tela; salva automaticamente enquanto o usuário
+  // preenche; e é descartado quando a despesa é salva com sucesso.
+  const [rascunhoRestaurado, setRascunhoRestaurado] = useState(false);
+  const rascunhoHidratadoRef = useRef(false);
+
+  useEffect(() => {
+    if (editDespesa || !currentUser?.id || rascunhoHidratadoRef.current) return;
+    rascunhoHidratadoRef.current = true;
+    const draft = carregarRascunhoDespesa(currentUser.id);
+    if (draft && !rascunhoEstaVazio(draft)) {
+      setForm((prev) => ({ ...prev, ...draft.form }));
+      setPagamentoTipo(draft.pagamentoTipo);
+      setParcelado(draft.parcelado);
+      setNumeroParcelas(draft.numeroParcelas);
+      setComprovante(draft.comprovante);
+      setRascunhoRestaurado(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editDespesa, currentUser?.id]);
+
+  useEffect(() => {
+    if (editDespesa || !currentUser?.id || !rascunhoHidratadoRef.current) return;
+    const draft: DespesaDraftData = {
+      form,
+      pagamentoTipo,
+      parcelado,
+      numeroParcelas,
+      comprovante,
+    };
+    const timer = setTimeout(() => {
+      if (rascunhoEstaVazio(draft)) {
+        limparRascunhoDespesa(currentUser.id);
+      } else {
+        salvarRascunhoDespesa(currentUser.id, draft);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [editDespesa, currentUser?.id, form, pagamentoTipo, parcelado, numeroParcelas, comprovante]);
+
+  function descartarRascunho() {
+    if (currentUser?.id) limparRascunhoDespesa(currentUser.id);
+    setRascunhoRestaurado(false);
+    setForm({
+      tipoDespesaId: "",
+      cartaoId: "",
+      cliente: "",
+      numeroOS: "",
+      valor: "",
+      documento: "",
+      observacao: "",
+      dataDespesa: getLocalDateString(),
+      horaDespesa: getLocalTimeString(),
+      dataCheckin: "",
+      dataCheckout: "",
+      frotaId: ((currentUser as any)?.frota_padrao_id as string | null) || "",
+      kmAtual: "",
+      litrosAbastecidos: "",
+      valorLitro: "",
+      tipoCombustivel: "",
+    });
+    setPagamentoTipo("cartao");
+    setParcelado(false);
+    setNumeroParcelas(2);
+    setComprovante(null);
+  }
 
   useEffect(() => {
     fetch("/api/setup-km-metricas")
@@ -207,25 +264,6 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       return;
     }
 
-    // ── Validação front-end: bloqueia abastecimento com KM aberto ────────────────
-    if (isCombustivel && form.frotaId && !editDespesa) {
-      try {
-        const res = await fetch("/api/verificar-km-aberto", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ frota_id: form.frotaId }),
-        });
-        const json = await res.json();
-        if (json.bloqueado) {
-          setKmAbertoInfo(json.apontamento);
-          return; // Não prossegue — exibe o modal de bloqueio
-        }
-      } catch {
-        // Falha na verificação front-end — o servidor ainda valida via addDespesa
-      }
-    }
-    // ────────────────────────────────────────────────────────────────────────────
-
     setLoading(true);
     setErrors({});
 
@@ -301,6 +339,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       }
 
       if (!hasError) {
+        if (currentUser?.id) limparRascunhoDespesa(currentUser.id);
         setFeedback({ type: "success", msg: `${qtdParcelas} parcelas criadas! Redirecionando...` });
         setTimeout(() => onBack(), 1500);
       }
@@ -315,15 +354,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         grupo_parcela_id: null,
         data_vencimento: calcularVencimento(form.dataDespesa, 0),
       });
-      if ((result as any).error === "KM_ABERTO") {
-        setKmAbertoInfo((result as any).kmAberto ?? null);
-        setLoading(false);
-        return;
-      }
-
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
       } else {
+        if (currentUser?.id) limparRascunhoDespesa(currentUser.id);
         // O cálculo e a persistência do "Último cálculo" (km apontado/esperado/percentual
         // e alerta_ativo da frota) são feitos exclusivamente por
         // addDespesa → persistirAlertasConsumo → gerarAlertasConsumo → POST /api/alertas-consumo.
@@ -378,78 +412,6 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   return (
     <div className="max-w-2xl mx-auto">
 
-      {/* Modal de bloqueio: existe apontamento de KM em aberto para o veículo */}
-      {kmAbertoInfo && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          role="alertdialog"
-          aria-modal="true"
-          aria-labelledby="km-aberto-titulo"
-        >
-          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-4 bg-destructive/10 border-b border-destructive/20">
-              <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />
-              <h2 id="km-aberto-titulo" className="text-base font-semibold text-destructive">
-                Apontamento de KM em aberto
-              </h2>
-            </div>
-            <div className="px-5 py-4 flex flex-col gap-3">
-              <p className="text-sm text-foreground leading-relaxed">
-                Existe um apontamento de KM em aberto para este veículo.
-                Finalize o apontamento antes de registrar o abastecimento.
-              </p>
-              <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-xs flex flex-col gap-1.5">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Veículo</span>
-                  <span className="font-medium text-foreground">
-                    {kmAbertoInfo.frota_modelo} &mdash; {kmAbertoInfo.frota_placa}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Iniciado por</span>
-                  <span className="font-medium text-foreground">{kmAbertoInfo.responsavel_nome}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Início</span>
-                  <span className="font-medium text-foreground">
-                    {new Date(kmAbertoInfo.data_inicio).toLocaleString("pt-BR", {
-                      day: "2-digit", month: "2-digit", year: "numeric",
-                      hour: "2-digit", minute: "2-digit",
-                    })}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">KM inicial</span>
-                  <span className="font-medium text-foreground">
-                    {kmAbertoInfo.km_inicial.toLocaleString("pt-BR")} km
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Se o apontamento pertence a outro funcionário, solicite que o responsável finalize o registro no Controle de KM.
-              </p>
-            </div>
-            <div className="flex items-center justify-between px-5 py-4 border-t border-border gap-2">
-              <button
-                onClick={() => setKmAbertoInfo(null)}
-                className="px-4 py-2 rounded-lg border border-input bg-background text-sm text-foreground hover:bg-muted transition"
-              >
-                Voltar ao formulário
-              </button>
-              <button
-                onClick={() => { setKmAbertoInfo(null); onBack(); }}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
-              >
-                <Car className="w-3.5 h-3.5" />
-                Ir para Controle de KM
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-
       {/* Banner: migration pendente para campos de abastecimento */}
       {migrationSql && (
         <div className="flex flex-col gap-2 p-4 mb-4 rounded-xl border border-warning/40 bg-warning/5">
@@ -502,6 +464,25 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           <p className="text-sm text-muted-foreground">Preencha os dados do lançamento</p>
         </div>
       </div>
+
+      {/* Banner: rascunho restaurado de uma sessão anterior não finalizada */}
+      {rascunhoRestaurado && (
+        <div className="flex items-start gap-2 p-3 mb-4 rounded-xl border border-primary/30 bg-primary/5">
+          <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-foreground">Rascunho restaurado</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Encontramos dados de um lançamento que você não chegou a salvar. Revise antes de continuar.
+            </p>
+          </div>
+          <button
+            onClick={descartarRascunho}
+            className="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-input bg-background hover:bg-muted transition font-medium text-muted-foreground"
+          >
+            Descartar
+          </button>
+        </div>
+      )}
 
       {/* Feedback */}
       {feedback && (

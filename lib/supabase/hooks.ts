@@ -519,39 +519,9 @@ export function useDespesas(userId?: string, perfil?: string) {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
-    // ── Validação server-side: bloqueia abastecimento com KM em aberto ──────────
-    // isAbastecimento verifica frota_id + litros_abastecidos > 0
-    if (isAbastecimento(despesa as Despesa) && despesa.frota_id) {
-      try {
-        const res = await fetch("/api/verificar-km-aberto", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ frota_id: despesa.frota_id }),
-        });
-        const json = await res.json();
-        if (json.bloqueado) {
-          // Retorna erro estruturado para o front-end exibir o modal de bloqueio
-          return {
-            error: "KM_ABERTO",
-            kmAberto: json.apontamento as {
-              id: string;
-              frota_id: string;
-              usuario_id: string;
-              km_inicial: number;
-              data_inicio: string;
-              responsavel_nome: string;
-              frota_placa: string;
-              frota_modelo: string;
-            },
-          };
-        }
-      } catch (err) {
-        // Falha na verificação: loga mas NÃO bloqueia — o front tem sua própria validação
-        console.error("[addDespesa] Erro ao verificar KM aberto:", err);
-      }
-    }
-    // ────────────────────────────────────────────────────────────────────────────
-
+    // Observação: não há mais bloqueio de cadastro por apontamento de KM em aberto.
+    // O abastecimento é salvo normalmente e o apontamento em aberto permanece
+    // inalterado — apenas o recálculo de Frotas abaixo considera o novo registro.
     const { data, error } = await supabase
       .from("despesas")
       .insert({ ...despesa, tecnico_id: userId })

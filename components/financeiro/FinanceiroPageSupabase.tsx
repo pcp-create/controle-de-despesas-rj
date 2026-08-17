@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback, type MouseEvent as ReactMouseEvent } from "react";
 import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosFinanceiro } from "@/lib/supabase/use-filtros-persistidos";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
@@ -15,6 +15,30 @@ import autoTable from "jspdf-autotable";
 const MESES_FULL = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 type ModoFiltro = "mes" | "periodo";
+
+// Colunas da tabela de Financeiro/ERP — a ordem e o índice aqui devem
+// corresponder exatamente à ordem das células <td> renderizadas no <tbody>.
+// `id` identifica a coluna (para controle de largura); `sortKey` é a chave de
+// ordenação usada em handleSort/getColValues quando a coluna é ordenável/filtrável.
+type FinanceiroSortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "observacao" | "valor" | "status" | "documento" | "cartao" | "lancado";
+const TABLE_COLUMNS: { id: string; sortKey: FinanceiroSortKey | null; label: string; align: "left" | "right"; defaultWidth: number }[] = [
+  { id: "lancado",     sortKey: "lancado",     label: "Lançar",      align: "left",  defaultWidth: 170 },
+  { id: "data",        sortKey: "data",        label: "Data",        align: "left",  defaultWidth: 100 },
+  { id: "vencimento",  sortKey: "vencimento",  label: "Vencimento",  align: "left",  defaultWidth: 120 },
+  { id: "funcionario", sortKey: "funcionario", label: "Funcionário", align: "left",  defaultWidth: 130 },
+  { id: "tipo",        sortKey: "tipo",        label: "Tipo",        align: "left",  defaultWidth: 170 },
+  { id: "pagamento",   sortKey: "pagamento",   label: "Pagamento",   align: "left",  defaultWidth: 120 },
+  { id: "observacao",  sortKey: "observacao",  label: "Observações", align: "left",  defaultWidth: 220 },
+  { id: "valor",       sortKey: "valor",       label: "Valor",       align: "right", defaultWidth: 110 },
+  { id: "documento",   sortKey: "documento",   label: "Documento",   align: "left",  defaultWidth: 150 },
+  { id: "comprovante", sortKey: null,          label: "Comprovante", align: "left",  defaultWidth: 130 },
+  { id: "cartao",      sortKey: "cartao",      label: "Cartão",      align: "left",  defaultWidth: 190 },
+  { id: "status",      sortKey: "status",      label: "Status",      align: "left",  defaultWidth: 130 },
+  { id: "status_erp",  sortKey: null,          label: "Status ERP",  align: "left",  defaultWidth: 130 },
+  { id: "envio",       sortKey: null,          label: "Envio",       align: "left",  defaultWidth: 100 },
+  { id: "erp_id",      sortKey: null,          label: "ERP ID",      align: "left",  defaultWidth: 100 },
+];
+const MIN_COL_WIDTH = 60;
 
 export default function FinanceiroPageSupabase() {
   const { despesas, isLoading, updateDespesaDocumento, updateDespesaTipo, updateDespesaVencimento, lancarSistema, lancarERP, tentarNovamenteERP, estornarLancamento, cancelarLancamento, estornarCancelamento } = useDespesas();
@@ -40,7 +64,7 @@ export default function FinanceiroPageSupabase() {
   const { user: authUser } = useAuth();
 
   // Ordenação
-  type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status" | "documento" | "cartao" | "lancado";
+  type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "observacao" | "valor" | "status" | "documento" | "cartao" | "lancado";
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   // Filtros por coluna — cada chave armazena um conjunto de valores selecionados
@@ -48,6 +72,46 @@ export default function FinanceiroPageSupabase() {
   const [filterOpen, setFilterOpen] = useState<SortKey | null>(null);
   const [filterSearch, setFilterSearch] = useState<Partial<Record<SortKey, string>>>({});
   const modalRef = useRef<HTMLDivElement>(null);
+
+  // Larguras redimensionáveis das colunas da tabela — arraste a borda do cabeçalho
+  const [colWidths, setColWidths] = useState<number[]>(() => TABLE_COLUMNS.map((c) => c.defaultWidth));
+  const resizingRef = useRef<{ index: number; startX: number; startWidth: number } | null>(null);
+  const [resizingIndex, setResizingIndex] = useState<number | null>(null);
+
+  const handleResizeStart = useCallback((index: number, e: ReactMouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizingRef.current = { index, startX: e.clientX, startWidth: colWidths[index] };
+    setResizingIndex(index);
+  }, [colWidths]);
+
+  useEffect(() => {
+    function handleMouseMove(e: MouseEvent) {
+      const rz = resizingRef.current;
+      if (!rz) return;
+      const delta = e.clientX - rz.startX;
+      const newWidth = Math.max(MIN_COL_WIDTH, rz.startWidth + delta);
+      setColWidths((prev) => {
+        const next = [...prev];
+        next[rz.index] = newWidth;
+        return next;
+      });
+    }
+    function handleMouseUp() {
+      resizingRef.current = null;
+      setResizingIndex(null);
+    }
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
+
+  const handleResetColWidths = useCallback(() => {
+    setColWidths(TABLE_COLUMNS.map((c) => c.defaultWidth));
+  }, []);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -268,8 +332,7 @@ export default function FinanceiroPageSupabase() {
         case "funcionario": cellVal = tecnico?.nome || "—"; break;
         case "tipo":        cellVal = tipo?.nome || "—"; break;
         case "pagamento":   cellVal = pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"]?.label || "—"; break;
-        case "cliente":     cellVal = d.cliente; break;
-        case "os":          cellVal = d.numero_os || "—"; break;
+        case "observacao":  cellVal = d.observacao || "—"; break;
         case "valor":       cellVal = formatCurrency(Number(d.valor)); break;
         case "status":      cellVal = statusGeralConfig[sg]?.label || "—"; break;
         case "documento":   cellVal = d.documento || "—"; break;
@@ -338,8 +401,7 @@ export default function FinanceiroPageSupabase() {
     const dataFmt = formatDate(d.data_despesa);
     const vencimentoFmt = d.data_vencimento ? formatDate(d.data_vencimento) : "";
     return (
-      d.cliente.toLowerCase().includes(term) ||
-      (d.numero_os || "").toLowerCase().includes(term) ||
+      (d.observacao || "").toLowerCase().includes(term) ||
       (tipo?.nome || "").toLowerCase().includes(term) ||
       (tecnico?.nome || "").toLowerCase().includes(term) ||
       (d.erp_id || "").toString().includes(term) ||
@@ -372,8 +434,7 @@ export default function FinanceiroPageSupabase() {
           case "funcionario": cellVal = tecnico?.nome || "—"; break;
           case "tipo":        cellVal = tipo?.nome || "—"; break;
           case "pagamento":   cellVal = pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"]?.label || "—"; break;
-          case "cliente":     cellVal = d.cliente; break;
-          case "os":          cellVal = d.numero_os || "—"; break;
+          case "observacao":  cellVal = d.observacao || "—"; break;
           case "valor":       cellVal = formatCurrency(Number(d.valor)); break;
           case "status":      cellVal = statusGeralConfig[sg]?.label || "—"; break;
           case "documento":   cellVal = d.documento || "—"; break;
@@ -427,8 +488,7 @@ export default function FinanceiroPageSupabase() {
           case "funcionario": va = tec_a?.nome || ""; vb = tec_b?.nome || ""; break;
           case "tipo":        va = tipo_a?.nome || ""; vb = tipo_b?.nome || ""; break;
           case "pagamento":   va = pagamentoTipoConfig[a.pagamento_tipo ?? "cartao"]?.label || ""; vb = pagamentoTipoConfig[b.pagamento_tipo ?? "cartao"]?.label || ""; break;
-          case "cliente":     va = a.cliente; vb = b.cliente; break;
-          case "os":          va = a.numero_os || ""; vb = b.numero_os || ""; break;
+          case "observacao":  va = a.observacao || ""; vb = b.observacao || ""; break;
           case "valor":       va = Number(a.valor); vb = Number(b.valor); break;
           case "status":      va = getStatusGeral(a.status_erp ?? "", a.status_aprovacao); vb = getStatusGeral(b.status_erp ?? "", b.status_aprovacao); break;
           case "documento":   va = a.documento || ""; vb = b.documento || ""; break;
@@ -464,8 +524,7 @@ export default function FinanceiroPageSupabase() {
         "Parcela": d.parcelado ? `${d.parcela_atual}/${d.numero_parcelas}` : "-",
         Funcionário: tecnico?.nome || "-",
         Tipo: tipo?.nome || "-",
-        Cliente: d.cliente,
-        "Número OS": d.numero_os || "-",
+        Observações: d.observacao || "-",
         Valor: Number(d.valor),
         Documento: d.documento || "-",
         Cartão: cartaoLabel,
@@ -481,8 +540,8 @@ export default function FinanceiroPageSupabase() {
     const worksheet = XLSX.utils.json_to_sheet(dados);
     worksheet["!cols"] = [
       { wch: 12 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 12 },
-      { wch: 12 }, { wch: 16 }, { wch: 30 }, { wch: 15 }, { wch: 12 },
-      { wch: 12 }, { wch: 12 }, { wch: 15 },
+      { wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 20 }, { wch: 15 },
+      { wch: 12 }, { wch: 15 },
     ];
     XLSX.utils.book_append_sheet(workbook, worksheet, "Despesas");
     const nomeArquivo = `Despesas_${new Date().toLocaleDateString("pt-BR").replace(/\//g, "-")}.xlsx`;
@@ -523,8 +582,7 @@ export default function FinanceiroPageSupabase() {
         d.parcelado ? `${d.parcela_atual}/${d.numero_parcelas}` : "-",
         tecnico?.nome.split(" ").slice(0, 2).join(" ") || "-",
         tipo?.nome || "-",
-        d.cliente,
-        d.numero_os || "-",
+        d.observacao || "-",
         formatCurrency(Number(d.valor)),
         d.documento || "-",
         d.comprovante_url ? "Sim" : "Não",
@@ -538,7 +596,7 @@ export default function FinanceiroPageSupabase() {
 
     autoTable(doc, {
       startY: 36,
-      head: [["Data", "Vencimento", "Parcela", "Funcionário", "Tipo", "Cliente", "OS", "Valor", "Doc.", "Comprovante", "Cartão", "Status", "Status ERP", "Envio", "ERP ID"]],
+      head: [["Data", "Vencimento", "Parcela", "Funcionário", "Tipo", "Observações", "Valor", "Doc.", "Comprovante", "Cartão", "Status", "Status ERP", "Envio", "ERP ID"]],
       body: rows,
       styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
       headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: "bold", fontSize: 7.5 },
@@ -549,17 +607,16 @@ export default function FinanceiroPageSupabase() {
         2: { cellWidth: 20 },
         3: { cellWidth: 28 },
         4: { cellWidth: 14 },
-        5: { cellWidth: 18, halign: "right" },
-        6: { cellWidth: 16 },
-        7: { cellWidth: 32 },
-        8: { cellWidth: 18 },
+        5: { cellWidth: 32 },
+        6: { cellWidth: 18, halign: "right" },
+        7: { cellWidth: 16 },
+        8: { cellWidth: 20 },
         9: { cellWidth: 20 },
-        10: { cellWidth: 20 },
-        11: { cellWidth: 14 },
-        12: { cellWidth: 22 },
+        10: { cellWidth: 14 },
+        11: { cellWidth: 22 },
       },
       didParseCell: (data) => {
-        if (data.section === "body" && data.column.index === 8) {
+        if (data.section === "body" && data.column.index === 7) {
           const v = data.cell.raw as string;
           if (v === "Aprovado")              { data.cell.styles.textColor = [22, 163, 74];  data.cell.styles.fontStyle = "bold"; }
           if (v === "Aguardando Aprova��ão")  { data.cell.styles.textColor = [202, 138, 4]; }
@@ -931,33 +988,28 @@ export default function FinanceiroPageSupabase() {
         </div>
 
         {/* Tabela */}
+        <div className="flex items-center justify-end px-4 pt-3 -mb-1">
+          <button
+            type="button"
+            onClick={handleResetColWidths}
+            className="text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline transition-colors"
+          >
+            Redefinir largura das colunas
+          </button>
+        </div>
         <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "calc(100vh - 320px)", minHeight: "400px" }}>
-          <table className="w-full text-xs">
+          <table className="text-xs" style={{ tableLayout: "fixed", width: colWidths.reduce((a, b) => a + b, 0) }}>
+            <colgroup>
+              {colWidths.map((w, i) => (
+                <col key={TABLE_COLUMNS[i].id} style={{ width: w }} />
+              ))}
+            </colgroup>
             <thead className="bg-muted sticky top-0 z-10">
               <tr>
-                {(
-                  [
-                    { key: "lancado",     label: "Lançar",      align: "left"  },
-                    { key: "data",        label: "Data",        align: "left"  },
-                    { key: "vencimento",  label: "Vencimento",  align: "left"  },
-                    { key: "funcionario", label: "Funcionário",  align: "left"  },
-                    { key: "tipo",        label: "Tipo",        align: "left"  },
-                    { key: "pagamento",   label: "Pagamento",   align: "left"  },
-                    { key: "cliente",     label: "Cliente",     align: "left"  },
-                    { key: "os",          label: "OS",          align: "left"  },
-                    { key: "valor",       label: "Valor",       align: "right" },
-                    { key: "documento",    label: "Documento",   align: "left"  },
-                    { key: null,          label: "Comprovante", align: "left"  },
-                    { key: "cartao",      label: "Cartão",      align: "left"  },
-                    { key: "status",      label: "Status",      align: "left"  },
-                    { key: null,          label: "Status ERP",  align: "left"  },
-                    { key: null,          label: "Envio",       align: "left"  },
-                    { key: null,          label: "ERP ID",      align: "left"  },
-                  ] as { key: SortKey | null; label: string; align: "left" | "right" }[]
-                ).map(({ key, label, align }) => (
+                {TABLE_COLUMNS.map(({ sortKey: key, label, align }, index) => (
                   <th
                     key={label}
-                    className={`px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"}`}
+                    className={`relative px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap overflow-hidden ${align === "right" ? "text-right" : "text-left"}`}
                   >
                     <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>
                       {key ? (
@@ -1050,6 +1102,14 @@ export default function FinanceiroPageSupabase() {
                           })()}
                         </div>
                       )}
+                    </div>
+                    {/* Handle de redimensionamento — arraste para ajustar a largura da coluna */}
+                    <div
+                      onMouseDown={(e) => handleResizeStart(index, e)}
+                      className={`absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none group ${resizingIndex === index ? "bg-primary" : "hover:bg-primary/40"}`}
+                      title="Arrastar para redimensionar"
+                    >
+                      <div className={`absolute top-1/2 -translate-y-1/2 right-0 w-px h-3/5 ${resizingIndex === index ? "bg-primary" : "bg-border group-hover:bg-primary/60"}`} />
                     </div>
                   </th>
                 ))}
@@ -1381,8 +1441,7 @@ export default function FinanceiroPageSupabase() {
                         ) : <span className="text-muted-foreground">����</span>;
                       })()}
                     </td>
-                    <td className="px-3 py-2 max-w-32 truncate">{d.cliente}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{d.numero_os || "-"}</td>
+                    <td className="px-3 py-2 max-w-48 truncate" title={d.observacao || ""}>{d.observacao || "-"}</td>
                     <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{formatCurrency(Number(d.valor))}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {editandoDocumento[d.id] !== undefined ? (
