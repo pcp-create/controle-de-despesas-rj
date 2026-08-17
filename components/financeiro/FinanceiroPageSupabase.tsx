@@ -1131,7 +1131,7 @@ export default function FinanceiroPageSupabase() {
                   <th
                     key={label}
                     title={label}
-                    className={`relative px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap overflow-hidden ${align === "right" ? "text-right" : "text-left"}`}
+                    className={`relative px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"}`}
                   >
                     <div className={`flex items-center gap-1 min-w-0 ${align === "right" ? "justify-end" : ""}`}>
                       {key ? (
