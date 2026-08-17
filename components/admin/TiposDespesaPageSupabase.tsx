@@ -27,6 +27,7 @@ function CentroCustoPanel({ tipoDespesaId, areas }: { tipoDespesaId: string; are
     useTipoDespesaCentroCusto(tipoDespesaId);
 
   const [editing, setEditing] = useState<Record<string, string>>({});
+  const [editingDescritivo, setEditingDescritivo] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -35,8 +36,14 @@ function CentroCustoPanel({ tipoDespesaId, areas }: { tipoDespesaId: string; are
     return cc?.centro_custo_erp || "";
   };
 
+  const getDescritivo = (areaNome: string) => {
+    const cc = centrosCusto.find((c) => c.area === areaNome);
+    return cc?.descritivo_custo_erp || "";
+  };
+
   const handleEdit = (areaNome: string) => {
     setEditing((prev) => ({ ...prev, [areaNome]: getValor(areaNome) }));
+    setEditingDescritivo((prev) => ({ ...prev, [areaNome]: getDescritivo(areaNome) }));
   };
 
   const handleCancel = (areaNome: string) => {
@@ -45,10 +52,16 @@ function CentroCustoPanel({ tipoDespesaId, areas }: { tipoDespesaId: string; are
       delete next[areaNome];
       return next;
     });
+    setEditingDescritivo((prev) => {
+      const next = { ...prev };
+      delete next[areaNome];
+      return next;
+    });
   };
 
   const handleSave = async (areaNome: string) => {
     const valor = editing[areaNome] ?? "";
+    const descritivo = editingDescritivo[areaNome] ?? "";
     setSaving((prev) => ({ ...prev, [areaNome]: true }));
     setSaveError(null);
 
@@ -58,7 +71,7 @@ function CentroCustoPanel({ tipoDespesaId, areas }: { tipoDespesaId: string; are
       const cc = centrosCusto.find((c) => c.area === areaNome);
       if (cc) result = await deleteCentroCusto(cc.id);
     } else {
-      result = await upsertCentroCusto(areaNome, valor.trim());
+      result = await upsertCentroCusto(areaNome, valor.trim(), descritivo.trim() || null);
     }
 
     setSaving((prev) => { const n = { ...prev }; delete n[areaNome]; return n; });
@@ -101,30 +114,47 @@ function CentroCustoPanel({ tipoDespesaId, areas }: { tipoDespesaId: string; are
         {areas.map((areaItem) => {
           const area = areaItem.nome;
           const valor = getValor(area);
+          const descritivo = getDescritivo(area);
           const isEditing = editing[area] !== undefined;
           const isSaving = saving[area] === true;
 
           return (
-            <div key={areaItem.id} className="flex items-center gap-3 px-3 py-2.5">
-              <span className="text-sm font-medium text-foreground w-32 shrink-0">{area}</span>
+            <div key={areaItem.id} className="flex items-start gap-3 px-3 py-2.5">
+              <span className="text-sm font-medium text-foreground w-32 shrink-0 pt-1.5">{area}</span>
 
               {isEditing ? (
-                <div className="flex items-center gap-1.5 flex-1">
-                  <input
-                    autoFocus
-                    type="text"
-                    value={editing[area] ?? ""}
-                    onChange={(e) =>
-                      setEditing((prev) => ({ ...prev, [area]: e.target.value }))
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleSave(area);
-                      if (e.key === "Escape") handleCancel(area);
-                    }}
-                    placeholder="Ex: CC-001"
-                    className="flex-1 px-2 py-1 rounded border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary font-mono"
-                    disabled={isSaving}
-                  />
+                <div className="flex items-start gap-1.5 flex-1">
+                  <div className="flex flex-col gap-1.5 flex-1">
+                    <input
+                      autoFocus
+                      type="text"
+                      value={editing[area] ?? ""}
+                      onChange={(e) =>
+                        setEditing((prev) => ({ ...prev, [area]: e.target.value }))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSave(area);
+                        if (e.key === "Escape") handleCancel(area);
+                      }}
+                      placeholder="Centro de Custo ERP — Ex: 142"
+                      className="w-full px-2 py-1 rounded border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+                      disabled={isSaving}
+                    />
+                    <input
+                      type="text"
+                      value={editingDescritivo[area] ?? ""}
+                      onChange={(e) =>
+                        setEditingDescritivo((prev) => ({ ...prev, [area]: e.target.value }))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSave(area);
+                        if (e.key === "Escape") handleCancel(area);
+                      }}
+                      placeholder="Descritivo do Centro de Custo — Ex: Assistência Técnica"
+                      className="w-full px-2 py-1 rounded border border-input bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                      disabled={isSaving}
+                    />
+                  </div>
                   <button
                     onClick={() => handleSave(area)}
                     disabled={isSaving}
@@ -146,13 +176,18 @@ function CentroCustoPanel({ tipoDespesaId, areas }: { tipoDespesaId: string; are
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 flex-1 group">
+                <div className="flex items-center gap-2 flex-1 group pt-1">
                   {valor ? (
                     <span className="text-sm font-mono text-primary bg-primary/8 px-2 py-0.5 rounded">
                       {valor}
                     </span>
                   ) : (
                     <span className="text-sm text-muted-foreground italic">Não definido</span>
+                  )}
+                  {valor && (
+                    <span className="text-sm text-foreground">
+                      {descritivo || <span className="text-muted-foreground italic">Sem descritivo</span>}
+                    </span>
                   )}
                   <button
                     onClick={() => handleEdit(area)}

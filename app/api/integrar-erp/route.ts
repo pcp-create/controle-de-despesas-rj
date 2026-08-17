@@ -315,6 +315,65 @@ async function m8Request<T>(
   };
 }
 
+// Erros transitórios (conexão instável, servidor sobrecarregado, ou o M8 ainda
+// persistindo um registro criado na etapa anterior) valem uma nova tentativa.
+// Erros de validação/negócio (4xx que não sejam 408/429) não devem ser repetidos.
+function ehErroTransitorioM8(error: unknown): boolean {
+  if (!(error instanceof IntegracaoError)) return true;
+
+  const mensagem = String(error.message || "");
+  const status = error.statusHttp;
+
+  if (status && status >= 500) return true;
+  if (status === 408 || status === 429) return true;
+  if (mensagem.includes("Falha de conexão")) return true;
+  if (mensagem.includes("Object reference not set to an instance of an object")) return true;
+  if (mensagem.includes("VerificarStatusDocumento")) return true;
+
+  return false;
+}
+
+// Executa uma chamada ao M8 com nova tentativa em caso de erro transitório.
+// A primeira tentativa é sempre imediata (sem espera artificial) para manter
+// a integração rápida no caminho feliz. Só espera — com tempo crescente — se
+// a chamada de fato falhar.
+async function m8RequestComRetry<T>(
+  etapa: number,
+  url: string,
+  token: string | null,
+  options: {
+    method?: "POST" | "PUT" | "GET";
+    body?: JsonObject;
+    autenticado?: boolean;
+  },
+  retryConfig: { tentativas: number; esperasMs: number[] }
+): Promise<{ data: T; respostaCompleta: unknown; status: number }> {
+  let ultimoErro: unknown;
+
+  for (let tentativa = 1; tentativa <= retryConfig.tentativas; tentativa++) {
+    try {
+      return await m8Request<T>(etapa, url, token, options);
+    } catch (erro) {
+      ultimoErro = erro;
+
+      const ehUltimaTentativa = tentativa === retryConfig.tentativas;
+      if (ehUltimaTentativa || !ehErroTransitorioM8(erro)) throw erro;
+
+      const espera =
+        retryConfig.esperasMs[tentativa - 1] ??
+        retryConfig.esperasMs[retryConfig.esperasMs.length - 1] ??
+        500;
+
+      console.warn(
+        `[M8][Etapa ${etapa}] Tentativa ${tentativa}/${retryConfig.tentativas} falhou (${(erro as any)?.message}). Nova tentativa em ${espera}ms.`
+      );
+      await aguardar(espera);
+    }
+  }
+
+  throw ultimoErro;
+}
+
 export async function POST(request: Request) {
   if (!supabaseUrl || !supabaseServiceKey) {
     return NextResponse.json(
@@ -523,11 +582,12 @@ export async function POST(request: Request) {
       domain: M8_DOMAIN!,
     };
 
-    const auth = await m8Request<{ token?: string }>(
+    const auth = await m8RequestComRetry<{ token?: string }>(
       1,
       `${baseUrl}/v1/auth/token`,
       null,
-      { method: "POST", body: loginBody, autenticado: false }
+      { method: "POST", body: loginBody, autenticado: false },
+      { tentativas: 2, esperasMs: [500] }
     );
 
     token = auth.data?.token || null;
@@ -578,11 +638,15 @@ export async function POST(request: Request) {
       console.log("[M8][Etapa 2] URL:", `${baseUrl}/v1/compras/notafiscal`);
       console.log("[M8][Etapa 2] Payload:", JSON.stringify(bodyEtapa2, null, 2));
 
-      const etapa2 = await m8Request<{ id?: number }>(
+      // A Etapa 2 (criação da Nota Fiscal de Compra) é a que o M8 mais demora
+      // para responder. Damos a ela uma espera de nova tentativa maior do que
+      // as demais etapas, em vez de um tempo de bloqueio fixo em toda chamada.
+      const etapa2 = await m8RequestComRetry<{ id?: number }>(
         2,
         `${baseUrl}/v1/compras/notafiscal`,
         token,
-        { method: "POST", body: bodyEtapa2 }
+        { method: "POST", body: bodyEtapa2 },
+        { tentativas: 2, esperasMs: [1200] }
       );
 
       erpId = paraNumero(etapa2.data?.id);
@@ -603,9 +667,8 @@ export async function POST(request: Request) {
         erp_resposta: respostas,
       });
 
-      // O M8 pode retornar a NF antes de concluir toda a persistência interna.
-      // Aguarda brevemente antes de cadastrar o primeiro produto.
-      await aguardar(400);
+      // Sem espera fixa aqui: a Etapa 3 tenta imediatamente e só espera —
+      // com tempo crescente — se o M8 ainda estiver persistindo a NF.
     }
 
     if (!erpId) {
@@ -625,40 +688,15 @@ export async function POST(request: Request) {
 
       payloads.etapa3 = bodyEtapa3;
 
-      let etapa3: Awaited<ReturnType<typeof m8Request>>;
-
-      const tentativasEtapa3 = 3;
-      let ultimoErroEtapa3: unknown;
-
-      for (let tentativa = 1; tentativa <= tentativasEtapa3; tentativa++) {
-        try {
-          etapa3 = await m8Request(
-            3,
-            `${baseUrl}/v1/compras/notafiscal/${erpId}/produto`,
-            token,
-            { method: "POST", body: bodyEtapa3 }
-          );
-          ultimoErroEtapa3 = null;
-          break;
-        } catch (erroEtapa3: any) {
-          const mensagemEtapa3 = String(erroEtapa3?.message || "");
-          const erroPersistenciaM8 =
-            mensagemEtapa3.includes("Object reference not set to an instance of an object") ||
-            mensagemEtapa3.includes("VerificarStatusDocumento");
-
-          if (!erroPersistenciaM8) throw erroEtapa3;
-
-          ultimoErroEtapa3 = erroEtapa3;
-
-          if (tentativa < tentativasEtapa3) {
-            const espera = 400 * Math.pow(2, tentativa - 1); // 400ms, 800ms
-            console.warn(`[M8][Etapa 3] NF ainda sendo persistida. Tentativa ${tentativa}/${tentativasEtapa3}. Aguardando ${espera}ms.`);
-            await aguardar(espera);
-          }
-        }
-      }
-
-      if (ultimoErroEtapa3) throw ultimoErroEtapa3;
+      // Tenta imediatamente; só espera — com tempo crescente — se o M8 ainda
+      // estiver persistindo a NF criada na Etapa 2.
+      const etapa3 = await m8RequestComRetry(
+        3,
+        `${baseUrl}/v1/compras/notafiscal/${erpId}/produto`,
+        token,
+        { method: "POST", body: bodyEtapa3 },
+        { tentativas: 3, esperasMs: [400, 800] }
+      );
 
       respostas.etapa3 = etapa3.respostaCompleta;
       await salvarProgresso(supabase, despesaId, {
@@ -677,11 +715,12 @@ export async function POST(request: Request) {
 
       payloads.etapa4 = bodyEtapa4;
 
-      const etapa4 = await m8Request(
+      const etapa4 = await m8RequestComRetry(
         4,
         `${baseUrl}/v1/compras/notafiscal/${erpId}/parcela`,
         token,
-        { method: "POST", body: bodyEtapa4 }
+        { method: "POST", body: bodyEtapa4 },
+        { tentativas: 2, esperasMs: [600] }
       );
 
       respostas.etapa4 = etapa4.respostaCompleta;
@@ -703,11 +742,12 @@ export async function POST(request: Request) {
 
       payloads.etapa5 = bodyEtapa5;
 
-      const etapa5 = await m8Request(
+      const etapa5 = await m8RequestComRetry(
         5,
         `${baseUrl}/v1/compras/notafiscal/${erpId}/centrocusto`,
         token,
-        { method: "POST", body: bodyEtapa5 }
+        { method: "POST", body: bodyEtapa5 },
+        { tentativas: 2, esperasMs: [600] }
       );
 
       respostas.etapa5 = etapa5.respostaCompleta;
@@ -721,11 +761,12 @@ export async function POST(request: Request) {
     if (etapaInicial <= 6) {
       payloads.etapa6 = null;
 
-      const etapa6 = await m8Request(
+      const etapa6 = await m8RequestComRetry(
         6,
         `${baseUrl}/v1/compras/notafiscal/${erpId}/processar`,
         token,
-        { method: "POST" }
+        { method: "POST" },
+        { tentativas: 2, esperasMs: [600] }
       );
 
       respostas.etapa6 = etapa6.respostaCompleta;

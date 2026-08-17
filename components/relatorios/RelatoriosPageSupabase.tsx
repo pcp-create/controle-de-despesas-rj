@@ -1527,6 +1527,7 @@ export default function RelatoriosPageSupabase() {
           tecnicoNome: tecnico?.nome ?? "Sem funcionário",
           area: area ?? "Sem área",
           centroCustoErp: centroCusto?.centro_custo_erp ?? null,
+          centroCustoDescritivo: centroCusto?.descritivo_custo_erp ?? null,
           tipoNome: tipo?.nome ?? "—",
           empresaId: extrairEmpresaErpId(d),
           empresaNome: extrairEmpresaErpNome(d),
@@ -1563,26 +1564,32 @@ export default function RelatoriosPageSupabase() {
       .sort((a, b) => b.valor - a.valor);
   }, [despesasIntegradas]);
 
-  // Rótulo de um centro de custo: código + todos os tipos de despesa distintos
-  // que caem nele (mesmo código pode ter sido cadastrado para tipos diferentes).
-  const labelCentroCusto = (codigo: string | null, tipos: Set<string>) => {
-    const tiposOrdenados = Array.from(tipos).sort();
-    return codigo
-      ? `${codigo} - ${tiposOrdenados.join(" / ")}`
-      : `Sem centro de custo - ${tiposOrdenados.join(" / ")}`;
+  // Rótulo de um centro de custo: código + descritivo do Centro de Custo ERP
+  // (cadastrado na configuração de Centro de Custo). Nunca usa o nome do tipo
+  // de despesa. Quando não há descritivo cadastrado, exibe apenas o código.
+  const labelCentroCusto = (codigo: string | null, descritivos: Set<string>) => {
+    const descritivosValidos = Array.from(descritivos)
+      .map((d) => d.trim())
+      .filter(Boolean)
+      .sort();
+    const descritivoTexto = descritivosValidos.join(" / ");
+    if (!codigo) {
+      return descritivoTexto ? `Sem centro de custo - ${descritivoTexto}` : "Sem centro de custo";
+    }
+    return descritivoTexto ? `${codigo} - ${descritivoTexto}` : codigo;
   };
 
   const ccByCentroCusto = useMemo(() => {
-    const map = new Map<string, { codigo: string | null; tipos: Set<string>; valor: number }>();
+    const map = new Map<string, { codigo: string | null; descritivos: Set<string>; valor: number }>();
     despesasIntegradas.forEach((item) => {
       const key = item.centroCustoErp ?? "__sem__";
-      if (!map.has(key)) map.set(key, { codigo: item.centroCustoErp, tipos: new Set(), valor: 0 });
+      if (!map.has(key)) map.set(key, { codigo: item.centroCustoErp, descritivos: new Set(), valor: 0 });
       const node = map.get(key)!;
-      node.tipos.add(item.tipoNome);
+      if (item.centroCustoDescritivo) node.descritivos.add(item.centroCustoDescritivo);
       node.valor += Number(item.despesa.valor);
     });
     return Array.from(map.values())
-      .map((node) => ({ label: labelCentroCusto(node.codigo, node.tipos), valor: node.valor }))
+      .map((node) => ({ label: labelCentroCusto(node.codigo, node.descritivos), valor: node.valor }))
       .sort((a, b) => b.valor - a.valor);
   }, [despesasIntegradas]);
 
@@ -1592,7 +1599,7 @@ export default function RelatoriosPageSupabase() {
   // mesmo "142" usado em Alimentação e Assistência) aparecem juntos num único grupo.
   const ccArvore = useMemo(() => {
     type ItemCC = typeof despesasIntegradas[0];
-    const empresasMap = new Map<string, { empresaId: number | null; nome: string; total: number; centros: Map<string, { codigo: string | null; tipos: Set<string>; total: number; itens: ItemCC[] }> }>();
+    const empresasMap = new Map<string, { empresaId: number | null; nome: string; total: number; centros: Map<string, { codigo: string | null; descritivos: Set<string>; total: number; itens: ItemCC[] }> }>();
 
     despesasIntegradas.forEach((item) => {
       const empresaKey = String(item.empresaId ?? "—");
@@ -1604,10 +1611,10 @@ export default function RelatoriosPageSupabase() {
 
       const ccKey = item.centroCustoErp ?? "__sem__";
       if (!empresaNode.centros.has(ccKey)) {
-        empresaNode.centros.set(ccKey, { codigo: item.centroCustoErp, tipos: new Set(), total: 0, itens: [] });
+        empresaNode.centros.set(ccKey, { codigo: item.centroCustoErp, descritivos: new Set(), total: 0, itens: [] });
       }
       const ccNode = empresaNode.centros.get(ccKey)!;
-      ccNode.tipos.add(item.tipoNome);
+      if (item.centroCustoDescritivo) ccNode.descritivos.add(item.centroCustoDescritivo);
       ccNode.total += Number(item.despesa.valor);
       ccNode.itens.push(item);
     });
@@ -1621,7 +1628,7 @@ export default function RelatoriosPageSupabase() {
         centros: Array.from(node.centros.entries())
           .map(([ccKey, cc]) => ({
             ccKey,
-            label: labelCentroCusto(cc.codigo, cc.tipos),
+            label: labelCentroCusto(cc.codigo, cc.descritivos),
             total: cc.total,
             itens: cc.itens.slice().sort((a, b) => {
               const idA = Number(a.despesa.erp_id);
@@ -2613,7 +2620,7 @@ export default function RelatoriosPageSupabase() {
         {ccByCentroCusto.length > 0 && (
           <div className="bg-white rounded-xl border border-border shadow-sm p-5">
             <h2 className="text-sm font-semibold text-foreground mb-1">Valores por Centro de Custo</h2>
-            <p className="text-xs text-muted-foreground mb-4">Centro de custo ERP + tipo de despesa</p>
+            <p className="text-xs text-muted-foreground mb-4">Centro de custo ERP + descritivo</p>
             <ResponsiveContainer width="100%" height={Math.max(160, ccByCentroCusto.length * 42)}>
               <BarChart data={ccByCentroCusto} layout="vertical" barSize={22} margin={{ right: 90, left: 0 }}>
                 <XAxis type="number" hide />
