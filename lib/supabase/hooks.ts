@@ -315,6 +315,7 @@ export interface TipoDespesaCentroCusto {
   tipo_despesa_id: string;
   area: string;
   centro_custo_erp: string;
+  descritivo_custo_erp: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -349,7 +350,11 @@ export function useTipoDespesaCentroCusto(tipoDespesaId: string | null) {
     { revalidateOnFocus: false }
   );
 
-  const upsertCentroCusto = async (area: string, centro_custo_erp: string) => {
+  const upsertCentroCusto = async (
+    area: string,
+    centro_custo_erp: string,
+    descritivo_custo_erp?: string | null
+  ) => {
     const supabase = getSupabase();
     if (!supabase || !tipoDespesaId) return { error: "Dados insuficientes" };
 
@@ -366,13 +371,22 @@ export function useTipoDespesaCentroCusto(tipoDespesaId: string | null) {
     if (existing?.id) {
       const res = await supabase
         .from("tipos_despesa_centro_custo")
-        .update({ centro_custo_erp, updated_at: new Date().toISOString() })
+        .update({
+          centro_custo_erp,
+          descritivo_custo_erp: descritivo_custo_erp || null,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", existing.id);
       error = res.error;
     } else {
       const res = await supabase
         .from("tipos_despesa_centro_custo")
-        .insert({ tipo_despesa_id: tipoDespesaId, area, centro_custo_erp });
+        .insert({
+          tipo_despesa_id: tipoDespesaId,
+          area,
+          centro_custo_erp,
+          descritivo_custo_erp: descritivo_custo_erp || null,
+        });
       error = res.error;
     }
 
