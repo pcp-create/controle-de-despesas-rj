@@ -40,7 +40,7 @@ export default function FinanceiroPageSupabase() {
   const { user: authUser } = useAuth();
 
   // Ordenação
-  type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "cliente" | "os" | "valor" | "status" | "documento" | "cartao" | "lancado";
+  type SortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "observacao" | "valor" | "status" | "documento" | "cartao" | "lancado";
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   // Filtros por coluna — cada chave armazena um conjunto de valores selecionados
@@ -268,8 +268,7 @@ export default function FinanceiroPageSupabase() {
         case "funcionario": cellVal = tecnico?.nome || "—"; break;
         case "tipo":        cellVal = tipo?.nome || "—"; break;
         case "pagamento":   cellVal = pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"]?.label || "—"; break;
-        case "cliente":     cellVal = d.cliente; break;
-        case "os":          cellVal = d.numero_os || "—"; break;
+        case "observacao":  cellVal = d.observacao || "—"; break;
         case "valor":       cellVal = formatCurrency(Number(d.valor)); break;
         case "status":      cellVal = statusGeralConfig[sg]?.label || "—"; break;
         case "documento":   cellVal = d.documento || "—"; break;
@@ -338,8 +337,7 @@ export default function FinanceiroPageSupabase() {
     const dataFmt = formatDate(d.data_despesa);
     const vencimentoFmt = d.data_vencimento ? formatDate(d.data_vencimento) : "";
     return (
-      d.cliente.toLowerCase().includes(term) ||
-      (d.numero_os || "").toLowerCase().includes(term) ||
+      (d.observacao || "").toLowerCase().includes(term) ||
       (tipo?.nome || "").toLowerCase().includes(term) ||
       (tecnico?.nome || "").toLowerCase().includes(term) ||
       (d.erp_id || "").toString().includes(term) ||
@@ -372,8 +370,7 @@ export default function FinanceiroPageSupabase() {
           case "funcionario": cellVal = tecnico?.nome || "—"; break;
           case "tipo":        cellVal = tipo?.nome || "—"; break;
           case "pagamento":   cellVal = pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"]?.label || "—"; break;
-          case "cliente":     cellVal = d.cliente; break;
-          case "os":          cellVal = d.numero_os || "—"; break;
+          case "observacao":  cellVal = d.observacao || "—"; break;
           case "valor":       cellVal = formatCurrency(Number(d.valor)); break;
           case "status":      cellVal = statusGeralConfig[sg]?.label || "—"; break;
           case "documento":   cellVal = d.documento || "—"; break;
@@ -427,8 +424,7 @@ export default function FinanceiroPageSupabase() {
           case "funcionario": va = tec_a?.nome || ""; vb = tec_b?.nome || ""; break;
           case "tipo":        va = tipo_a?.nome || ""; vb = tipo_b?.nome || ""; break;
           case "pagamento":   va = pagamentoTipoConfig[a.pagamento_tipo ?? "cartao"]?.label || ""; vb = pagamentoTipoConfig[b.pagamento_tipo ?? "cartao"]?.label || ""; break;
-          case "cliente":     va = a.cliente; vb = b.cliente; break;
-          case "os":          va = a.numero_os || ""; vb = b.numero_os || ""; break;
+          case "observacao":  va = a.observacao || ""; vb = b.observacao || ""; break;
           case "valor":       va = Number(a.valor); vb = Number(b.valor); break;
           case "status":      va = getStatusGeral(a.status_erp ?? "", a.status_aprovacao); vb = getStatusGeral(b.status_erp ?? "", b.status_aprovacao); break;
           case "documento":   va = a.documento || ""; vb = b.documento || ""; break;
@@ -464,8 +460,7 @@ export default function FinanceiroPageSupabase() {
         "Parcela": d.parcelado ? `${d.parcela_atual}/${d.numero_parcelas}` : "-",
         Funcionário: tecnico?.nome || "-",
         Tipo: tipo?.nome || "-",
-        Cliente: d.cliente,
-        "Número OS": d.numero_os || "-",
+        Observações: d.observacao || "-",
         Valor: Number(d.valor),
         Documento: d.documento || "-",
         Cartão: cartaoLabel,
@@ -481,8 +476,8 @@ export default function FinanceiroPageSupabase() {
     const worksheet = XLSX.utils.json_to_sheet(dados);
     worksheet["!cols"] = [
       { wch: 12 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 12 },
-      { wch: 12 }, { wch: 16 }, { wch: 30 }, { wch: 15 }, { wch: 12 },
-      { wch: 12 }, { wch: 12 }, { wch: 15 },
+      { wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 20 }, { wch: 15 },
+      { wch: 12 }, { wch: 15 },
     ];
     XLSX.utils.book_append_sheet(workbook, worksheet, "Despesas");
     const nomeArquivo = `Despesas_${new Date().toLocaleDateString("pt-BR").replace(/\//g, "-")}.xlsx`;
@@ -523,8 +518,7 @@ export default function FinanceiroPageSupabase() {
         d.parcelado ? `${d.parcela_atual}/${d.numero_parcelas}` : "-",
         tecnico?.nome.split(" ").slice(0, 2).join(" ") || "-",
         tipo?.nome || "-",
-        d.cliente,
-        d.numero_os || "-",
+        d.observacao || "-",
         formatCurrency(Number(d.valor)),
         d.documento || "-",
         d.comprovante_url ? "Sim" : "Não",
@@ -538,7 +532,7 @@ export default function FinanceiroPageSupabase() {
 
     autoTable(doc, {
       startY: 36,
-      head: [["Data", "Vencimento", "Parcela", "Funcionário", "Tipo", "Cliente", "OS", "Valor", "Doc.", "Comprovante", "Cartão", "Status", "Status ERP", "Envio", "ERP ID"]],
+      head: [["Data", "Vencimento", "Parcela", "Funcionário", "Tipo", "Observações", "Valor", "Doc.", "Comprovante", "Cartão", "Status", "Status ERP", "Envio", "ERP ID"]],
       body: rows,
       styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
       headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: "bold", fontSize: 7.5 },
@@ -549,17 +543,16 @@ export default function FinanceiroPageSupabase() {
         2: { cellWidth: 20 },
         3: { cellWidth: 28 },
         4: { cellWidth: 14 },
-        5: { cellWidth: 18, halign: "right" },
-        6: { cellWidth: 16 },
-        7: { cellWidth: 32 },
-        8: { cellWidth: 18 },
+        5: { cellWidth: 32 },
+        6: { cellWidth: 18, halign: "right" },
+        7: { cellWidth: 16 },
+        8: { cellWidth: 20 },
         9: { cellWidth: 20 },
-        10: { cellWidth: 20 },
-        11: { cellWidth: 14 },
-        12: { cellWidth: 22 },
+        10: { cellWidth: 14 },
+        11: { cellWidth: 22 },
       },
       didParseCell: (data) => {
-        if (data.section === "body" && data.column.index === 8) {
+        if (data.section === "body" && data.column.index === 7) {
           const v = data.cell.raw as string;
           if (v === "Aprovado")              { data.cell.styles.textColor = [22, 163, 74];  data.cell.styles.fontStyle = "bold"; }
           if (v === "Aguardando Aprova��ão")  { data.cell.styles.textColor = [202, 138, 4]; }
@@ -943,8 +936,7 @@ export default function FinanceiroPageSupabase() {
                     { key: "funcionario", label: "Funcionário",  align: "left"  },
                     { key: "tipo",        label: "Tipo",        align: "left"  },
                     { key: "pagamento",   label: "Pagamento",   align: "left"  },
-                    { key: "cliente",     label: "Cliente",     align: "left"  },
-                    { key: "os",          label: "OS",          align: "left"  },
+                    { key: "observacao",  label: "Observações", align: "left"  },
                     { key: "valor",       label: "Valor",       align: "right" },
                     { key: "documento",    label: "Documento",   align: "left"  },
                     { key: null,          label: "Comprovante", align: "left"  },
@@ -1381,8 +1373,7 @@ export default function FinanceiroPageSupabase() {
                         ) : <span className="text-muted-foreground">����</span>;
                       })()}
                     </td>
-                    <td className="px-3 py-2 max-w-32 truncate">{d.cliente}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{d.numero_os || "-"}</td>
+                    <td className="px-3 py-2 max-w-48 truncate" title={d.observacao || ""}>{d.observacao || "-"}</td>
                     <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{formatCurrency(Number(d.valor))}</td>
                     <td className="px-3 py-2 whitespace-nowrap">
                       {editandoDocumento[d.id] !== undefined ? (
