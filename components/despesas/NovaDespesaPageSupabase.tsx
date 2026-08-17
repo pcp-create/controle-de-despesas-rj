@@ -5,6 +5,7 @@ import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
 import { LIMITE_CONSUMO, type AlertaConsumo } from "@/lib/consumo-frota";
+import { salvarRascunhoDespesa, carregarRascunhoDespesa, limparRascunhoDespesa, rascunhoEstaVazio, type DespesaDraftData } from "@/lib/despesa-draft";
 import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2, Receipt, Search } from "lucide-react";
 import { formatCurrency, getLocalDateString, getLocalTimeString } from "@/lib/helpers";
 
@@ -77,6 +78,74 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "warning"; msg: string } | null>(null);
   const [migrationSql, setMigrationSql] = useState<string | null>(null);
+
+  // ─── Rascunho local (localStorage) ───────────────────────────────────────────
+  // Só se aplica à criação de novas despesas (nunca à edição). Restaura os dados
+  // digitados ao voltar para esta tela; salva automaticamente enquanto o usuário
+  // preenche; e é descartado quando a despesa é salva com sucesso.
+  const [rascunhoRestaurado, setRascunhoRestaurado] = useState(false);
+  const rascunhoHidratadoRef = useRef(false);
+
+  useEffect(() => {
+    if (editDespesa || !currentUser?.id || rascunhoHidratadoRef.current) return;
+    rascunhoHidratadoRef.current = true;
+    const draft = carregarRascunhoDespesa(currentUser.id);
+    if (draft && !rascunhoEstaVazio(draft)) {
+      setForm((prev) => ({ ...prev, ...draft.form }));
+      setPagamentoTipo(draft.pagamentoTipo);
+      setParcelado(draft.parcelado);
+      setNumeroParcelas(draft.numeroParcelas);
+      setComprovante(draft.comprovante);
+      setRascunhoRestaurado(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editDespesa, currentUser?.id]);
+
+  useEffect(() => {
+    if (editDespesa || !currentUser?.id || !rascunhoHidratadoRef.current) return;
+    const draft: DespesaDraftData = {
+      form,
+      pagamentoTipo,
+      parcelado,
+      numeroParcelas,
+      comprovante,
+    };
+    const timer = setTimeout(() => {
+      if (rascunhoEstaVazio(draft)) {
+        limparRascunhoDespesa(currentUser.id);
+      } else {
+        salvarRascunhoDespesa(currentUser.id, draft);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [editDespesa, currentUser?.id, form, pagamentoTipo, parcelado, numeroParcelas, comprovante]);
+
+  function descartarRascunho() {
+    if (currentUser?.id) limparRascunhoDespesa(currentUser.id);
+    setRascunhoRestaurado(false);
+    setForm({
+      tipoDespesaId: "",
+      cartaoId: "",
+      cliente: "",
+      numeroOS: "",
+      valor: "",
+      documento: "",
+      observacao: "",
+      dataDespesa: getLocalDateString(),
+      horaDespesa: getLocalTimeString(),
+      dataCheckin: "",
+      dataCheckout: "",
+      frotaId: ((currentUser as any)?.frota_padrao_id as string | null) || "",
+      kmAtual: "",
+      litrosAbastecidos: "",
+      valorLitro: "",
+      tipoCombustivel: "",
+    });
+    setPagamentoTipo("cartao");
+    setParcelado(false);
+    setNumeroParcelas(2);
+    setComprovante(null);
+  }
 
   useEffect(() => {
     fetch("/api/setup-km-metricas")
@@ -270,6 +339,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       }
 
       if (!hasError) {
+        if (currentUser?.id) limparRascunhoDespesa(currentUser.id);
         setFeedback({ type: "success", msg: `${qtdParcelas} parcelas criadas! Redirecionando...` });
         setTimeout(() => onBack(), 1500);
       }
@@ -287,6 +357,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
       } else {
+        if (currentUser?.id) limparRascunhoDespesa(currentUser.id);
         // O cálculo e a persistência do "Último cálculo" (km apontado/esperado/percentual
         // e alerta_ativo da frota) são feitos exclusivamente por
         // addDespesa → persistirAlertasConsumo → gerarAlertasConsumo → POST /api/alertas-consumo.
@@ -393,6 +464,25 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           <p className="text-sm text-muted-foreground">Preencha os dados do lançamento</p>
         </div>
       </div>
+
+      {/* Banner: rascunho restaurado de uma sessão anterior não finalizada */}
+      {rascunhoRestaurado && (
+        <div className="flex items-start gap-2 p-3 mb-4 rounded-xl border border-primary/30 bg-primary/5">
+          <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-foreground">Rascunho restaurado</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Encontramos dados de um lançamento que você não chegou a salvar. Revise antes de continuar.
+            </p>
+          </div>
+          <button
+            onClick={descartarRascunho}
+            className="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-input bg-background hover:bg-muted transition font-medium text-muted-foreground"
+          >
+            Descartar
+          </button>
+        </div>
+      )}
 
       {/* Feedback */}
       {feedback && (
