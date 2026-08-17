@@ -747,16 +747,16 @@ export function useDespesas(userId?: string, perfil?: string) {
 
     const aprovacaoAutomatica = dentroDoValorLimite && dentroDoLimiteDiario;
 
-    const erpPayload = { despesa_id: id, timestamp: new Date().toISOString() };
-    const erpResposta = { success: true, erp_id: `ERP-${Date.now()}`, message: "Enviado com sucesso" };
     const now = new Date().toISOString();
 
+    // Esta etapa é apenas o envio da despesa para aprovação (do gestor ou
+    // automática por estar dentro do limite). O ERP ID real só é atribuído
+    // mais adiante, pela integração de fato com o ERP M8 (erp_status
+    // passando de "pendente" para "integrado"). Nenhum campo de ERP
+    // (erp_id / erp_payload / erp_resposta) deve ser tocado aqui.
     const updateData: Record<string, unknown> = {
       status_erp: aprovacaoAutomatica ? "AprovadoGestorERPAtualizado" : "EnviadoAguardandoGestor",
       status_aprovacao: aprovacaoAutomatica ? "AprovadoGestor" : "AguardandoGestor",
-      erp_id: erpResposta.erp_id,
-      erp_payload: erpPayload,
-      erp_resposta: erpResposta,
       data_envio: now,
       updated_at: now,
       // Limpa o motivo de reprovação ao reenviar — o aviso não deve aparecer novamente
