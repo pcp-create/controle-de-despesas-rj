@@ -7,6 +7,7 @@ import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks"
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
 import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
+import { salvarPrefsTabelaFinanceiro, carregarPrefsTabelaFinanceiro } from "@/lib/financeiro-table-prefs";
 import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle, AlertTriangle, Clock, Send, CheckCircle, RefreshCw, Ban } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -20,25 +21,29 @@ type ModoFiltro = "mes" | "periodo";
 // corresponder exatamente à ordem das células <td> renderizadas no <tbody>.
 // `id` identifica a coluna (para controle de largura); `sortKey` é a chave de
 // ordenação usada em handleSort/getColValues quando a coluna é ordenável/filtrável.
+// `filterType` define o tipo de filtro exibido no popover do cabeçalho:
+//   "select" → lista de valores conhecidos com checkbox (colunas categóricas)
+//   "text"   → busca livre por parte do texto (colunas de texto aberto)
 type FinanceiroSortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "observacao" | "valor" | "status" | "documento" | "cartao" | "lancado";
-const TABLE_COLUMNS: { id: string; sortKey: FinanceiroSortKey | null; label: string; align: "left" | "right"; defaultWidth: number }[] = [
-  { id: "lancado",     sortKey: "lancado",     label: "Lançar",      align: "left",  defaultWidth: 170 },
-  { id: "data",        sortKey: "data",        label: "Data",        align: "left",  defaultWidth: 100 },
-  { id: "vencimento",  sortKey: "vencimento",  label: "Vencimento",  align: "left",  defaultWidth: 120 },
-  { id: "funcionario", sortKey: "funcionario", label: "Funcionário", align: "left",  defaultWidth: 130 },
-  { id: "tipo",        sortKey: "tipo",        label: "Tipo",        align: "left",  defaultWidth: 170 },
-  { id: "pagamento",   sortKey: "pagamento",   label: "Pagamento",   align: "left",  defaultWidth: 120 },
-  { id: "observacao",  sortKey: "observacao",  label: "Observações", align: "left",  defaultWidth: 220 },
-  { id: "valor",       sortKey: "valor",       label: "Valor",       align: "right", defaultWidth: 110 },
-  { id: "documento",   sortKey: "documento",   label: "Documento",   align: "left",  defaultWidth: 150 },
-  { id: "comprovante", sortKey: null,          label: "Comprovante", align: "left",  defaultWidth: 130 },
-  { id: "cartao",      sortKey: "cartao",      label: "Cartão",      align: "left",  defaultWidth: 190 },
-  { id: "status",      sortKey: "status",      label: "Status",      align: "left",  defaultWidth: 130 },
-  { id: "status_erp",  sortKey: null,          label: "Status ERP",  align: "left",  defaultWidth: 130 },
-  { id: "envio",       sortKey: null,          label: "Envio",       align: "left",  defaultWidth: 100 },
-  { id: "erp_id",      sortKey: null,          label: "ERP ID",      align: "left",  defaultWidth: 100 },
+const TABLE_COLUMNS: { id: string; sortKey: FinanceiroSortKey | null; label: string; align: "left" | "right"; defaultWidth: number; filterType: "select" | "text" | null }[] = [
+  { id: "lancado",     sortKey: "lancado",     label: "Lançar",      align: "left",  defaultWidth: 170, filterType: "select" },
+  { id: "data",        sortKey: "data",        label: "Data",        align: "left",  defaultWidth: 100, filterType: "select" },
+  { id: "vencimento",  sortKey: "vencimento",  label: "Vencimento",  align: "left",  defaultWidth: 120, filterType: "select" },
+  { id: "funcionario", sortKey: "funcionario", label: "Funcionário", align: "left",  defaultWidth: 130, filterType: "select" },
+  { id: "tipo",        sortKey: "tipo",        label: "Tipo",        align: "left",  defaultWidth: 170, filterType: "select" },
+  { id: "pagamento",   sortKey: "pagamento",   label: "Pagamento",   align: "left",  defaultWidth: 120, filterType: "select" },
+  { id: "observacao",  sortKey: "observacao",  label: "Observações", align: "left",  defaultWidth: 220, filterType: "text" },
+  { id: "valor",       sortKey: "valor",       label: "Valor",       align: "right", defaultWidth: 110, filterType: "select" },
+  { id: "documento",   sortKey: "documento",   label: "Documento",   align: "left",  defaultWidth: 150, filterType: "text" },
+  { id: "comprovante", sortKey: null,          label: "Comprovante", align: "left",  defaultWidth: 130, filterType: null },
+  { id: "cartao",      sortKey: "cartao",      label: "Cartão",      align: "left",  defaultWidth: 190, filterType: "select" },
+  { id: "status",      sortKey: "status",      label: "Status",      align: "left",  defaultWidth: 130, filterType: "select" },
+  { id: "status_erp",  sortKey: null,          label: "Status ERP",  align: "left",  defaultWidth: 130, filterType: null },
+  { id: "envio",       sortKey: null,          label: "Envio",       align: "left",  defaultWidth: 100, filterType: null },
+  { id: "erp_id",      sortKey: null,          label: "ERP ID",      align: "left",  defaultWidth: 100, filterType: null },
 ];
 const MIN_COL_WIDTH = 60;
+const MAX_COL_WIDTH = 480;
 
 export default function FinanceiroPageSupabase() {
   const { despesas, isLoading, updateDespesaDocumento, updateDespesaTipo, updateDespesaVencimento, lancarSistema, lancarERP, tentarNovamenteERP, estornarLancamento, cancelarLancamento, estornarCancelamento } = useDespesas();
@@ -69,6 +74,8 @@ export default function FinanceiroPageSupabase() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   // Filtros por coluna — cada chave armazena um conjunto de valores selecionados
   const [colFilters, setColFilters] = useState<Partial<Record<SortKey, Set<string>>>>({});
+  // Filtros de texto livre por coluna (colunas com filterType "text", ex.: Observações, Documento)
+  const [colTextFilters, setColTextFilters] = useState<Partial<Record<SortKey, string>>>({});
   const [filterOpen, setFilterOpen] = useState<SortKey | null>(null);
   const [filterSearch, setFilterSearch] = useState<Partial<Record<SortKey, string>>>({});
   const modalRef = useRef<HTMLDivElement>(null);
@@ -90,7 +97,7 @@ export default function FinanceiroPageSupabase() {
       const rz = resizingRef.current;
       if (!rz) return;
       const delta = e.clientX - rz.startX;
-      const newWidth = Math.max(MIN_COL_WIDTH, rz.startWidth + delta);
+      const newWidth = Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, rz.startWidth + delta));
       setColWidths((prev) => {
         const next = [...prev];
         next[rz.index] = newWidth;
@@ -112,6 +119,65 @@ export default function FinanceiroPageSupabase() {
   const handleResetColWidths = useCallback(() => {
     setColWidths(TABLE_COLUMNS.map((c) => c.defaultWidth));
   }, []);
+
+  // ── Persistência local (localStorage) das preferências da tabela ──
+  // Larguras de coluna, ordenação e filtros ativos são salvos por usuário e
+  // restaurados automaticamente ao reabrir a página.
+  const tableUserId = authUser?.id ?? currentUser?.id;
+  const prefsCarregadasRef = useRef(false);
+  const prefsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!tableUserId || prefsCarregadasRef.current) return;
+    prefsCarregadasRef.current = true;
+    const prefs = carregarPrefsTabelaFinanceiro(tableUserId);
+    if (!prefs) return;
+    if (Array.isArray(prefs.colWidths) && prefs.colWidths.length === TABLE_COLUMNS.length) {
+      setColWidths(prefs.colWidths.map((w) => Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, Number(w) || MIN_COL_WIDTH))));
+    }
+    const validSortKeys = new Set(TABLE_COLUMNS.map((c) => c.sortKey).filter(Boolean));
+    if (prefs.sortKey && validSortKeys.has(prefs.sortKey as SortKey)) {
+      setSortKey(prefs.sortKey as SortKey);
+      setSortDir(prefs.sortDir === "desc" ? "desc" : "asc");
+    }
+    if (prefs.colFilters) {
+      const restored: Partial<Record<SortKey, Set<string>>> = {};
+      Object.entries(prefs.colFilters).forEach(([key, values]) => {
+        if (validSortKeys.has(key as SortKey) && Array.isArray(values) && values.length > 0) {
+          restored[key as SortKey] = new Set(values);
+        }
+      });
+      if (Object.keys(restored).length > 0) setColFilters(restored);
+    }
+    if (prefs.colTextFilters) {
+      const restoredText: Partial<Record<SortKey, string>> = {};
+      Object.entries(prefs.colTextFilters).forEach(([key, val]) => {
+        if (validSortKeys.has(key as SortKey) && val) restoredText[key as SortKey] = val;
+      });
+      if (Object.keys(restoredText).length > 0) setColTextFilters(restoredText);
+    }
+  }, [tableUserId]);
+
+  useEffect(() => {
+    if (!tableUserId || !prefsCarregadasRef.current) return;
+    if (prefsSaveTimerRef.current) clearTimeout(prefsSaveTimerRef.current);
+    prefsSaveTimerRef.current = setTimeout(() => {
+      const colFiltersArr: Record<string, string[]> = {};
+      Object.entries(colFilters).forEach(([key, set]) => {
+        if (set && set.size > 0) colFiltersArr[key] = Array.from(set);
+      });
+      salvarPrefsTabelaFinanceiro(tableUserId, {
+        colWidths,
+        sortKey,
+        sortDir,
+        colFilters: colFiltersArr,
+        colTextFilters: colTextFilters as Record<string, string>,
+      });
+    }, 400);
+    return () => {
+      if (prefsSaveTimerRef.current) clearTimeout(prefsSaveTimerRef.current);
+    };
+  }, [tableUserId, colWidths, sortKey, sortDir, colFilters, colTextFilters]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -215,11 +281,15 @@ export default function FinanceiroPageSupabase() {
   // Mantido para compatibilidade com estornar
   const handleLancar = async (id: string) => handleLancarSistema(id);
 
+  // Ciclo de ordenação ao clicar no cabeçalho: crescente → decrescente → sem ordenação
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
+    if (sortKey !== key) {
       setSortKey(key);
+      setSortDir("asc");
+    } else if (sortDir === "asc") {
+      setSortDir("desc");
+    } else {
+      setSortKey(null);
       setSortDir("asc");
     }
   };
@@ -370,6 +440,25 @@ export default function FinanceiroPageSupabase() {
     });
   };
 
+  const setColTextFilter = (key: SortKey, val: string) => {
+    setColTextFilters((prev) => {
+      if (!val) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: val };
+    });
+  };
+
+  const clearColTextFilter = (key: SortKey) => {
+    setColTextFilters((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
   const despesasAprovadas = todasDespesas.filter((d) => d.status_aprovacao === "AprovadoGestor");
   const totalAprovado = despesasAprovadas.reduce((s, d) => s + Number(d.valor), 0);
   const qtdLancamentos = despesasAprovadas.length;
@@ -450,8 +539,40 @@ export default function FinanceiroPageSupabase() {
       });
     });
 
+    // Filtros de texto livre (colunas com filterType "text", ex.: Observações, Documento) —
+    // busca por substring, sem diferenciar maiúsculas/minúsculas.
+    Object.entries(colTextFilters).forEach(([key, term]) => {
+      if (!term) return;
+      const termLower = term.toLowerCase();
+      list = list.filter((d) => {
+        const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
+        const tecnico = profiles.find((p) => p.id === d.tecnico_id);
+        const sg = getStatusGeral(d.status_erp ?? "", d.status_aprovacao);
+        let cellVal = "";
+        switch (key as SortKey) {
+          case "data":        cellVal = formatDate(d.data_despesa); break;
+          case "vencimento":  cellVal = d.data_vencimento ? formatDate(d.data_vencimento) : "—"; break;
+          case "funcionario": cellVal = tecnico?.nome || "—"; break;
+          case "tipo":        cellVal = tipo?.nome || "—"; break;
+          case "pagamento":   cellVal = pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"]?.label || "—"; break;
+          case "observacao":  cellVal = d.observacao || "—"; break;
+          case "valor":       cellVal = formatCurrency(Number(d.valor)); break;
+          case "status":      cellVal = statusGeralConfig[sg]?.label || "—"; break;
+          case "documento":   cellVal = d.documento || "—"; break;
+          case "lancado":     cellVal = d.lancado_sistema ? "Lançado" : "Pendente"; break;
+          case "cartao": {
+            const c = d.cartao;
+            cellVal = c ? `${c.banco} — ${c.bandeira} — **** ${c.ultimos_digitos}` : "—";
+            break;
+          }
+          default: return true;
+        }
+        return cellVal.toLowerCase().includes(termLower);
+      });
+    });
+
     return list;
-  }, [despesasFiltradas, colFilters, tiposDespesa, profiles]);
+  }, [despesasFiltradas, colFilters, colTextFilters, tiposDespesa, profiles]);
 
   // Contadores dos cards — calculados sobre a MESMA base filtrada da tabela
   // (período + busca + filtros por coluna), garantindo que os cards sempre reflitam
@@ -1006,32 +1127,33 @@ export default function FinanceiroPageSupabase() {
             </colgroup>
             <thead className="bg-muted sticky top-0 z-10">
               <tr>
-                {TABLE_COLUMNS.map(({ sortKey: key, label, align }, index) => (
+                {TABLE_COLUMNS.map(({ sortKey: key, label, align, filterType }, index) => (
                   <th
                     key={label}
+                    title={label}
                     className={`relative px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap overflow-hidden ${align === "right" ? "text-right" : "text-left"}`}
                   >
-                    <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : ""}`}>
+                    <div className={`flex items-center gap-1 min-w-0 ${align === "right" ? "justify-end" : ""}`}>
                       {key ? (
                         <button
                           type="button"
                           onClick={() => handleSort(key)}
-                          className="flex items-center gap-0.5 hover:text-foreground transition-colors"
+                          className="flex items-center gap-0.5 min-w-0 hover:text-foreground transition-colors"
                         >
-                          <span>{label}</span>
+                          <span className="truncate">{label}</span>
                           {sortKey === key ? (
                             sortDir === "asc"
-                              ? <ChevronUp className="w-3 h-3" />
-                              : <ChevronDown className="w-3 h-3" />
+                              ? <ChevronUp className="w-3 h-3 shrink-0" />
+                              : <ChevronDown className="w-3 h-3 shrink-0" />
                           ) : (
-                            <ChevronsUpDown className="w-3 h-3 opacity-40" />
+                            <ChevronsUpDown className="w-3 h-3 shrink-0 opacity-40" />
                           )}
                         </button>
                       ) : (
-                        <span>{label}</span>
+                        <span className="truncate">{label}</span>
                       )}
-                      {key && (
-                        <div className="relative">
+                      {key && filterType && (
+                        <div className="relative shrink-0">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1039,12 +1161,40 @@ export default function FinanceiroPageSupabase() {
                               if (filterOpen !== key) setFilterSearch((s) => ({ ...s, [key]: "" }));
                               setFilterOpen(filterOpen === key ? null : key);
                             }}
-                            className={`p-0.5 rounded hover:bg-background transition-colors ${colFilters[key]?.size ? "text-primary" : "text-muted-foreground opacity-50 hover:opacity-100"}`}
+                            className={`p-0.5 rounded hover:bg-background transition-colors ${
+                              (filterType === "text" ? !!colTextFilters[key] : !!colFilters[key]?.size)
+                                ? "text-primary"
+                                : "text-muted-foreground opacity-50 hover:opacity-100"
+                            }`}
                             title="Filtrar"
                           >
                             <Filter className="w-3 h-3" />
                           </button>
-                          {filterOpen === key && (() => {
+                          {filterOpen === key && filterType === "text" && (
+                            <div
+                              data-filter-popover
+                              className="absolute left-0 top-full mt-1 z-50 bg-background border border-input rounded-lg shadow-xl min-w-56 p-2"
+                            >
+                              <input
+                                autoFocus
+                                type="text"
+                                placeholder="Buscar texto contendo..."
+                                value={colTextFilters[key] || ""}
+                                onChange={(e) => setColTextFilter(key, e.target.value)}
+                                className="w-full px-2 py-1 text-xs rounded border border-input bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary"
+                              />
+                              {colTextFilters[key] && (
+                                <button
+                                  type="button"
+                                  onClick={() => { clearColTextFilter(key); setFilterOpen(null); }}
+                                  className="mt-2 text-xs text-destructive hover:underline w-full text-left"
+                                >
+                                  Limpar filtro
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {filterOpen === key && filterType === "select" && (() => {
                             const allVals = getColValues(key);
                             const searchTerm = (filterSearch[key] || "").toLowerCase();
                             const visible = searchTerm ? allVals.filter((v) => v.toLowerCase().includes(searchTerm)) : allVals;
@@ -1080,7 +1230,7 @@ export default function FinanceiroPageSupabase() {
                                           onChange={() => toggleColFilterValue(key, val)}
                                           className="accent-primary rounded"
                                         />
-                                        <span className="truncate">{val}</span>
+                                        <span className="truncate" title={val}>{val}</span>
                                       </label>
                                     </li>
                                   ))}
@@ -1150,7 +1300,7 @@ export default function FinanceiroPageSupabase() {
                 return (
                   <tr key={d.id} className="border-t border-border hover:bg-muted/20 transition">
                     {/* Coluna Lançar */}
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 overflow-hidden">
                       {(() => {
                         const fmtDtHr = (iso: string) => {
                           const dt = new Date(iso);
@@ -1323,9 +1473,9 @@ export default function FinanceiroPageSupabase() {
                         );
                       })()}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">{formatDate(d.data_despesa)}</td>
+                    <td className="px-3 py-2 truncate">{formatDate(d.data_despesa)}</td>
                     {/* Vencimento editável */}
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-3 py-2 overflow-hidden">
                       {editandoVencimento[d.id] !== undefined ? (
                         <div className="flex items-center gap-1">
                           <input
@@ -1353,8 +1503,8 @@ export default function FinanceiroPageSupabase() {
                           </button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1 group">
-                          <span className={d.data_vencimento ? "text-foreground" : "text-muted-foreground"}>
+                        <div className="flex items-center gap-1 group min-w-0">
+                          <span className={`truncate ${d.data_vencimento ? "text-foreground" : "text-muted-foreground"}`}>
                             {d.data_vencimento
                               ? new Date(d.data_vencimento + "T12:00:00").toLocaleDateString("pt-BR")
                               : "—"}
@@ -1363,7 +1513,7 @@ export default function FinanceiroPageSupabase() {
                             <button
                               onClick={() => handleEditarVencimento(d.id, d.data_vencimento)}
                               title="Editar vencimento"
-                              className="p-0.5 rounded opacity-0 group-hover:opacity-100 transition hover:bg-muted text-muted-foreground"
+                              className="p-0.5 rounded opacity-0 group-hover:opacity-100 transition hover:bg-muted text-muted-foreground shrink-0"
                             >
                               <Pencil className="w-3 h-3" />
                             </button>
@@ -1371,8 +1521,8 @@ export default function FinanceiroPageSupabase() {
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">{tecnico?.nome.split(" ")[0] || "-"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-3 py-2 truncate" title={tecnico?.nome || ""}>{tecnico?.nome.split(" ")[0] || "-"}</td>
+                    <td className="px-3 py-2 overflow-hidden">
                       {editandoTipo[d.id] !== undefined ? (
                         <div className="flex items-center gap-1">
                           <select
@@ -1402,20 +1552,20 @@ export default function FinanceiroPageSupabase() {
                           </button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1 group">
-                          <span>{tipo?.nome || "-"}</span>
+                        <div className="flex items-center gap-1 group min-w-0">
+                          <span className="truncate" title={tipo?.nome || ""}>{tipo?.nome || "-"}</span>
                           {d.parcelado && d.numero_parcelas > 1 && (
-                            <span className="ml-1.5 text-xs font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                            <span className="ml-1.5 shrink-0 text-xs font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                               {d.parcela_atual}/{d.numero_parcelas}
                             </span>
                           )}
                           {d.pagamento_tipo === "faturado" && (
-                            <span className="ml-1.5 text-xs font-semibold text-accent bg-accent/10 px-1.5 py-0.5 rounded-full">
+                            <span className="ml-1.5 shrink-0 text-xs font-semibold text-accent bg-accent/10 px-1.5 py-0.5 rounded-full">
                               Faturado
                             </span>
                           )}
                           {d.pagamento_tipo === "boleto" && (
-                            <span className="ml-1.5 text-xs font-semibold text-warning bg-warning/10 px-1.5 py-0.5 rounded-full">
+                            <span className="ml-1.5 shrink-0 text-xs font-semibold text-warning bg-warning/10 px-1.5 py-0.5 rounded-full">
                               Boleto
                             </span>
                           )}
@@ -1423,7 +1573,7 @@ export default function FinanceiroPageSupabase() {
                             <button
                               onClick={() => handleEditarTipo(d.id, d.tipo_despesa_id)}
                               title="Editar tipo"
-                              className="p-0.5 rounded opacity-0 group-hover:opacity-100 transition hover:bg-muted text-muted-foreground"
+                              className="p-0.5 rounded opacity-0 group-hover:opacity-100 transition hover:bg-muted text-muted-foreground shrink-0"
                             >
                               <Pencil className="w-3 h-3" />
                             </button>
@@ -1431,19 +1581,19 @@ export default function FinanceiroPageSupabase() {
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-3 py-2 overflow-hidden">
                       {(() => {
                         const pc = pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"];
                         return pc ? (
-                          <span className={`inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-full ${pc.color}`}>
+                          <span className={`inline-flex items-center max-w-full truncate text-xs font-medium px-2 py-0.5 rounded-full ${pc.color}`}>
                             {pc.label}
                           </span>
-                        ) : <span className="text-muted-foreground">����</span>;
+                        ) : <span className="text-muted-foreground">—</span>;
                       })()}
                     </td>
                     <td className="px-3 py-2 max-w-48 truncate" title={d.observacao || ""}>{d.observacao || "-"}</td>
                     <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{formatCurrency(Number(d.valor))}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-3 py-2 overflow-hidden">
                       {editandoDocumento[d.id] !== undefined ? (
                         <div className="flex items-center gap-1">
                           <select
@@ -1473,9 +1623,9 @@ export default function FinanceiroPageSupabase() {
                           </button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1 group">
+                        <div className="flex items-center gap-1 group min-w-0">
                           {d.documento ? (
-                            <span className="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-muted/60 text-foreground font-medium">
+                            <span className="inline-flex items-center max-w-full truncate text-xs px-2 py-0.5 rounded-full bg-muted/60 text-foreground font-medium" title={d.documento}>
                               {d.documento}
                             </span>
                           ) : (
@@ -1485,7 +1635,7 @@ export default function FinanceiroPageSupabase() {
                             <button
                               onClick={() => handleEditarDocumento(d.id, d.documento)}
                               title="Editar documento"
-                              className="p-0.5 rounded opacity-0 group-hover:opacity-100 transition hover:bg-muted text-muted-foreground"
+                              className="p-0.5 rounded opacity-0 group-hover:opacity-100 transition hover:bg-muted text-muted-foreground shrink-0"
                             >
                               <Pencil className="w-3 h-3" />
                             </button>
@@ -1504,21 +1654,21 @@ export default function FinanceiroPageSupabase() {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-3 py-2 overflow-hidden">
                       {cartaoLabel ? (
-                        <span className="text-xs text-foreground font-mono">{cartaoLabel}</span>
+                        <span className="block truncate text-xs text-foreground font-mono" title={cartaoLabel}>{cartaoLabel}</span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${statusCfg.color}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />
-                        {statusCfg.label}
+                    <td className="px-3 py-2 overflow-hidden">
+                      <span className={`inline-flex items-center gap-1 max-w-full truncate text-xs font-medium px-2 py-0.5 rounded-full ${statusCfg.color}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCfg.dot}`} />
+                        <span className="truncate">{statusCfg.label}</span>
                       </span>
                     </td>
                     {/* Status ERP */}
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-3 py-2 overflow-hidden">
                       {(() => {
                         const erpStatusKey = d.erp_status || "pendente";
                         const erpStatusConfigMap: Record<string, { label: string; color: string; icon: React.ElementType }> = {
@@ -1532,11 +1682,13 @@ export default function FinanceiroPageSupabase() {
                         const isProcessing = erpStatusKey === "processando";
                         const isError = erpStatusKey === "erro";
                         return (
-                          <div className="flex flex-col gap-0.5">
-                            <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${cfg.color}`}>
-                              <Icon className={`w-3 h-3 ${isProcessing ? "animate-spin" : ""}`} />
-                              {cfg.label}
-                              {isError && d.erp_etapa_erro ? ` — E${d.erp_etapa_erro}` : ""}
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <span className={`inline-flex items-center gap-1 max-w-full text-xs font-medium px-2 py-1 rounded-full ${cfg.color}`}>
+                              <Icon className={`w-3 h-3 shrink-0 ${isProcessing ? "animate-spin" : ""}`} />
+                              <span className="truncate">
+                                {cfg.label}
+                                {isError && d.erp_etapa_erro ? ` — E${d.erp_etapa_erro}` : ""}
+                              </span>
                             </span>
                             {isError && d.erp_erro && (
                               <span className="text-[10px] text-destructive/70 max-w-[160px] truncate pl-1" title={d.erp_erro}>
@@ -1548,14 +1700,14 @@ export default function FinanceiroPageSupabase() {
                       })()}
                     </td>
                     {/* Data Envio */}
-                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground text-xs">
+                    <td className="px-3 py-2 truncate text-muted-foreground text-xs">
                       {d.lancado_erp_em
                         ? <span>{new Date(d.lancado_erp_em).toLocaleString("pt-BR")}</span>
                         : <span>—</span>
                       }
                     </td>
                     {/* ERP ID */}
-                    <td className="px-3 py-2 whitespace-nowrap font-mono">
+                    <td className="px-3 py-2 truncate font-mono" title={d.erp_id || ""}>
                       {d.erp_id
                         ? <span className="text-success font-semibold">{d.erp_id}</span>
                         : <span className="text-muted-foreground">—</span>
