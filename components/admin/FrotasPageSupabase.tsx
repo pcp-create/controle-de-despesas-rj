@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { mutate as swrMutate } from "swr";
 import { useFrotas, useDespesas, useControleKm, useProfiles, type Frota, type ControleKm, type Despesa } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
@@ -215,6 +215,41 @@ export default function FrotasPageSupabase() {
   }, [apontamentosDaFrota]);
 
   const totalInconsistencias = inconsistenciasPorId.size;
+
+  // Lacunas de KM: identifica visualmente ONDE está a diferença apontada no
+  // cabeçalho ("Possível falta de apontamento"). Analisa somente apontamentos
+  // finalizados, ordenados pela sequência real do odômetro (KM), e não pela
+  // data/hora — dois apontamentos consecutivos nessa sequência cujo KM final
+  // do anterior seja menor que o KM inicial do próximo indicam KM não
+  // apontado entre eles. Sobreposição de KM (próximo início <= final
+  // anterior) não é lacuna — já é sinalizada como inconsistência acima.
+  // Mapeada pelo id do apontamento com o KM maior (o mais recente na
+  // sequência), pois a listagem é exibida do mais recente para o mais
+  // antigo — a lacuna é renderizada imediatamente após o card desse
+  // apontamento, ficando exatamente entre os dois que a originaram.
+  const lacunasPorApontamentoId = useMemo(() => {
+    const mapa = new Map<string, { kmInicio: number; kmFim: number; lacunaKm: number }>();
+
+    const finalizadosPorKm = apontamentosDaFrota
+      .filter((a) => a.status === "finalizado" && a.km_final != null)
+      .sort((a, b) => a.km_inicial - b.km_inicial);
+
+    for (let i = 0; i < finalizadosPorKm.length - 1; i++) {
+      const anterior = finalizadosPorKm[i];
+      const proximo = finalizadosPorKm[i + 1];
+      const kmFinalAnterior = anterior.km_final as number;
+      const kmInicialProximo = proximo.km_inicial;
+
+      if (kmInicialProximo <= kmFinalAnterior) continue; // sem lacuna ou sobreposição
+
+      const lacunaKm = kmInicialProximo - kmFinalAnterior;
+      if (lacunaKm <= 0) continue;
+
+      mapa.set(proximo.id, { kmInicio: kmFinalAnterior, kmFim: kmInicialProximo, lacunaKm });
+    }
+
+    return mapa;
+  }, [apontamentosDaFrota]);
 
   // Edição inline de apontamento (Gestor/Administrador) — reaproveita editarKm() já usado
   // pela tela Controle de KM. Registra auditoria após salvar, o que o fluxo original não faz.
@@ -1368,8 +1403,10 @@ export default function FrotasPageSupabase() {
                   const usuario = profiles.find((p) => p.id === a.usuario_id);
                   const percorrido = a.km_percorrido ?? (a.km_final != null ? a.km_final - a.km_inicial : null);
                   const problemas = inconsistenciasPorId.get(a.id) ?? [];
+                  const lacuna = lacunasPorApontamentoId.get(a.id);
                   return (
-                    <div key={a.id} className={`border rounded-lg p-3 flex flex-col gap-1.5 text-sm ${
+                    <Fragment key={a.id}>
+                    <div className={`border rounded-lg p-3 flex flex-col gap-1.5 text-sm ${
                       problemas.length > 0 ? "border-destructive/40" : "border-border"
                     }`}>
                       <div className="flex items-center justify-between gap-2">
@@ -1428,6 +1465,25 @@ export default function FrotasPageSupabase() {
                         </div>
                       )}
                     </div>
+
+                    {/* Lacuna de KM: intervalo entre este apontamento e o anterior (mais
+                        antigo, exibido a seguir) que não foi coberto por nenhum registro.
+                        Estrutura preparada para receber futuramente uma ação de "Tratar". */}
+                    {lacuna && (
+                      <div className="flex items-center gap-2 rounded-md border border-dashed border-warning/50 bg-warning/10 px-3 py-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />
+                        <div className="flex flex-col gap-0 min-w-0">
+                          <span className="text-xs font-semibold text-warning leading-tight">
+                            {lacuna.lacunaKm.toLocaleString("pt-BR")} km não apontados
+                          </span>
+                          <span className="text-[11px] text-warning/80 leading-tight">
+                            {lacuna.kmInicio.toLocaleString("pt-BR")} → {lacuna.kmFim.toLocaleString("pt-BR")}
+                          </span>
+                        </div>
+                        {/* TODO: ação "Tratar" — sem tratativa implementada por ora. */}
+                      </div>
+                    )}
+                    </Fragment>
                   );
                 })
               )}
