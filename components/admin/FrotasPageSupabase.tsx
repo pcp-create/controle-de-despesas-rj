@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { mutate as swrMutate } from "swr";
 import { useFrotas, useDespesas, useControleKm, useProfiles, type Frota, type ControleKm, type Despesa } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
@@ -43,6 +43,36 @@ const EMPTY_FORM = {
   observacao: "",
   ativo: true,
 };
+
+// Identifica lacunas de KM entre apontamentos finalizados de UM veículo: ordena
+// pela sequência real do odômetro (KM, não data/hora) e, para cada par
+// consecutivo, marca uma lacuna quando o KM inicial do próximo é maior que o
+// KM final do anterior (sobreposição/KM igual não conta como lacuna — isso é
+// sinalizado separadamente como inconsistência). Função pura reaproveitada
+// tanto no modal de histórico (por veículo) quanto na contagem global do card.
+function calcularLacunasKm(apontamentos: ControleKm[]) {
+  const finalizadosPorKm = apontamentos
+    .filter((a) => a.status === "finalizado" && a.km_final != null)
+    .sort((a, b) => a.km_inicial - b.km_inicial);
+
+  const lacunas: { anteriorId: string; proximoId: string; kmInicio: number; kmFim: number; lacunaKm: number }[] = [];
+
+  for (let i = 0; i < finalizadosPorKm.length - 1; i++) {
+    const anterior = finalizadosPorKm[i];
+    const proximo = finalizadosPorKm[i + 1];
+    const kmFinalAnterior = anterior.km_final as number;
+    const kmInicialProximo = proximo.km_inicial;
+
+    if (kmInicialProximo <= kmFinalAnterior) continue; // sem lacuna ou sobreposição
+
+    const lacunaKm = kmInicialProximo - kmFinalAnterior;
+    if (lacunaKm <= 0) continue;
+
+    lacunas.push({ anteriorId: anterior.id, proximoId: proximo.id, kmInicio: kmFinalAnterior, kmFim: kmInicialProximo, lacunaKm });
+  }
+
+  return lacunas;
+}
 
 export default function FrotasPageSupabase() {
   const { frotas, isLoading, addFrota, updateFrota, deleteFrota, mutate: mutateFrotas } = useFrotas();
@@ -104,6 +134,7 @@ export default function FrotasPageSupabase() {
 
   const [search, setSearch] = useState("");
   const [showAtivos, setShowAtivos] = useState(true);
+  const [filtroPendencias, setFiltroPendencias] = useState<"todos" | "com" | "sem">("todos");
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [editing, setEditing] = useState<Frota | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
@@ -215,6 +246,47 @@ export default function FrotasPageSupabase() {
   }, [apontamentosDaFrota]);
 
   const totalInconsistencias = inconsistenciasPorId.size;
+
+  // Lacunas de KM: identifica visualmente ONDE está a diferença apontada no
+  // cabeçalho ("Possível falta de apontamento"). Analisa somente apontamentos
+  // finalizados, ordenados pela sequência real do odômetro (KM), e não pela
+  // data/hora — dois apontamentos consecutivos nessa sequência cujo KM final
+  // do anterior seja menor que o KM inicial do próximo indicam KM não
+  // apontado entre eles. Sobreposição de KM (próximo início <= final
+  // anterior) não é lacuna — já é sinalizada como inconsistência acima.
+  // Mapeada pelo id do apontamento com o KM maior (o mais recente na
+  // sequência), pois a listagem é exibida do mais recente para o mais
+  // antigo — a lacuna é renderizada imediatamente após o card desse
+  // apontamento, ficando exatamente entre os dois que a originaram.
+  const lacunasPorApontamentoId = useMemo(() => {
+    const mapa = new Map<string, { kmInicio: number; kmFim: number; lacunaKm: number }>();
+    for (const l of calcularLacunasKm(apontamentosDaFrota)) {
+      mapa.set(l.proximoId, { kmInicio: l.kmInicio, kmFim: l.kmFim, lacunaKm: l.lacunaKm });
+    }
+    return mapa;
+  }, [apontamentosDaFrota]);
+
+  // Total de ocorrências pendentes por veículo, exibido no indicador vermelho do
+  // card ("⚠ N"): soma das lacunas de KM entre apontamentos (cada lacuna conta
+  // como 1 ocorrência, independente da quantidade de km) + 1 se houver alerta de
+  // consumo ativo. Calculado sobre TODO o histórico do veículo (sem filtro de
+  // período), assim como os indicadores do modal de histórico.
+  const ocorrenciasPorFrota = useMemo(() => {
+    const apontamentosPorFrotaId = new Map<string, ControleKm[]>();
+    for (const a of apontamentosKm) {
+      const lista = apontamentosPorFrotaId.get(a.frota_id) ?? [];
+      lista.push(a);
+      apontamentosPorFrotaId.set(a.frota_id, lista);
+    }
+
+    const mapa = new Map<string, number>();
+    for (const frota of frotas) {
+      const qtdLacunas = calcularLacunasKm(apontamentosPorFrotaId.get(frota.id) ?? []).length;
+      const qtdAlertaConsumo = frota.alerta_ativo ? 1 : 0;
+      mapa.set(frota.id, qtdLacunas + qtdAlertaConsumo);
+    }
+    return mapa;
+  }, [apontamentosKm, frotas]);
 
   // Edição inline de apontamento (Gestor/Administrador) — reaproveita editarKm() já usado
   // pela tela Controle de KM. Registra auditoria após salvar, o que o fluxo original não faz.
@@ -402,6 +474,9 @@ export default function FrotasPageSupabase() {
 
   const frostasFiltradas = frotas.filter((f) => {
     const matchAtivo = showAtivos ? f.ativo : !f.ativo;
+    const qtdOcorrencias = ocorrenciasPorFrota.get(f.id) ?? 0;
+    const matchPendencias =
+      filtroPendencias === "todos" ? true : filtroPendencias === "com" ? qtdOcorrencias > 0 : qtdOcorrencias === 0;
     const term = search.toLowerCase();
     const matchSearch =
       !term ||
@@ -414,7 +489,7 @@ export default function FrotasPageSupabase() {
       (f.quilometragem?.toString().includes(term) ?? false) ||
       (f.km_media_litro?.toString().includes(term) ?? false) ||
       (f.observacao?.toLowerCase().includes(term) ?? false);
-    return matchAtivo && matchSearch;
+    return matchAtivo && matchPendencias && matchSearch;
   });
 
   const openAdd = () => {
@@ -660,6 +735,28 @@ export default function FrotasPageSupabase() {
             Inativos
           </button>
         </div>
+
+        <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
+          <button
+            onClick={() => setFiltroPendencias("todos")}
+            className={`px-3 py-1 rounded-md text-xs font-medium transition ${filtroPendencias === "todos" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Todos
+          </button>
+          <button
+            onClick={() => setFiltroPendencias("com")}
+            className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs font-medium transition ${filtroPendencias === "com" ? "bg-white text-destructive shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            <AlertTriangle className="w-3 h-3" />
+            Com pendências
+          </button>
+          <button
+            onClick={() => setFiltroPendencias("sem")}
+            className={`px-3 py-1 rounded-md text-xs font-medium transition ${filtroPendencias === "sem" ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Sem pendências
+          </button>
+        </div>
       </div>
 
       {/* Lista */}
@@ -704,6 +801,8 @@ export default function FrotasPageSupabase() {
               ? `${est.mediaUsada.toFixed(1).replace(".", ",")} km/L`
               : "Não calculado";
 
+            const ocorrencias = ocorrenciasPorFrota.get(frota.id) ?? 0;
+
             return (
               <div key={frota.id} className="bg-white rounded-xl border border-border p-4 flex flex-col gap-3 h-full">
 
@@ -718,7 +817,7 @@ export default function FrotasPageSupabase() {
                       <p className="text-xs text-muted-foreground">{frota.marca} {frota.modelo}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center flex-wrap justify-end gap-1.5 shrink-0">
                     {frota.alerta_ativo && (
                       <span
                         className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-warning/10 text-warning"
@@ -733,6 +832,15 @@ export default function FrotasPageSupabase() {
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${frota.ativo ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}>
                       {frota.ativo ? "Ativo" : "Inativo"}
                     </span>
+                    {ocorrencias > 0 && (
+                      <span
+                        title="Pendências identificadas neste veículo"
+                        className="flex items-center gap-0.5 text-xs px-2 py-0.5 rounded-full font-medium bg-destructive/10 text-destructive"
+                      >
+                        <AlertTriangle className="w-3 h-3" />
+                        {ocorrencias}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -1368,8 +1476,10 @@ export default function FrotasPageSupabase() {
                   const usuario = profiles.find((p) => p.id === a.usuario_id);
                   const percorrido = a.km_percorrido ?? (a.km_final != null ? a.km_final - a.km_inicial : null);
                   const problemas = inconsistenciasPorId.get(a.id) ?? [];
+                  const lacuna = lacunasPorApontamentoId.get(a.id);
                   return (
-                    <div key={a.id} className={`border rounded-lg p-3 flex flex-col gap-1.5 text-sm ${
+                    <Fragment key={a.id}>
+                    <div className={`border rounded-lg p-3 flex flex-col gap-1.5 text-sm ${
                       problemas.length > 0 ? "border-destructive/40" : "border-border"
                     }`}>
                       <div className="flex items-center justify-between gap-2">
@@ -1428,6 +1538,25 @@ export default function FrotasPageSupabase() {
                         </div>
                       )}
                     </div>
+
+                    {/* Lacuna de KM: intervalo entre este apontamento e o anterior (mais
+                        antigo, exibido a seguir) que não foi coberto por nenhum registro.
+                        Estrutura preparada para receber futuramente uma ação de "Tratar". */}
+                    {lacuna && (
+                      <div className="flex items-center gap-2 rounded-md border border-dashed border-warning/50 bg-warning/10 px-3 py-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0" />
+                        <div className="flex flex-col gap-0 min-w-0">
+                          <span className="text-xs font-semibold text-warning leading-tight">
+                            {lacuna.lacunaKm.toLocaleString("pt-BR")} km não apontados
+                          </span>
+                          <span className="text-[11px] text-warning/80 leading-tight">
+                            {lacuna.kmInicio.toLocaleString("pt-BR")} → {lacuna.kmFim.toLocaleString("pt-BR")}
+                          </span>
+                        </div>
+                        {/* TODO: ação "Tratar" — sem tratativa implementada por ora. */}
+                      </div>
+                    )}
+                    </Fragment>
                   );
                 })
               )}
