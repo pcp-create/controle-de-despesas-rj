@@ -40,9 +40,11 @@ export function usePendenciasCount(): PendenciasCount {
         ).size
       : 0;
 
-    // Financeiro/ERP: aprovadas ainda não lançadas, excluindo "Não enviado" (Rascunho), dinheiro e canceladas
-    // E com Data de Vencimento dentro do mês atual (comparação por string "YYYY-MM" para
-    // evitar que conversões de timezone excluam incorretamente o 1º/último dia do mês).
+    // Financeiro/ERP: aprovadas ainda não lançadas, excluindo "Não enviado" (Rascunho), dinheiro,
+    // faturado, boleto (estes dois últimos não passam por lançamento — aparecem na lista apenas
+    // para conferência) e canceladas. E com Data de Vencimento dentro do mês atual (comparação
+    // por string "YYYY-MM" para evitar que conversões de timezone excluam incorretamente o
+    // 1º/último dia do mês).
     const mesAtualStr = (() => {
       const hoje = new Date();
       const mes = String(hoje.getMonth() + 1).padStart(2, "0");
@@ -54,6 +56,8 @@ export function usePendenciasCount(): PendenciasCount {
             d.status_aprovacao === "AprovadoGestor" &&
             !d.lancado_sistema &&
             d.pagamento_tipo !== "dinheiro" &&
+            d.pagamento_tipo !== "faturado" &&
+            d.pagamento_tipo !== "boleto" &&
             d.status_erp !== "Rascunho" &&
             d.status_erp != null &&
             !d.lancamento_cancelado &&
