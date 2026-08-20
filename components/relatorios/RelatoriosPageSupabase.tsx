@@ -109,6 +109,10 @@ export default function RelatoriosPageSupabase() {
   const { currentUser } = useAppStore();
   const isFuncionario = currentUser?.perfil === "funcionario";
   const isGestorOuAdmin = currentUser?.perfil === "administrador" || currentUser?.perfil === "gestor";
+  // Aba "Centro de Custo": visão gerencial liberada também para o Financeiro
+  // (acesso de leitura e exportação), sem estender as demais seções restritas
+  // a gestor/admin (ex.: KM por funcionário).
+  const podeVerCentroCusto = isGestorOuAdmin || currentUser?.perfil === "financeiro";
 
   // Funcionário: busca só as próprias via hook (respeita RLS)
   // Gestor/Admin: busca via API route server-side com service key (ignora RLS, vê tudo)
@@ -1502,7 +1506,7 @@ export default function RelatoriosPageSupabase() {
   // Despesas integradas ao ERP, dentro do período/empresa selecionados, já
   // enriquecidas com área do funcionário, centro de custo e dados do erp_payload.
   const despesasIntegradas = useMemo(() => {
-    if (!isGestorOuAdmin) return [];
+    if (!podeVerCentroCusto) return [];
     return despesas
       .filter((d) => d.erp_status === "integrado")
       .filter((d) => {
@@ -1535,7 +1539,7 @@ export default function RelatoriosPageSupabase() {
           dataRef: getDataRefCC(d),
         };
       });
-  }, [despesas, isGestorOuAdmin, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, campoPeriodoCC, filtroEmpresaCC, profilesPorId, centrosCustoPorChave, tiposDespesa]);
+  }, [despesas, podeVerCentroCusto, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, campoPeriodoCC, filtroEmpresaCC, profilesPorId, centrosCustoPorChave, tiposDespesa]);
 
   const ccCardsTotais = useMemo(() => {
     const valorTotal = despesasIntegradas.reduce((s, item) => s + Number(item.despesa.valor), 0);
@@ -1688,7 +1692,7 @@ export default function RelatoriosPageSupabase() {
               <Gauge className="w-3.5 h-3.5" />
               Controle de KM
             </button>
-            {isGestorOuAdmin && (
+            {podeVerCentroCusto && (
               <button
                 onClick={() => setAbaRelatorio("centrocusto")}
                 className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium transition whitespace-nowrap ${abaRelatorio === "centrocusto" ? "bg-primary text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
@@ -2539,7 +2543,7 @@ export default function RelatoriosPageSupabase() {
       </>
       )}
 
-      {abaRelatorio === "centrocusto" && isGestorOuAdmin && (
+      {abaRelatorio === "centrocusto" && podeVerCentroCusto && (
       <>
       {/* Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
