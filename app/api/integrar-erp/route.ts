@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { motivoBloqueioEnvioERP } from "@/lib/helpers";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -445,6 +446,17 @@ export async function POST(request: Request) {
       { error: despesaErr?.message || "Despesa não encontrada." },
       { status: 404 }
     );
+  }
+
+  // Regra de negócio: Faturado, Boleto e documento Nota Fiscal (NF) podem ser
+  // lançados normalmente, mas NUNCA enviados ao ERP M8. Bloqueia aqui também
+  // (e não só na interface) para impedir envio via chamada direta a esta API.
+  const motivoBloqueio = motivoBloqueioEnvioERP({
+    pagamento_tipo: despesa.pagamento_tipo,
+    documento: despesa.documento,
+  });
+  if (motivoBloqueio) {
+    return NextResponse.json({ error: motivoBloqueio, etapa: null }, { status: 422 });
   }
 
   if (despesa.erp_status === "processando") {

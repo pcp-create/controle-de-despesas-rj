@@ -576,7 +576,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           {pagamentoTipo === "boleto" && (
             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
               <Info className="w-3.5 h-3.5 shrink-0" />
-              Pagamento via boleto. A despesa será registrada no Financeiro / ERP para conferência.
+              Pagamento via boleto. A despesa passa pelo lançamento normal no Financeiro, mas não é enviada ao ERP M8.
             </p>
           )}
         </div>

@@ -6,6 +6,7 @@ import {
   formatCurrency,
   formatDate,
   pagamentoTipoConfig,
+  motivoBloqueioEnvioERP,
 } from "@/lib/helpers";
 import {
   CreditCard,
@@ -446,7 +447,7 @@ export default function DespesaExpandida({
             label="Enviado ao ERP M8"
             sub={d.lancado_erp
               ? `${fmt(d.lancado_erp_em)}${erpBy?.nome ? ` — ${erpBy.nome}` : ""}${d.erp_id ? `\nID: ${d.erp_id}` : ""}`
-              : d.pagamento_tipo === "faturado" ? "N/A (Faturado)" : "Pendente"}
+              : motivoBloqueioEnvioERP({ pagamento_tipo: d.pagamento_tipo, documento: d.documento }) ? "N/A" : "Pendente"}
           />
           <StatusChip
             ok={d.reembolso_processado}
