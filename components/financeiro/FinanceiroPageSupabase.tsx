@@ -6,7 +6,7 @@ import type { FiltrosFinanceiro } from "@/lib/supabase/use-filtros-persistidos";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
-import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
+import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig, motivoBloqueioEnvioERP } from "@/lib/helpers";
 import { salvarPrefsTabelaFinanceiro, carregarPrefsTabelaFinanceiro } from "@/lib/financeiro-table-prefs";
 import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle, AlertTriangle, Clock, Send, CheckCircle, RefreshCw, Ban } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -58,8 +58,6 @@ export default function FinanceiroPageSupabase() {
   const [motivoCancelamento, setMotivoCancelamento] = useState("");
   const [cancelando, setCancelando] = useState(false);
   const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
-  const [confirmNFERP, setConfirmNFERP] = useState(false); // alerta NF antes de enviar ao ERP (modal lançar)
-  const [confirmNFERPDireto, setConfirmNFERPDireto] = useState<string | null>(null); // id da despesa aguardando confirmação NF no envio direto
   const [lancando, setLancando] = useState<Record<string, boolean>>({});
   const [erroLancar, setErroLancar] = useState<string | null>(null);
   const [enviandoERP, setEnviandoERP] = useState<Record<string, boolean>>({});
@@ -259,7 +257,6 @@ export default function FinanceiroPageSupabase() {
     setLancando((prev) => ({ ...prev, [id]: false }));
     setEnviandoERP((prev) => ({ ...prev, [id]: false }));
     setConfirmLancar(null);
-    setConfirmNFERP(false);
   };
 
   // Reenvio ao ERP quando já lançado no sistema mas com erro
@@ -406,7 +403,7 @@ export default function FinanceiroPageSupabase() {
         case "valor":       cellVal = formatCurrency(Number(d.valor)); break;
         case "status":      cellVal = statusGeralConfig[sg]?.label || "—"; break;
         case "documento":   cellVal = d.documento || "—"; break;
-        case "lancado":     cellVal = d.lancado_sistema ? "Lançado" : (d.pagamento_tipo === "faturado" || d.pagamento_tipo === "boleto") ? "N/A (Conferência)" : "Pendente"; break;
+        case "lancado":     cellVal = d.lancado_sistema ? "Lançado" : "Pendente"; break;
         case "cartao": {
           const c = d.cartao;
           cellVal = c ? `${c.banco} — ${c.bandeira} — **** ${c.ultimos_digitos}` : "—";
@@ -527,7 +524,7 @@ export default function FinanceiroPageSupabase() {
           case "valor":       cellVal = formatCurrency(Number(d.valor)); break;
           case "status":      cellVal = statusGeralConfig[sg]?.label || "—"; break;
           case "documento":   cellVal = d.documento || "—"; break;
-          case "lancado":     cellVal = d.lancado_sistema ? "Lançado" : (d.pagamento_tipo === "faturado" || d.pagamento_tipo === "boleto") ? "N/A (Conferência)" : "Pendente"; break;
+          case "lancado":     cellVal = d.lancado_sistema ? "Lançado" : "Pendente"; break;
           case "cartao": {
             const c = d.cartao;
             cellVal = c ? `${c.banco} — ${c.bandeira} — **** ${c.ultimos_digitos}` : "—";
@@ -559,7 +556,7 @@ export default function FinanceiroPageSupabase() {
           case "valor":       cellVal = formatCurrency(Number(d.valor)); break;
           case "status":      cellVal = statusGeralConfig[sg]?.label || "—"; break;
           case "documento":   cellVal = d.documento || "—"; break;
-          case "lancado":     cellVal = d.lancado_sistema ? "Lançado" : (d.pagamento_tipo === "faturado" || d.pagamento_tipo === "boleto") ? "N/A (Conferência)" : "Pendente"; break;
+          case "lancado":     cellVal = d.lancado_sistema ? "Lançado" : "Pendente"; break;
           case "cartao": {
             const c = d.cartao;
             cellVal = c ? `${c.banco} — ${c.bandeira} — **** ${c.ultimos_digitos}` : "—";
@@ -578,11 +575,10 @@ export default function FinanceiroPageSupabase() {
   // (período + busca + filtros por coluna), garantindo que os cards sempre reflitam
   // exatamente os filtros aplicados, incluindo combinações de múltiplos filtros.
   const despesasNaoCanceladas = despesasComFiltrosColuna.filter((d) => !d.lancamento_cancelado);
-  // Faturado/Boleto não passam por lançamento — aparecem na lista apenas para
-  // conferência ("N/A — Conferência"), então não contam como "Pendente".
-  const qtdErpPendente  = despesasNaoCanceladas.filter(
-    (d) => !d.lancado_sistema && d.pagamento_tipo !== "faturado" && d.pagamento_tipo !== "boleto"
-  ).length;
+  // Faturado, Boleto e Nota Fiscal (NF) participam normalmente do lançamento —
+  // só o envio ao ERP M8 é bloqueado para eles — então contam como "Pendente"
+  // igual às demais formas de pagamento/documento.
+  const qtdErpPendente  = despesasNaoCanceladas.filter((d) => !d.lancado_sistema).length;
   const qtdErpLancado   = despesasNaoCanceladas.filter((d) => d.lancado_sistema && d.erp_status !== "integrado").length;
   const qtdErpIntegrado = despesasNaoCanceladas.filter((d) => d.erp_status === "integrado").length;
   const qtdCancelado    = despesasComFiltrosColuna.filter((d) => d.lancamento_cancelado).length;
@@ -594,9 +590,7 @@ export default function FinanceiroPageSupabase() {
     // Filtro lançamento — 4 status
     if (filtroLancamento === "cancelado")  list = list.filter((d) => d.lancamento_cancelado);
     else list = list.filter((d) => !d.lancamento_cancelado); // oculta cancelados nos demais filtros
-    if (filtroLancamento === "pendente")  list = list.filter(
-      (d) => !d.lancado_sistema && d.pagamento_tipo !== "faturado" && d.pagamento_tipo !== "boleto"
-    );
+    if (filtroLancamento === "pendente")  list = list.filter((d) => !d.lancado_sistema);
     if (filtroLancamento === "lancado")   list = list.filter((d) => d.lancado_sistema && d.erp_status !== "integrado");
     if (filtroLancamento === "integrado") list = list.filter((d) => d.erp_status === "integrado");
 
@@ -1365,13 +1359,6 @@ export default function FinanceiroPageSupabase() {
                                   );
                                 })()}
                               </div>
-                            ) : aprovado && (d.pagamento_tipo === "faturado" || d.pagamento_tipo === "boleto") ? (
-                              <span
-                                title={`Pagamento ${d.pagamento_tipo === "faturado" ? "Faturado" : "Boleto"} não requer lançamento — despesa listada apenas para conferência`}
-                                className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/60 px-1.5 py-0.5 rounded-full bg-muted/20 border border-border italic"
-                              >
-                                N/A ({d.pagamento_tipo === "faturado" ? "Faturado" : "Boleto"}) — Conferência
-                              </span>
                             ) : aprovado ? (
                               <div className="flex items-center gap-1">
                                 <button
@@ -1428,6 +1415,10 @@ export default function FinanceiroPageSupabase() {
                                 );
                               }
 
+                              // Regra centralizada: Faturado, Boleto e documento Nota Fiscal (NF)
+                              // nunca podem ser enviados ao ERP M8 (só o lançamento interno se aplica).
+                              const motivoBloqueio = motivoBloqueioEnvioERP({ pagamento_tipo: d.pagamento_tipo, documento: d.documento });
+
                               if (erpStatus === "erro") {
                                 return (
                                   <div className="flex flex-col gap-0.5">
@@ -1442,7 +1433,7 @@ export default function FinanceiroPageSupabase() {
                                         {d.erp_erro}
                                       </span>
                                     )}
-                                    {d.pagamento_tipo !== "faturado" && d.pagamento_tipo !== "boleto" && (
+                                    {!motivoBloqueio && (
                                       <button
                                         type="button"
                                         disabled={enviandoERP[d.id]}
@@ -1457,21 +1448,20 @@ export default function FinanceiroPageSupabase() {
                                 );
                               }
 
-                              // pendente: faturado/boleto não vão ao ERP M8 — exibe aviso informativo
-                              if (d.pagamento_tipo === "faturado" || d.pagamento_tipo === "boleto") return (
+                              // pendente: envio ao ERP bloqueado para esta forma de pagamento/documento
+                              if (motivoBloqueio) return (
                                 <span
-                                  title={`Pagamento ${d.pagamento_tipo === "faturado" ? "Faturado" : "Boleto"} não é enviado ao ERP M8`}
+                                  title={motivoBloqueio}
                                   className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/60 px-1.5 py-0.5 italic"
                                 >
-                                  ERP N/A ({d.pagamento_tipo === "faturado" ? "Faturado" : "Boleto"})
+                                  Enviar ao ERP indisponível
                                 </span>
                               );
-                              const isNFDireto = /^nf$/i.test((d.documento || "").trim()) || /nota\s*fiscal/i.test((d.documento || "").trim());
                               return (
                                 <button
                                   type="button"
                                   disabled={enviandoERP[d.id]}
-                                  onClick={() => isNFDireto ? setConfirmNFERPDireto(d.id) : handleEnviarERP(d.id)}
+                                  onClick={() => handleEnviarERP(d.id)}
                                   className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-muted text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/10 transition disabled:opacity-50"
                                 >
                                   {enviandoERP[d.id]
@@ -1742,48 +1732,12 @@ export default function FinanceiroPageSupabase() {
       </div>
     </div>
 
-    {/* ���─ Modal de lançamento ── */}
-    {/* ── Modal confirmação NF — envio direto ao ERP ── */}
-    {confirmNFERPDireto && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-        <div className="bg-background rounded-2xl border border-border shadow-xl w-full max-w-sm p-6 flex flex-col gap-5">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center">
-              <AlertCircle className="w-5 h-5 text-warning" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-foreground">Atenção — Nota Fiscal (NF)</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Esta despesa foi lançada com documento <strong>Nota Fiscal (NF)</strong>. Antes de enviar ao ERP M8, verifique se esta nota fiscal ainda não foi lançada para evitar duplicidade no sistema.
-              </p>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setConfirmNFERPDireto(null)}
-              className="px-4 py-2 rounded-lg border border-input bg-background text-sm font-medium text-muted-foreground hover:bg-muted transition"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={() => { const id = confirmNFERPDireto; setConfirmNFERPDireto(null); handleEnviarERP(id); }}
-              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition"
-            >
-              NF verificada — Enviar ao ERP
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
-
+    {/* ── Modal de lançamento ── */}
     {confirmLancar && (() => {
       const despLancar = despesasFiltradas.find((d) => d.id === confirmLancar);
-      const isSomenteConferencia = despLancar?.pagamento_tipo === "faturado" || despLancar?.pagamento_tipo === "boleto";
-      const labelPagamentoConferencia = despLancar?.pagamento_tipo === "faturado" ? "Faturado" : "Boleto";
-      const isNF = /^nf$/i.test((despLancar?.documento || "").trim()) ||
-                   /nota\s*fiscal/i.test((despLancar?.documento || "").trim());
+      const motivoBloqueioLancar = despLancar
+        ? motivoBloqueioEnvioERP({ pagamento_tipo: despLancar.pagamento_tipo, documento: despLancar.documento })
+        : null;
 
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
@@ -1801,16 +1755,6 @@ export default function FinanceiroPageSupabase() {
                 </p>
               </div>
             </div>
-
-            {/* Alerta NF */}
-            {isNF && !confirmNFERP && (
-              <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-warning/40 bg-warning/8">
-                <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-                <p className="text-xs text-warning leading-relaxed">
-                  Esta despesa foi lançada com documento <strong>Nota Fiscal (NF)</strong>. Antes de enviar ao ERP M8, verifique se esta nota fiscal ainda não foi lançada para evitar duplicidade no sistema.
-                </p>
-              </div>
-            )}
 
             {/* Opções */}
             <div className="flex flex-col gap-3">
@@ -1835,40 +1779,21 @@ export default function FinanceiroPageSupabase() {
               </button>
 
               {/* Lançar e enviar ao ERP */}
-              {isSomenteConferencia ? (
+              {motivoBloqueioLancar ? (
                 <div className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-muted bg-muted/20 opacity-60 cursor-not-allowed">
                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center mt-0.5">
                     <SendHorizonal className="w-4 h-4 text-muted-foreground" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-muted-foreground">Lançar e Enviar ao ERP (M8)</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Indisponivel para despesas com pagamento <strong>{labelPagamentoConferencia}</strong>. O envio ao ERP M8 nao se aplica a este tipo de pagamento.
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{motivoBloqueioLancar}</p>
                   </div>
                 </div>
-              ) : isNF && !confirmNFERP ? (
-                <button
-                  type="button"
-                  disabled={!!lancando[confirmLancar as string]}
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmNFERP(true); }}
-                  className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-warning/40 bg-warning/5 hover:bg-warning/10 transition text-left disabled:opacity-50"
-                >
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-warning/15 flex items-center justify-center mt-0.5">
-                    <SendHorizonal className="w-4 h-4 text-warning" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Lançar e Enviar ao ERP (M8)</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Clique para confirmar que verificou a nota fiscal e prosseguir com o envio.
-                    </p>
-                  </div>
-                </button>
               ) : (
                 <button
                   type="button"
                   disabled={!!lancando[confirmLancar as string]}
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (confirmLancar) { setConfirmNFERP(false); handleLancarEnviarERP(confirmLancar); } }}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (confirmLancar) handleLancarEnviarERP(confirmLancar); }}
                   className="w-full flex items-start gap-3 px-4 py-3 rounded-xl border border-accent/30 bg-accent/5 hover:bg-accent/10 transition text-left disabled:opacity-50"
                 >
                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center mt-0.5">
@@ -1876,12 +1801,10 @@ export default function FinanceiroPageSupabase() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-foreground">
-                      {lancando[confirmLancar as string] ? "Processando..." : isNF ? "Confirmar — Enviar ao ERP (NF verificada)" : "Lançar e Enviar ao ERP (M8)"}
+                      {lancando[confirmLancar as string] ? "Processando..." : "Lançar e Enviar ao ERP (M8)"}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {isNF
-                        ? "Nota fiscal verificada. Lanca no sistema e integra ao ERP M8."
-                        : "Lanca no sistema e integra imediatamente ao ERP M8. As 6 etapas de integração são executadas automaticamente."}
+                      Lança no sistema e integra imediatamente ao ERP M8. As 6 etapas de integração são executadas automaticamente.
                     </p>
                   </div>
                 </button>
@@ -1892,7 +1815,7 @@ export default function FinanceiroPageSupabase() {
             <div className="flex justify-end">
               <button
                 type="button"
-                onClick={() => { setConfirmLancar(null); setConfirmNFERP(false); }}
+                onClick={() => setConfirmLancar(null)}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-input bg-background text-sm font-medium text-muted-foreground hover:bg-muted transition"
               >
                 <X className="w-4 h-4" /> Cancelar

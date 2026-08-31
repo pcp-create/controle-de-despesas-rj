@@ -104,3 +104,41 @@ export const pagamentoTipoConfig: Record<string, { label: string; color: string 
   faturado: { label: "Faturado",         color: "bg-accent/10 text-accent border border-accent/20" },
   boleto:   { label: "Boleto",           color: "bg-warning/10 text-warning border border-warning/20" },
 };
+
+// ─── Regras de bloqueio de envio ao ERP (Financeiro / ERP) ──────────────────
+// Faturado, Boleto e documento "Nota Fiscal (NF)" participam normalmente do
+// lançamento interno (ação "Lançar"), mas NUNCA podem ser enviados ao ERP M8.
+// Esta é a ÚNICA fonte de verdade para essa regra — tabela, cards, filtros,
+// ações em lote/individuais e a API de integração (/api/integrar-erp) devem
+// sempre consultar estas funções, nunca reimplementar a condição.
+export function isDocumentoNotaFiscal(documento: string | null | undefined): boolean {
+  const valor = (documento || "").trim();
+  if (!valor) return false;
+  return /^nf$/i.test(valor) || /nota\s*fiscal/i.test(valor);
+}
+
+export function isPagamentoBloqueadoParaERP(pagamentoTipo: string | null | undefined): boolean {
+  return pagamentoTipo === "faturado" || pagamentoTipo === "boleto";
+}
+
+type DespesaParaBloqueioERP = {
+  pagamento_tipo?: string | null;
+  documento?: string | null;
+};
+
+// Retorna o motivo do bloqueio (para exibir ao usuário) ou null se o envio ao
+// ERP é permitido para esta despesa.
+export function motivoBloqueioEnvioERP(despesa: DespesaParaBloqueioERP): string | null {
+  if (isPagamentoBloqueadoParaERP(despesa.pagamento_tipo)) {
+    const label = despesa.pagamento_tipo === "faturado" ? "Faturado" : "Boleto";
+    return `Envio ao ERP não disponível para esta forma de pagamento (${label}).`;
+  }
+  if (isDocumentoNotaFiscal(despesa.documento)) {
+    return "Envio ao ERP não disponível para esta forma de pagamento/documento (Nota Fiscal — NF).";
+  }
+  return null;
+}
+
+export function podeEnviarAoERP(despesa: DespesaParaBloqueioERP): boolean {
+  return motivoBloqueioEnvioERP(despesa) === null;
+}
