@@ -7,7 +7,7 @@ import type { FiltrosRelatorio } from "@/lib/supabase/use-filtros-persistidos";
 import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas, useTiposDespesaCentroCustoTodos, ControleKm } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { formatCurrency } from "@/lib/helpers";
-import { calcularEstimativaVeiculo } from "@/lib/consumo-frota";
+import { calcularEstimativaVeiculo, calcularConsumoRealVeiculo } from "@/lib/consumo-frota";
 import { EMPRESAS_ERP, extrairEmpresaErpId, extrairEmpresaErpNome, extrairComplementoErp } from "@/lib/erp-payload";
 import {
   BarChart,
@@ -1412,6 +1412,18 @@ export default function RelatoriosPageSupabase() {
             usuarioId: p.id,
           });
 
+          // Consumo real apontado deste veículo/funcionário no período — kmApontado
+          // ÷ litrosAbastecidos, sem saldo/estimativa/consumo de referência.
+          // Fonte única: calcularConsumoRealVeiculo (mesma regra usada em Frotas).
+          const consumoReal = calcularConsumoRealVeiculo({
+            frotaId,
+            periodoIni,
+            periodoFim,
+            todasDespesas: despesas,
+            todosRegistrosKm: registrosKm,
+            usuarioId: p.id,
+          });
+
           return {
             frotaId,
             placa,
@@ -1426,6 +1438,8 @@ export default function RelatoriosPageSupabase() {
             mediaUsada:            est.mediaUsada,
             dadosSuficientes:      est.dadosSuficientes,
             estimativa:            est.estimativa,
+            consumoRealKmL:        consumoReal.consumoRealKmL,
+            litrosConsumoReal:     consumoReal.litrosAbastecidos,
           };
         }).filter((v) => v.kmEstimado > 0 || v.kmApontadoVeiculo > 0 || v.litrosPeriodo > 0);
 
@@ -1438,14 +1452,14 @@ export default function RelatoriosPageSupabase() {
         const totalCombDisp       = veiculos.reduce((s, v) => s + v.combustivelDisponivel, 0);
         const totalSaldoFinal     = veiculos.reduce((s, v) => s + v.saldoFinal, 0);
         const pct = kmEstimado > 0 ? Math.round((kmApontado / kmEstimado) * 100) : null;
-        // Média ponderada do km/L real (ou de referência, quando sem histórico) de
-        // cada veículo, ponderada pelos litros abastecidos por veículo no período —
-        // evita a distorção de somar litros ainda não consumidos de vários veículos
-        // e dividi-los pelo km total apontado (fórmula "ingênua" do período).
-        const veiculosComMedia = veiculos.filter((v) => v.litrosPeriodo > 0 && v.mediaUsada > 0);
-        const litrosPonderacao = veiculosComMedia.reduce((s, v) => s + v.litrosPeriodo, 0);
+        // Consumo real apontado do funcionário = média ponderada do consumo real
+        // (kmApontado / litrosAbastecidos) de cada veículo utilizado, ponderada
+        // pelos litros abastecidos por veículo no período — nunca usa consumo de
+        // referência nem saldo estimado. Fonte por veículo: calcularConsumoRealVeiculo.
+        const veiculosComConsumoReal = veiculos.filter((v) => v.consumoRealKmL !== null && v.litrosConsumoReal > 0);
+        const litrosPonderacao = veiculosComConsumoReal.reduce((s, v) => s + v.litrosConsumoReal, 0);
         const kmLReal = litrosPonderacao > 0
-          ? Math.round((veiculosComMedia.reduce((s, v) => s + v.mediaUsada * v.litrosPeriodo, 0) / litrosPonderacao) * 100) / 100
+          ? Math.round((veiculosComConsumoReal.reduce((s, v) => s + (v.consumoRealKmL as number) * v.litrosConsumoReal, 0) / litrosPonderacao) * 100) / 100
           : null;
         const semAbastecimento = kmApontado > 0 && totalLitros === 0 && totalSaldoInicial === 0;
         const semViagem = kmApontado === 0 && totalLitros > 0;
@@ -1483,6 +1497,7 @@ export default function RelatoriosPageSupabase() {
           diferenca: number; pctVeiculo: number | null;
           saldoFinal: number; mediaUsada: number;
           dadosSuficientes: boolean; estimativa: boolean;
+          consumoRealKmL: number | null; litrosConsumoReal: number;
         }[];
       }[];
   }, [profiles, registrosKm, despesas, frotas, isGestorOuAdmin, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);

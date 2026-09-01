@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, Fragment } from "react";
 import { mutate as swrMutate } from "swr";
 import { useFrotas, useDespesas, useControleKm, useProfiles, type Frota, type ControleKm, type Despesa } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
-import { calcularEstimativaVeiculo, persistirAlertasConsumo, isAbastecimento, type EstimativaVeiculoResult } from "@/lib/consumo-frota";
+import { calcularEstimativaVeiculo, calcularConsumoRealVeiculo, persistirAlertasConsumo, isAbastecimento, type EstimativaVeiculoResult } from "@/lib/consumo-frota";
 import { formatCurrency } from "@/lib/helpers";
 import { registrarAuditoria } from "@/lib/supabase/audit";
 import {
@@ -129,6 +129,27 @@ export default function FrotasPageSupabase() {
         todosRegistrosKm: apontamentosKm,
       });
       mapa.set(frota.id, est);
+    }
+    return mapa;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frotas, despesas, apontamentosKm, periodoEfetivo?.ini, periodoEfetivo?.fim]);
+
+  // Consumo real apontado por frota — kmApontado / litrosAbastecidos, usando o
+  // mesmo período (ou todo o histórico) nos dois lados, sem saldo/estimativa/
+  // consumo de referência. Fonte única: calcularConsumoRealVeiculo.
+  const consumoRealPorFrota = useMemo(() => {
+    const mapa = new Map<string, ReturnType<typeof calcularConsumoRealVeiculo>>();
+    for (const frota of frotas) {
+      mapa.set(
+        frota.id,
+        calcularConsumoRealVeiculo({
+          frotaId: frota.id,
+          periodoIni: periodoEfetivo?.ini ?? "",
+          periodoFim: periodoEfetivo?.fim ?? "",
+          todasDespesas: despesas,
+          todosRegistrosKm: apontamentosKm,
+        }),
+      );
     }
     return mapa;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -798,14 +819,11 @@ export default function FrotasPageSupabase() {
               : pct > 115 ? "text-warning"
               : "text-destructive";
 
-            // Consumo real apontado = média histórica calculada por janelas entre
-            // abastecimentos consecutivos (calcularMediaHistorica, via
-            // est.mediaKmLReal) — NUNCA a divisão ingênua kmApontado/litrosPeriodo,
-            // que mistura combustível ainda não consumido (abastecido perto do fim
-            // do período) e ignora o saldo que já estava no tanque no início dele.
-            const kmLRealApontado = est && est.mediaKmLReal !== null
-              ? est.mediaKmLReal
-              : null;
+            // Consumo real apontado = kmApontado / litrosAbastecidos no mesmo
+            // período (ou todo o histórico) — sem saldo, sem estimativa, sem
+            // consumo de referência. Fonte única: calcularConsumoRealVeiculo.
+            const consumoReal = consumoRealPorFrota.get(frota.id);
+            const kmLRealApontado = consumoReal?.consumoRealKmL ?? null;
 
             // Consumo de referência = valor cadastrado manualmente na frota,
             // exibido separadamente do consumo real para não misturar as duas fontes.
@@ -1008,9 +1026,9 @@ export default function FrotasPageSupabase() {
                       </span>
                       <span className="font-medium text-foreground">{consumoReferenciaLabel}</span>
                     </div>
-                    {/* Col 2 — média histórica real, calculada por janelas entre abastecimentos consecutivos */}
+                    {/* Col 2 — km apontado ÷ litros abastecidos no mesmo período, sem saldo/estimativa */}
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-muted-foreground" title="Média km/L calculada a partir dos intervalos entre abastecimentos consecutivos e dos km apontados dentro de cada janela — não é afetada por combustível ainda não consumido">
+                      <span className="text-muted-foreground" title="KM apontado ÷ litros abastecidos, considerando o mesmo veículo e o mesmo período (ou todo o histórico, quando sem filtro de período)">
                         Consumo real apontado
                       </span>
                       <span className={`font-medium ${kmLRealApontado === null ? "text-muted-foreground italic" : "text-foreground"}`}>
@@ -1753,7 +1771,7 @@ export default function FrotasPageSupabase() {
         </div>
       )}
 
-      {/* ── Modal Histórico de Abastecimentos (somente leitura) ── */}
+      {/* ── Modal Histórico de Abastecimentos (somente leitura) ���─ */}
       {modalAbastecimentosFrota && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-background rounded-2xl shadow-xl border border-border w-full max-w-lg max-h-[85vh] flex flex-col">
