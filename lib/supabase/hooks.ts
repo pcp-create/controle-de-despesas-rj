@@ -122,6 +122,10 @@ export interface Frota {
   quilometragem: number;
   km_atualizado_em: string | null;
   km_media_litro: number | null;
+  // Saldo de combustível (litros) no tanque no momento do 1º abastecimento
+  // cadastrado no sistema. Ponto de partida do cálculo de saldo estimado,
+  // evitando assumir tanque vazio antes do primeiro registro.
+  saldo_inicial_combustivel_litros: number;
   observacao: string | null;
   ativo: boolean;
   // Alertas de consumo persistidos

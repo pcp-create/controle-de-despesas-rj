@@ -245,6 +245,9 @@ export interface EstimativaVeiculoOpts {
   periodoFim: string;
   /** Média km/L cadastrada na frota (fallback quando não há histórico) */
   frotaKmMedia: number | null;
+  /** Saldo de combustível (litros) cadastrado na frota, existente antes do
+   *  primeiro abastecimento registrado no sistema (seed do saldo inicial) */
+  frotaSaldoInicialCombustivel?: number | null;
   /** Todos os registros de despesa (qualquer funcionário, qualquer frota) */
   todasDespesas: Despesa[];
   /** Todos os registros de controle_km (qualquer funcionário, qualquer frota) */
@@ -337,6 +340,11 @@ export function calcularMediaHistorica(
 /**
  * Calcula o saldo estimado de combustível no início de um período,
  * percorrendo cronologicamente o histórico de abastecimentos e apontamentos anteriores.
+ *
+ * `saldoInicialCadastrado` é o saldo de combustível (litros) que já estava no
+ * tanque antes do primeiro abastecimento registrado no sistema (campo
+ * cadastrado em Frotas). É usado como ponto de partida do cálculo em vez de
+ * assumir tanque vazio (0) antes do primeiro registro histórico.
  */
 export function calcularSaldoInicial(opts: {
   frotaId: string;
@@ -344,17 +352,18 @@ export function calcularSaldoInicial(opts: {
   mediaUsada: number;
   todasDespesas: Despesa[];
   todosRegistrosKm: ControleKm[];
+  saldoInicialCadastrado?: number;
 }): number {
-  const { frotaId, periodoIni, mediaUsada, todasDespesas, todosRegistrosKm } = opts;
+  const { frotaId, periodoIni, mediaUsada, todasDespesas, todosRegistrosKm, saldoInicialCadastrado = 0 } = opts;
   if (!mediaUsada || mediaUsada <= 0) return 0;
 
   const abastAnt = todasDespesas
     .filter((d) => d.frota_id === frotaId && isCombustivelComLitros(d) && (d.data_despesa ?? "") < periodoIni)
     .sort((a, b) => (a.data_despesa ?? "").localeCompare(b.data_despesa ?? ""));
 
-  if (abastAnt.length === 0) return 0;
+  if (abastAnt.length === 0) return Math.max(0, saldoInicialCadastrado);
 
-  let saldo = 0;
+  let saldo = Math.max(0, saldoInicialCadastrado);
   for (let i = 0; i < abastAnt.length; i++) {
     const abat = abastAnt[i];
     saldo += abat.litros_abastecidos as number;
@@ -388,7 +397,7 @@ export function calcularSaldoInicial(opts: {
 export function calcularEstimativaVeiculo(opts: EstimativaVeiculoOpts): EstimativaVeiculoResult {
   const {
     frotaId, periodoIni, periodoFim,
-    frotaKmMedia, todasDespesas, todosRegistrosKm, usuarioId,
+    frotaKmMedia, frotaSaldoInicialCombustivel, todasDespesas, todosRegistrosKm, usuarioId,
   } = opts;
 
   // 1. Média histórica real (todos os abastecimentos do veículo, sem filtro de funcionário)
@@ -399,7 +408,10 @@ export function calcularEstimativaVeiculo(opts: EstimativaVeiculoOpts): Estimati
 
   // 2. Saldo inicial estimado
   const saldoInicial = mediaUsada > 0
-    ? calcularSaldoInicial({ frotaId, periodoIni, mediaUsada, todasDespesas, todosRegistrosKm })
+    ? calcularSaldoInicial({
+        frotaId, periodoIni, mediaUsada, todasDespesas, todosRegistrosKm,
+        saldoInicialCadastrado: frotaSaldoInicialCombustivel ?? 0,
+      })
     : 0;
 
   // 3. Litros abastecidos dentro do período
@@ -453,6 +465,96 @@ export function calcularEstimativaVeiculo(opts: EstimativaVeiculoOpts): Estimati
     percentual,
     saldoFinal: Math.round(saldoFinal * 10) / 10,
     temAlerta,
+  };
+}
+
+export interface ConsumoRealVeiculoOpts {
+  frotaId: string;
+  /** YYYY-MM-DD — início do período. Vazio/undefined = todo o histórico. */
+  periodoIni?: string;
+  /** YYYY-MM-DD — fim do período (inclusive). Vazio/undefined = todo o histórico. */
+  periodoFim?: string;
+  todasDespesas: Despesa[];
+  todosRegistrosKm: ControleKm[];
+  /** Quando definido, filtra apontamentos somente deste usuário (uso em Relatórios por funcionário) */
+  usuarioId?: string | null;
+}
+
+export interface ConsumoRealVeiculoResult {
+  frotaId: string;
+  /** Soma de km percorridos nos apontamentos finalizados no período (ou todo o histórico) */
+  kmApontado: number;
+  /** Soma de litros abastecidos no período (ou todo o histórico) */
+  litrosAbastecidos: number;
+  /** kmApontado / litrosAbastecidos — null quando não há dados suficientes */
+  consumoRealKmL: number | null;
+  /** true quando kmApontado > 0 E litrosAbastecidos > 0 */
+  possuiHistoricoSuficiente: boolean;
+}
+
+/**
+ * FONTE ÚNICA DE CÁLCULO do "Consumo real apontado".
+ *
+ * Regra: consumoRealKmL = kmApontado / litrosAbastecidos, usando exatamente o
+ * mesmo veículo e o mesmo período (ou todo o histórico, quando o filtro de
+ * período estiver desativado) nos dois lados da divisão.
+ *
+ * Propositalmente NÃO utiliza:
+ *  - saldo inicial/final estimado;
+ *  - km estimado;
+ *  - consumo de referência (km_media_litro cadastrado);
+ *  - janelas entre abastecimentos consecutivos.
+ *
+ * Essas informações continuam existindo apenas em calcularEstimativaVeiculo,
+ * para fins de estimativa/autonomia — nunca aqui.
+ *
+ * "Sem histórico suficiente" (possuiHistoricoSuficiente = false) ocorre
+ * somente quando kmApontado = 0 OU litrosAbastecidos = 0.
+ */
+export function calcularConsumoRealVeiculo(opts: ConsumoRealVeiculoOpts): ConsumoRealVeiculoResult {
+  const {
+    frotaId,
+    periodoIni = "",
+    periodoFim = "",
+    todasDespesas,
+    todosRegistrosKm,
+    usuarioId,
+  } = opts;
+
+  const temFiltroPeriodo = !!periodoIni && !!periodoFim;
+
+  const litrosAbastecidos = todasDespesas
+    .filter((d) => {
+      if (d.frota_id !== frotaId) return false;
+      if (!isCombustivelComLitros(d)) return false;
+      if (!temFiltroPeriodo) return true;
+      const ds = d.data_despesa ?? "";
+      return ds >= periodoIni && ds <= periodoFim;
+    })
+    .reduce((s, d) => s + (d.litros_abastecidos as number), 0);
+
+  const kmApontado = todosRegistrosKm
+    .filter((r) => {
+      if (r.frota_id !== frotaId) return false;
+      if ((r.status as string) !== "finalizado") return false;
+      if (usuarioId && r.usuario_id !== usuarioId) return false;
+      if (!temFiltroPeriodo) return true;
+      const ds = (r.data_fim ?? r.data_inicio ?? "").slice(0, 10);
+      return ds >= periodoIni && ds <= periodoFim;
+    })
+    .reduce((s, r) => s + kmPercorridoApontamento(r), 0);
+
+  const possuiHistoricoSuficiente = kmApontado > 0 && litrosAbastecidos > 0;
+  const consumoRealKmL = possuiHistoricoSuficiente
+    ? Math.round((kmApontado / litrosAbastecidos) * 100) / 100
+    : null;
+
+  return {
+    frotaId,
+    kmApontado: Math.round(kmApontado),
+    litrosAbastecidos: Math.round(litrosAbastecidos * 10) / 10,
+    consumoRealKmL,
+    possuiHistoricoSuficiente,
   };
 }
 

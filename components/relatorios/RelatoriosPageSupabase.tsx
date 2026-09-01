@@ -7,7 +7,7 @@ import type { FiltrosRelatorio } from "@/lib/supabase/use-filtros-persistidos";
 import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas, useTiposDespesaCentroCustoTodos, ControleKm } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { formatCurrency } from "@/lib/helpers";
-import { calcularEstimativaVeiculo } from "@/lib/consumo-frota";
+import { calcularEstimativaVeiculo, calcularConsumoRealVeiculo } from "@/lib/consumo-frota";
 import { EMPRESAS_ERP, extrairEmpresaErpId, extrairEmpresaErpNome, extrairComplementoErp } from "@/lib/erp-payload";
 import {
   BarChart,
@@ -1399,12 +1399,26 @@ export default function RelatoriosPageSupabase() {
           const frota = frotas.find((f) => f.id === frotaId);
           const placa = (frota as any)?.placa ?? frotaId;
           const frotaKmMedia = (frota as any)?.km_media_litro ?? null;
+          const frotaSaldoInicialCombustivel = (frota as any)?.saldo_inicial_combustivel_litros ?? 0;
 
           const est = calcularEstimativaVeiculo({
             frotaId,
             periodoIni,
             periodoFim,
             frotaKmMedia,
+            frotaSaldoInicialCombustivel,
+            todasDespesas: despesas,
+            todosRegistrosKm: registrosKm,
+            usuarioId: p.id,
+          });
+
+          // Consumo real apontado deste veículo/funcionário no período — kmApontado
+          // ÷ litrosAbastecidos, sem saldo/estimativa/consumo de referência.
+          // Fonte única: calcularConsumoRealVeiculo (mesma regra usada em Frotas).
+          const consumoReal = calcularConsumoRealVeiculo({
+            frotaId,
+            periodoIni,
+            periodoFim,
             todasDespesas: despesas,
             todosRegistrosKm: registrosKm,
             usuarioId: p.id,
@@ -1424,6 +1438,8 @@ export default function RelatoriosPageSupabase() {
             mediaUsada:            est.mediaUsada,
             dadosSuficientes:      est.dadosSuficientes,
             estimativa:            est.estimativa,
+            consumoRealKmL:        consumoReal.consumoRealKmL,
+            litrosConsumoReal:     consumoReal.litrosAbastecidos,
           };
         }).filter((v) => v.kmEstimado > 0 || v.kmApontadoVeiculo > 0 || v.litrosPeriodo > 0);
 
@@ -1436,7 +1452,15 @@ export default function RelatoriosPageSupabase() {
         const totalCombDisp       = veiculos.reduce((s, v) => s + v.combustivelDisponivel, 0);
         const totalSaldoFinal     = veiculos.reduce((s, v) => s + v.saldoFinal, 0);
         const pct = kmEstimado > 0 ? Math.round((kmApontado / kmEstimado) * 100) : null;
-        const kmLReal = totalLitros > 0 ? Math.round((kmApontado / totalLitros) * 100) / 100 : null;
+        // Consumo real apontado do funcionário = média ponderada do consumo real
+        // (kmApontado / litrosAbastecidos) de cada veículo utilizado, ponderada
+        // pelos litros abastecidos por veículo no período — nunca usa consumo de
+        // referência nem saldo estimado. Fonte por veículo: calcularConsumoRealVeiculo.
+        const veiculosComConsumoReal = veiculos.filter((v) => v.consumoRealKmL !== null && v.litrosConsumoReal > 0);
+        const litrosPonderacao = veiculosComConsumoReal.reduce((s, v) => s + v.litrosConsumoReal, 0);
+        const kmLReal = litrosPonderacao > 0
+          ? Math.round((veiculosComConsumoReal.reduce((s, v) => s + (v.consumoRealKmL as number) * v.litrosConsumoReal, 0) / litrosPonderacao) * 100) / 100
+          : null;
         const semAbastecimento = kmApontado > 0 && totalLitros === 0 && totalSaldoInicial === 0;
         const semViagem = kmApontado === 0 && totalLitros > 0;
 
@@ -1473,6 +1497,7 @@ export default function RelatoriosPageSupabase() {
           diferenca: number; pctVeiculo: number | null;
           saldoFinal: number; mediaUsada: number;
           dadosSuficientes: boolean; estimativa: boolean;
+          consumoRealKmL: number | null; litrosConsumoReal: number;
         }[];
       }[];
   }, [profiles, registrosKm, despesas, frotas, isGestorOuAdmin, modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal]);
@@ -2515,9 +2540,12 @@ export default function RelatoriosPageSupabase() {
                       </div>
                     )}
                     {item.kmLReal !== null && (
-                      <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border bg-muted/30 border-border">
+                      <div
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border bg-muted/30 border-border"
+                        title="Média do consumo (real histórico ou de referência) de cada veículo utilizado, ponderada pelos litros abastecidos por veículo no período"
+                      >
                         <span className="font-mono font-bold text-foreground">{item.kmLReal.toFixed(2)} km/L</span>
-                        <span className="text-muted-foreground">real apontado</span>
+                        <span className="text-muted-foreground">média ponderada por veículo</span>
                       </div>
                     )}
                   </div>
