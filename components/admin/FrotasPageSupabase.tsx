@@ -40,6 +40,7 @@ const EMPTY_FORM = {
   tipo: "Carro",
   quilometragem: "0",
   km_media_litro: "",
+  saldo_inicial_combustivel_litros: "0",
   observacao: "",
   ativo: true,
 };
@@ -123,6 +124,7 @@ export default function FrotasPageSupabase() {
         periodoIni: periodoEfetivo?.ini ?? "",
         periodoFim: periodoEfetivo?.fim ?? "",
         frotaKmMedia: (frota as any).km_media_litro ?? null,
+        frotaSaldoInicialCombustivel: (frota as any).saldo_inicial_combustivel_litros ?? 0,
         todasDespesas: despesas,
         todosRegistrosKm: apontamentosKm,
       });
@@ -510,6 +512,7 @@ export default function FrotasPageSupabase() {
       tipo: frota.tipo || "Carro",
       quilometragem: frota.quilometragem.toString(),
       km_media_litro: frota.km_media_litro?.toString() || "",
+      saldo_inicial_combustivel_litros: (frota.saldo_inicial_combustivel_litros ?? 0).toString(),
       observacao: frota.observacao || "",
       ativo: frota.ativo,
     });
@@ -536,6 +539,8 @@ export default function FrotasPageSupabase() {
       errs.ano = "Ano inválido";
     if (form.quilometragem && (isNaN(Number(form.quilometragem)) || Number(form.quilometragem) < 0))
       errs.quilometragem = "KM inválido";
+    if (form.saldo_inicial_combustivel_litros && (isNaN(Number(form.saldo_inicial_combustivel_litros)) || Number(form.saldo_inicial_combustivel_litros) < 0))
+      errs.saldo_inicial_combustivel_litros = "Saldo inicial inválido";
     return errs;
   };
 
@@ -556,6 +561,7 @@ export default function FrotasPageSupabase() {
       tipo: form.tipo || null,
       quilometragem: Number(form.quilometragem) || 0,
       km_media_litro: form.km_media_litro ? Number(form.km_media_litro) : null,
+      saldo_inicial_combustivel_litros: form.saldo_inicial_combustivel_litros ? Number(form.saldo_inicial_combustivel_litros) : 0,
       observacao: form.observacao.trim() || null,
       ativo: form.ativo,
     };
@@ -792,14 +798,20 @@ export default function FrotasPageSupabase() {
               : pct > 115 ? "text-warning"
               : "text-destructive";
 
-            // km/L real apontado = kmApontado / litrosPeriodo — mesma fórmula do relatório
-            const kmLRealApontado = est && est.litrosPeriodo > 0 && est.kmApontado > 0
-              ? Math.round((est.kmApontado / est.litrosPeriodo) * 100) / 100
+            // Consumo real apontado = média histórica calculada por janelas entre
+            // abastecimentos consecutivos (calcularMediaHistorica, via
+            // est.mediaKmLReal) — NUNCA a divisão ingênua kmApontado/litrosPeriodo,
+            // que mistura combustível ainda não consumido (abastecido perto do fim
+            // do período) e ignora o saldo que já estava no tanque no início dele.
+            const kmLRealApontado = est && est.mediaKmLReal !== null
+              ? est.mediaKmLReal
               : null;
 
-            const consumoMedioLabel = est && est.mediaUsada > 0
-              ? `${est.mediaUsada.toFixed(1).replace(".", ",")} km/L`
-              : "Não calculado";
+            // Consumo de referência = valor cadastrado manualmente na frota,
+            // exibido separadamente do consumo real para não misturar as duas fontes.
+            const consumoReferenciaLabel = frota.km_media_litro && frota.km_media_litro > 0
+              ? `${frota.km_media_litro.toFixed(1).replace(".", ",")} km/L`
+              : "Não cadastrado";
 
             const ocorrencias = ocorrenciasPorFrota.get(frota.id) ?? 0;
 
@@ -989,18 +1001,22 @@ export default function FrotasPageSupabase() {
                         {hasActivity && est ? `${est.saldoFinal.toLocaleString("pt-BR", { minimumFractionDigits: 1 })} L` : "—"}
                       </span>
                     </div>
-                    {/* Col 1 */}
+                    {/* Col 1 — valor cadastrado manualmente, nunca misturado com o real */}
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-muted-foreground">Consumo médio estimado</span>
-                      <span className="font-medium text-foreground">{consumoMedioLabel}</span>
+                      <span className="text-muted-foreground" title="Valor cadastrado manualmente no veículo, usado apenas como estimativa quando não há histórico suficiente">
+                        Consumo de referência
+                      </span>
+                      <span className="font-medium text-foreground">{consumoReferenciaLabel}</span>
                     </div>
-                    {/* Col 2 */}
+                    {/* Col 2 — média histórica real, calculada por janelas entre abastecimentos consecutivos */}
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-muted-foreground">Estimado km/L (Real apontado)</span>
+                      <span className="text-muted-foreground" title="Média km/L calculada a partir dos intervalos entre abastecimentos consecutivos e dos km apontados dentro de cada janela — não é afetada por combustível ainda não consumido">
+                        Consumo real apontado
+                      </span>
                       <span className={`font-medium ${kmLRealApontado === null ? "text-muted-foreground italic" : "text-foreground"}`}>
                         {kmLRealApontado !== null
                           ? `${kmLRealApontado.toFixed(1).replace(".", ",")} km/L`
-                          : "—"}
+                          : "Sem histórico suficiente"}
                       </span>
                     </div>
                   </div>
@@ -1237,6 +1253,22 @@ export default function FrotasPageSupabase() {
                     className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                   <span className="text-xs text-muted-foreground">Usado para calcular estimativa de KM a partir do combustível abastecido.</span>
+                </div>
+
+                {/* Saldo inicial de combustível */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium text-foreground">Saldo inicial de combustível (L)</label>
+                  <input
+                    type="number"
+                    value={form.saldo_inicial_combustivel_litros}
+                    onChange={(e) => setForm({ ...form, saldo_inicial_combustivel_litros: e.target.value })}
+                    placeholder="0"
+                    min={0}
+                    step={0.1}
+                    className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  {errors.saldo_inicial_combustivel_litros && <span className="text-xs text-destructive">{errors.saldo_inicial_combustivel_litros}</span>}
+                  <span className="text-xs text-muted-foreground">Litros no tanque antes do primeiro abastecimento cadastrado no sistema. Evita subestimar o saldo disponível nos primeiros períodos.</span>
                 </div>
               </div>
 

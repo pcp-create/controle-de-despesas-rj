@@ -1399,12 +1399,14 @@ export default function RelatoriosPageSupabase() {
           const frota = frotas.find((f) => f.id === frotaId);
           const placa = (frota as any)?.placa ?? frotaId;
           const frotaKmMedia = (frota as any)?.km_media_litro ?? null;
+          const frotaSaldoInicialCombustivel = (frota as any)?.saldo_inicial_combustivel_litros ?? 0;
 
           const est = calcularEstimativaVeiculo({
             frotaId,
             periodoIni,
             periodoFim,
             frotaKmMedia,
+            frotaSaldoInicialCombustivel,
             todasDespesas: despesas,
             todosRegistrosKm: registrosKm,
             usuarioId: p.id,
@@ -1436,7 +1438,15 @@ export default function RelatoriosPageSupabase() {
         const totalCombDisp       = veiculos.reduce((s, v) => s + v.combustivelDisponivel, 0);
         const totalSaldoFinal     = veiculos.reduce((s, v) => s + v.saldoFinal, 0);
         const pct = kmEstimado > 0 ? Math.round((kmApontado / kmEstimado) * 100) : null;
-        const kmLReal = totalLitros > 0 ? Math.round((kmApontado / totalLitros) * 100) / 100 : null;
+        // Média ponderada do km/L real (ou de referência, quando sem histórico) de
+        // cada veículo, ponderada pelos litros abastecidos por veículo no período —
+        // evita a distorção de somar litros ainda não consumidos de vários veículos
+        // e dividi-los pelo km total apontado (fórmula "ingênua" do período).
+        const veiculosComMedia = veiculos.filter((v) => v.litrosPeriodo > 0 && v.mediaUsada > 0);
+        const litrosPonderacao = veiculosComMedia.reduce((s, v) => s + v.litrosPeriodo, 0);
+        const kmLReal = litrosPonderacao > 0
+          ? Math.round((veiculosComMedia.reduce((s, v) => s + v.mediaUsada * v.litrosPeriodo, 0) / litrosPonderacao) * 100) / 100
+          : null;
         const semAbastecimento = kmApontado > 0 && totalLitros === 0 && totalSaldoInicial === 0;
         const semViagem = kmApontado === 0 && totalLitros > 0;
 
@@ -2515,9 +2525,12 @@ export default function RelatoriosPageSupabase() {
                       </div>
                     )}
                     {item.kmLReal !== null && (
-                      <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border bg-muted/30 border-border">
+                      <div
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-medium border bg-muted/30 border-border"
+                        title="Média do consumo (real histórico ou de referência) de cada veículo utilizado, ponderada pelos litros abastecidos por veículo no período"
+                      >
                         <span className="font-mono font-bold text-foreground">{item.kmLReal.toFixed(2)} km/L</span>
-                        <span className="text-muted-foreground">real apontado</span>
+                        <span className="text-muted-foreground">média ponderada por veículo</span>
                       </div>
                     )}
                   </div>

@@ -245,6 +245,9 @@ export interface EstimativaVeiculoOpts {
   periodoFim: string;
   /** Média km/L cadastrada na frota (fallback quando não há histórico) */
   frotaKmMedia: number | null;
+  /** Saldo de combustível (litros) cadastrado na frota, existente antes do
+   *  primeiro abastecimento registrado no sistema (seed do saldo inicial) */
+  frotaSaldoInicialCombustivel?: number | null;
   /** Todos os registros de despesa (qualquer funcionário, qualquer frota) */
   todasDespesas: Despesa[];
   /** Todos os registros de controle_km (qualquer funcionário, qualquer frota) */
@@ -337,6 +340,11 @@ export function calcularMediaHistorica(
 /**
  * Calcula o saldo estimado de combustível no início de um período,
  * percorrendo cronologicamente o histórico de abastecimentos e apontamentos anteriores.
+ *
+ * `saldoInicialCadastrado` é o saldo de combustível (litros) que já estava no
+ * tanque antes do primeiro abastecimento registrado no sistema (campo
+ * cadastrado em Frotas). É usado como ponto de partida do cálculo em vez de
+ * assumir tanque vazio (0) antes do primeiro registro histórico.
  */
 export function calcularSaldoInicial(opts: {
   frotaId: string;
@@ -344,17 +352,18 @@ export function calcularSaldoInicial(opts: {
   mediaUsada: number;
   todasDespesas: Despesa[];
   todosRegistrosKm: ControleKm[];
+  saldoInicialCadastrado?: number;
 }): number {
-  const { frotaId, periodoIni, mediaUsada, todasDespesas, todosRegistrosKm } = opts;
+  const { frotaId, periodoIni, mediaUsada, todasDespesas, todosRegistrosKm, saldoInicialCadastrado = 0 } = opts;
   if (!mediaUsada || mediaUsada <= 0) return 0;
 
   const abastAnt = todasDespesas
     .filter((d) => d.frota_id === frotaId && isCombustivelComLitros(d) && (d.data_despesa ?? "") < periodoIni)
     .sort((a, b) => (a.data_despesa ?? "").localeCompare(b.data_despesa ?? ""));
 
-  if (abastAnt.length === 0) return 0;
+  if (abastAnt.length === 0) return Math.max(0, saldoInicialCadastrado);
 
-  let saldo = 0;
+  let saldo = Math.max(0, saldoInicialCadastrado);
   for (let i = 0; i < abastAnt.length; i++) {
     const abat = abastAnt[i];
     saldo += abat.litros_abastecidos as number;
@@ -388,7 +397,7 @@ export function calcularSaldoInicial(opts: {
 export function calcularEstimativaVeiculo(opts: EstimativaVeiculoOpts): EstimativaVeiculoResult {
   const {
     frotaId, periodoIni, periodoFim,
-    frotaKmMedia, todasDespesas, todosRegistrosKm, usuarioId,
+    frotaKmMedia, frotaSaldoInicialCombustivel, todasDespesas, todosRegistrosKm, usuarioId,
   } = opts;
 
   // 1. Média histórica real (todos os abastecimentos do veículo, sem filtro de funcionário)
@@ -399,7 +408,10 @@ export function calcularEstimativaVeiculo(opts: EstimativaVeiculoOpts): Estimati
 
   // 2. Saldo inicial estimado
   const saldoInicial = mediaUsada > 0
-    ? calcularSaldoInicial({ frotaId, periodoIni, mediaUsada, todasDespesas, todosRegistrosKm })
+    ? calcularSaldoInicial({
+        frotaId, periodoIni, mediaUsada, todasDespesas, todosRegistrosKm,
+        saldoInicialCadastrado: frotaSaldoInicialCombustivel ?? 0,
+      })
     : 0;
 
   // 3. Litros abastecidos dentro do período
