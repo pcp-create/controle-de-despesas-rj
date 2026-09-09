@@ -25,6 +25,7 @@ export interface DespesaElegivel {
   cliente: string;
   numero_os: string;
   tecnico_id: string;
+  tecnico_nome?: string | null;
 }
 
 export interface ElegibilidadeResultado {
@@ -90,6 +91,14 @@ export function extractStoragePathFromSignedUrl(signedUrl: string, bucket: strin
 /** Nome de arquivo seguro para uso dentro do ZIP (remove separadores de path e caracteres de controle). */
 export function sanitizeZipEntryName(name: string): string {
   return name.replace(/[/\\]/g, "_").replace(/[\u0000-\u001f]/g, "").trim() || "arquivo";
+}
+
+/** Primeiro nome do funcionário, sem acentos/espaços, para compor o nome do arquivo no ZIP. */
+export function getPrimeiroNome(nomeCompleto: string | null | undefined): string {
+  if (!nomeCompleto) return "funcionario";
+  const primeiro = nomeCompleto.trim().split(/\s+/)[0] ?? "";
+  const semAcentos = primeiro.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return sanitizeZipEntryName(semAcentos) || "funcionario";
 }
 
 export function formatBytes(bytes: number): string {

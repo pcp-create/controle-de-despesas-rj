@@ -5,6 +5,7 @@ import {
   avaliarElegibilidade,
   extractStoragePathFromSignedUrl,
   sanitizeZipEntryName,
+  getPrimeiroNome,
   mapWithConcurrency,
   BUCKET_COMPROVANTES,
   BUCKET_BACKUPS,
@@ -79,16 +80,22 @@ export async function POST(request: NextRequest) {
     // desatualizada entre a busca e a geração do backup).
     const { data: despesasData, error: despesasError } = await supabase
       .from("despesas")
-      .select("id, data_despesa, status_erp, status_aprovacao, comprovante_url, comprovante_nome, comprovante_arquivado_em, valor, cliente, numero_os, tecnico_id")
+      .select(
+        "id, data_despesa, status_erp, status_aprovacao, comprovante_url, comprovante_nome, comprovante_arquivado_em, valor, cliente, numero_os, tecnico_id, tecnico:tecnico_id(nome)",
+      )
       .in("id", despesaIds);
 
     if (despesasError) {
       return NextResponse.json({ error: `Erro ao revalidar despesas: ${despesasError.message}` }, { status: 500 });
     }
 
-    const elegiveis = (despesasData ?? []).filter(
-      (d) => avaliarElegibilidade(d as DespesaElegivel, corteData).elegivel,
-    ) as DespesaElegivel[];
+    const elegiveis = (despesasData ?? [])
+      .map((d) => {
+        const tecnico = (d as unknown as { tecnico: { nome: string } | { nome: string }[] | null }).tecnico;
+        const tecnico_nome = Array.isArray(tecnico) ? tecnico[0]?.nome ?? null : tecnico?.nome ?? null;
+        return { ...d, tecnico_nome } as DespesaElegivel;
+      })
+      .filter((d) => avaliarElegibilidade(d, corteData).elegivel);
 
     if (elegiveis.length === 0) {
       return NextResponse.json({ error: "Nenhuma das despesas selecionadas está mais elegível." }, { status: 400 });
@@ -162,10 +169,11 @@ export async function POST(request: NextRequest) {
       totalBytes += buffer.byteLength;
 
       const baseName = sanitizeZipEntryName(despesa.comprovante_nome || path.split("/").pop() || `${despesa.id}.bin`);
-      let entryName = `${despesa.data_despesa}_${despesa.numero_os}_${baseName}`;
+      const primeiroNome = getPrimeiroNome(despesa.tecnico_nome);
+      let entryName = `${despesa.data_despesa}_${primeiroNome}_${despesa.numero_os}_${baseName}`;
       let suffix = 1;
       while (usedNames.has(entryName)) {
-        entryName = `${despesa.data_despesa}_${despesa.numero_os}_${suffix}_${baseName}`;
+        entryName = `${despesa.data_despesa}_${primeiroNome}_${despesa.numero_os}_${suffix}_${baseName}`;
         suffix += 1;
       }
       usedNames.add(entryName);
