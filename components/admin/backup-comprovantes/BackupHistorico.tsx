@@ -14,7 +14,7 @@ interface BackupHistoricoItem {
   corteData: string;
   totalItens: number;
   totalBytesEstimado: number;
-  status: "gerado" | "excluido" | "expirado";
+  status: "gerado" | "excluido" | "expirado" | "cancelado";
   excluidoEm: string | null;
   criadorNome: string;
   excluidorNome: string | null;
@@ -32,12 +32,14 @@ const STATUS_BADGE: Record<string, string> = {
   gerado: "bg-amber-100 text-amber-700",
   excluido: "bg-emerald-100 text-emerald-700",
   expirado: "bg-slate-100 text-slate-600",
+  cancelado: "bg-slate-100 text-slate-600",
 };
 
 const STATUS_LABEL: Record<string, string> = {
   gerado: "Aguardando exclusão",
   excluido: "Originais excluídos",
   expirado: "Expirado",
+  cancelado: "Backup cancelado",
 };
 
 export default function BackupHistorico() {
@@ -118,10 +120,10 @@ export default function BackupHistorico() {
                         <ShieldAlert className="size-3.5" />
                       </button>
                     )}
-                    {item.status === "excluido" && item.downloadUrls.length > 0 && (
+                    {(item.status === "excluido" || item.status === "gerado") && item.downloadUrls.length > 0 && (
                       <button
                         onClick={() => setModalRemoverZipId(item.id)}
-                        title="Remover ZIP e liberar armazenamento"
+                        title={item.status === "excluido" ? "Remover ZIP e liberar armazenamento" : "Cancelar backup e remover ZIP"}
                         className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-destructive/30 text-destructive text-xs font-medium hover:bg-destructive/10 transition"
                       >
                         <Trash2 className="size-3.5" />
@@ -151,6 +153,7 @@ export default function BackupHistorico() {
         <RemoverZipModal
           backupId={modalRemoverZipItem.id}
           totalItens={modalRemoverZipItem.totalItens}
+          originaisJaExcluidos={modalRemoverZipItem.status === "excluido"}
           onClose={() => setModalRemoverZipId(null)}
           onRemovido={() => {
             setModalRemoverZipId(null);

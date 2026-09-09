@@ -7,11 +7,12 @@ import { extractApiErrorMessage } from "@/lib/backup-comprovantes";
 interface Props {
   backupId: string;
   totalItens: number;
+  originaisJaExcluidos: boolean;
   onClose: () => void;
   onRemovido: () => void;
 }
 
-export default function RemoverZipModal({ backupId, totalItens, onClose, onRemovido }: Props) {
+export default function RemoverZipModal({ backupId, totalItens, originaisJaExcluidos, onClose, onRemovido }: Props) {
   const [senha, setSenha] = useState("");
   const [confirmText, setConfirmText] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -46,7 +47,7 @@ export default function RemoverZipModal({ backupId, totalItens, onClose, onRemov
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 text-destructive">
             <Trash2 className="size-5 shrink-0" />
-            <h2 className="text-base font-bold">Remover arquivo ZIP do backup</h2>
+            <h2 className="text-base font-bold">{originaisJaExcluidos ? "Remover arquivo ZIP do backup" : "Cancelar backup e remover ZIP"}</h2>
           </div>
           <button onClick={onClose} aria-label="Fechar" className="text-muted-foreground hover:text-foreground">
             <X className="size-4" />
@@ -54,10 +55,21 @@ export default function RemoverZipModal({ backupId, totalItens, onClose, onRemov
         </div>
 
         <p className="text-sm text-muted-foreground">
-          Este ZIP é a <span className="font-semibold text-foreground">única cópia restante</span> de{" "}
-          <span className="font-semibold text-foreground">{totalItens} comprovante(s)</span>, já que os originais
-          foram excluídos do armazenamento. Só remova depois de ter baixado e guardado este arquivo em outro lugar
-          seguro (ex.: HD externo, outro serviço de armazenamento). Esta ação não pode ser desfeita.
+          {originaisJaExcluidos ? (
+            <>
+              Este ZIP é a <span className="font-semibold text-foreground">única cópia restante</span> de{" "}
+              <span className="font-semibold text-foreground">{totalItens} comprovante(s)</span>, já que os originais
+              foram excluídos do armazenamento. Só remova depois de ter baixado e guardado este arquivo em outro
+              lugar seguro (ex.: HD externo, outro serviço de armazenamento). Esta ação não pode ser desfeita.
+            </>
+          ) : (
+            <>
+              Os <span className="font-semibold text-foreground">{totalItens} comprovante(s) originais</span> ainda
+              estão intactos no armazenamento — esta ação apenas cancela este backup e remove o arquivo ZIP gerado,
+              sem excluir nenhum comprovante. Esta ação não pode ser desfeita, mas você pode gerar um novo backup
+              depois se precisar.
+            </>
+          )}
         </p>
 
         <div className="flex flex-col gap-1.5">
@@ -109,7 +121,7 @@ export default function RemoverZipModal({ backupId, totalItens, onClose, onRemov
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 transition"
           >
             {enviando ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-            Remover ZIP definitivamente
+            {originaisJaExcluidos ? "Remover ZIP definitivamente" : "Cancelar backup e remover ZIP"}
           </button>
         </div>
       </div>
