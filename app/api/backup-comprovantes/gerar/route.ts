@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     const { data: despesasData, error: despesasError } = await supabase
       .from("despesas")
       .select(
-        "id, data_despesa, status_erp, status_aprovacao, comprovante_url, comprovante_nome, comprovante_arquivado_em, valor, cliente, numero_os, tecnico_id, tecnico:tecnico_id(nome)",
+        "id, data_despesa, status_erp, status_aprovacao, comprovante_url, comprovante_nome, comprovante_arquivado_em, valor, cliente, numero_os, tecnico_id, lancado_sistema, tecnico:tecnico_id(nome)",
       )
       .in("id", despesaIds);
 
