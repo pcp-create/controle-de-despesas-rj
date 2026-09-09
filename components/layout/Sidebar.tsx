@@ -21,6 +21,7 @@ import {
   Car,
   Banknote,
   Gauge,
+  Archive,
 } from "lucide-react";
 import type { PendenciasCount } from "@/hooks/usePendenciasCount";
 
@@ -76,6 +77,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { key: "usuarios",  label: "Usuários",  icon: <Users         className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
       { key: "auditoria", label: "Auditoria", icon: <ClipboardList className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
+      { key: "backup-comprovantes", label: "Backup de Comprovantes", icon: <Archive className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
     ],
   },
 ];

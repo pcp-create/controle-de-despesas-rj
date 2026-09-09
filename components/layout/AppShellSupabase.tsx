@@ -20,6 +20,7 @@ import TiposDespesaPageSupabase from "@/components/admin/TiposDespesaPageSupabas
 import FrotasPageSupabase from "@/components/admin/FrotasPageSupabase";
 import AlterarSenhaModalSupabase from "@/components/auth/AlterarSenhaModalSupabase";
 import AuditoriaPageSupabase from "@/components/admin/AuditoriaPageSupabase";
+import BackupComprovantesPageSupabase from "@/components/admin/BackupComprovantesPageSupabase";
 import ReembolsoPage from "@/components/reembolso/ReembolsoPage";
 import ControleKmPage from "@/components/km/ControleKmPage";
 import { useAppStore } from "@/lib/store";
@@ -39,6 +40,7 @@ export type PageKey =
   | "frotas"
   | "controle-km"
   | "auditoria"
+  | "backup-comprovantes"
   | "alterar-senha";
 
 export type NavigateFn = (page: PageKey, statusFilter?: string) => void;
@@ -98,6 +100,7 @@ export default function AppShellSupabase() {
       case "controle-km": return <ControleKmPage />;
       case "todas-despesas": return <TodasDespesasPage initialStatus={initialStatusFilter} />;
       case "auditoria": return <AuditoriaPageSupabase />;
+      case "backup-comprovantes": return <BackupComprovantesPageSupabase />;
       default: return <DashboardSupabase onNavigate={navigate} />;
     }
   };
