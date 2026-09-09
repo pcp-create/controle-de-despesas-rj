@@ -38,14 +38,10 @@ export interface ElegibilidadeResultado {
  * Uma despesa só é elegível para backup/exclusão do comprovante quando:
  *  - possui um comprovante ainda não arquivado;
  *  - data_despesa é anterior (ou igual) à data de corte escolhida pelo admin;
- *  - status_erp === 'AprovadoGestorERPAtualizado' — ou seja, já foi lançada
- *    e consolidada no ERP. Despesas ainda não lançadas (rascunho, aguardando
- *    aprovação, erro de envio, reprovada mas pendente de correção etc.)
+ *  - lancado_sistema === true — confirmação de que o Financeiro já
+ *    efetivamente lançou a despesa no sistema. Despesas ainda não lançadas
  *    NUNCA são elegíveis, para não perder o comprovante de algo que ainda
  *    pode precisar ser corrigido e relançado.
- *  - lancado_sistema === true — confirmação adicional de que o Financeiro já
- *    efetivamente lançou a despesa no sistema (não basta o status do ERP
- *    estar OK; precisa ter o registro explícito do lançamento feito).
  */
 export function avaliarElegibilidade(
   despesa: DespesaElegivel,
@@ -59,9 +55,6 @@ export function avaliarElegibilidade(
   }
   if (despesa.data_despesa > corteData) {
     return { elegivel: false, motivo: "Despesa posterior à data de corte" };
-  }
-  if (despesa.status_erp !== STATUS_ERP_LANCADO) {
-    return { elegivel: false, motivo: "Despesa ainda não lançada/consolidada no ERP" };
   }
   if (despesa.lancado_sistema !== true) {
     return { elegivel: false, motivo: "Despesa ainda não lançada pelo Financeiro no sistema" };
