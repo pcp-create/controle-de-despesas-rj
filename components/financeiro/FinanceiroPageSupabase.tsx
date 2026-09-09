@@ -8,7 +8,7 @@ import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
 import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig, motivoBloqueioEnvioERP } from "@/lib/helpers";
 import { salvarPrefsTabelaFinanceiro, carregarPrefsTabelaFinanceiro } from "@/lib/financeiro-table-prefs";
-import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle, AlertTriangle, Clock, Send, CheckCircle, RefreshCw, Ban } from "lucide-react";
+import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle, AlertTriangle, Clock, Send, CheckCircle, RefreshCw, Ban, Archive } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -1653,6 +1653,14 @@ export default function FinanceiroPageSupabase() {
                           <Eye className="w-3.5 h-3.5" />
                           Ver
                         </a>
+                      ) : d.comprovante_arquivado_em ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-muted-foreground"
+                          title={`Arquivo removido do Storage em ${new Date(d.comprovante_arquivado_em).toLocaleDateString("pt-BR")} via backup administrativo. Os dados da despesa continuam intactos.`}
+                        >
+                          <Archive className="w-3.5 h-3.5" />
+                          Arquivado
+                        </span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}

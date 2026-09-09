@@ -48,6 +48,8 @@ export interface Despesa {
   observacao: string | null;
   comprovante_nome: string | null;
   comprovante_url: string | null;
+  comprovante_arquivado_em: string | null;
+  comprovante_backup_id: string | null;
   data_despesa: string;
   hora_despesa: string | null;
   data_checkin: string | null;
