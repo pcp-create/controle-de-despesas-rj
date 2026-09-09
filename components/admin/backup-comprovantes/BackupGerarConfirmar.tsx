@@ -16,7 +16,7 @@ interface BackupGerado {
   totalItens: number;
   totalBytes: number;
   falhas: string[];
-  downloadUrl: string | null;
+  downloadUrls: (string | null)[];
 }
 
 export default function BackupGerarConfirmar({ corteData, despesaIds, onConcluido }: Props) {
@@ -74,14 +74,17 @@ export default function BackupGerarConfirmar({ corteData, despesaIds, onConcluid
         )}
 
         <div className="flex flex-wrap items-center gap-2">
-          {backup.downloadUrl && (
-            <a
-              href={backup.downloadUrl}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-white text-sm font-medium hover:bg-muted/40 transition"
-            >
-              <Download className="size-4" />
-              Baixar ZIP do backup
-            </a>
+          {backup.downloadUrls.map((url, i) =>
+            url ? (
+              <a
+                key={url}
+                href={url}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-white text-sm font-medium hover:bg-muted/40 transition"
+              >
+                <Download className="size-4" />
+                {backup.downloadUrls.length > 1 ? `Baixar parte ${i + 1} de ${backup.downloadUrls.length}` : "Baixar ZIP do backup"}
+              </a>
+            ) : null,
           )}
           <button
             onClick={() => setModalExclusaoAberto(true)}

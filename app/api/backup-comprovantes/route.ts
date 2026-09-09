@@ -14,7 +14,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("backup_comprovantes")
     .select(
-      "id, criado_em, corte_data, total_itens, total_bytes_estimado, status, excluido_em, zip_storage_path, criador:criado_por(nome), excluidor:excluido_por(nome)",
+      "id, criado_em, corte_data, total_itens, total_bytes_estimado, status, excluido_em, zip_storage_paths, criador:criado_por(nome), excluidor:excluido_por(nome)",
     )
     .order("criado_em", { ascending: false })
     .limit(100);
@@ -25,11 +25,10 @@ export async function GET() {
 
   const itens = await Promise.all(
     (data ?? []).map(async (row) => {
-      let downloadUrl: string | null = null;
-      if (row.zip_storage_path) {
-        const { data: signed } = await supabase.storage.from(BUCKET_BACKUPS).createSignedUrl(row.zip_storage_path, 60 * 15);
-        downloadUrl = signed?.signedUrl ?? null;
-      }
+      const paths = (row.zip_storage_paths ?? []) as string[];
+      const downloadUrls = (
+        await Promise.all(paths.map((p) => supabase.storage.from(BUCKET_BACKUPS).createSignedUrl(p, 60 * 15)))
+      ).map((r) => r.data?.signedUrl ?? null);
       return {
         id: row.id,
         criadoEm: row.criado_em,
@@ -40,7 +39,7 @@ export async function GET() {
         excluidoEm: row.excluido_em,
         criadorNome: (row as unknown as { criador: { nome: string } | null }).criador?.nome ?? "—",
         excluidorNome: (row as unknown as { excluidor: { nome: string } | null }).excluidor?.nome ?? null,
-        downloadUrl,
+        downloadUrls,
       };
     }),
   );

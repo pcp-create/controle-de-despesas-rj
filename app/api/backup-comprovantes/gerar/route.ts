@@ -20,6 +20,12 @@ export const runtime = "nodejs";
 
 const CONCORRENCIA_DOWNLOAD = 8;
 
+// O bucket de backups usa o limite global de tamanho de objeto do projeto no
+// Storage (não configurável por aqui). 40MB fica com margem segura abaixo do
+// menor limite padrão praticado pelo Supabase, então backups grandes são
+// particionados em vários arquivos ZIP em vez de um único arquivo enorme.
+const LIMITE_BYTES_POR_PARTE = 40 * 1024 * 1024;
+
 interface GerarBackupBody {
   corteData: string;
   despesaIds: string[];
@@ -134,18 +140,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Monta o ZIP em memória via stream do archiver — os nomes de entrada
-    // precisam de sufixo em caso de colisão, então isso continua sequencial
-    // (é uma operação em memória, não uma chamada de rede, então é rápido).
-    const archive = archiver("zip", { zlib: { level: 9 } });
-    const chunks: Buffer[] = [];
-    archive.on("data", (chunk: Buffer) => chunks.push(chunk));
-
-    const archiveFinished = new Promise<void>((resolve, reject) => {
-      archive.on("end", () => resolve());
-      archive.on("error", (err: Error) => reject(err));
-    });
-
+    // Monta os nomes de entrada (com sufixo em caso de colisão) e particiona
+    // os itens em grupos que ficam abaixo do limite de tamanho por ZIP —
+    // um único arquivo enorme facilmente excede o limite de objeto do
+    // Storage quando há centenas de comprovantes.
     const usedNames = new Set<string>();
     let totalBytes = 0;
     const itensParaInserir: Array<{
@@ -155,6 +153,9 @@ export async function POST(request: NextRequest) {
       comprovante_nome_original: string | null;
       storage_path_original: string;
     }> = [];
+
+    type ItemComNome = { despesa: DespesaElegivel; path: string; buffer: Buffer; entryName: string };
+    const itensComNome: ItemComNome[] = [];
 
     for (const item of sucesso) {
       const { despesa, path, buffer } = item as { despesa: DespesaElegivel; path: string; buffer: Buffer };
@@ -168,8 +169,7 @@ export async function POST(request: NextRequest) {
         suffix += 1;
       }
       usedNames.add(entryName);
-
-      archive.append(buffer, { name: entryName });
+      itensComNome.push({ despesa, path, buffer, entryName });
 
       itensParaInserir.push({
         backup_id: backupId,
@@ -180,40 +180,76 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    archive.finalize();
-    await archiveFinished;
-    const zipBuffer = Buffer.concat(chunks);
+    const partes: ItemComNome[][] = [];
+    let parteAtual: ItemComNome[] = [];
+    let bytesParteAtual = 0;
+    for (const item of itensComNome) {
+      if (parteAtual.length > 0 && bytesParteAtual + item.buffer.byteLength > LIMITE_BYTES_POR_PARTE) {
+        partes.push(parteAtual);
+        parteAtual = [];
+        bytesParteAtual = 0;
+      }
+      parteAtual.push(item);
+      bytesParteAtual += item.buffer.byteLength;
+    }
+    if (parteAtual.length > 0) partes.push(parteAtual);
 
-    const zipPath = `${backupId}.zip`;
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET_BACKUPS)
-      .upload(zipPath, zipBuffer, { contentType: "application/zip", upsert: true });
+    const zipPaths: string[] = [];
+    for (let i = 0; i < partes.length; i++) {
+      const parte = partes[i];
+      const archive = archiver("zip", { zlib: { level: 9 } });
+      const chunks: Buffer[] = [];
+      archive.on("data", (chunk: Buffer) => chunks.push(chunk));
+      const archiveFinished = new Promise<void>((resolve, reject) => {
+        archive.on("end", () => resolve());
+        archive.on("error", (err: Error) => reject(err));
+      });
 
-    if (uploadError) {
-      await supabase.from("backup_comprovantes").delete().eq("id", backupId);
-      return NextResponse.json({ error: `Erro ao salvar o arquivo ZIP: ${uploadError.message}` }, { status: 500 });
+      for (const item of parte) {
+        archive.append(item.buffer, { name: item.entryName });
+      }
+      archive.finalize();
+      await archiveFinished;
+      const zipBuffer = Buffer.concat(chunks);
+
+      const zipPath = partes.length > 1 ? `${backupId}_parte-${i + 1}-de-${partes.length}.zip` : `${backupId}.zip`;
+      const { error: uploadError } = await supabase.storage
+        .from(BUCKET_BACKUPS)
+        .upload(zipPath, zipBuffer, { contentType: "application/zip", upsert: true });
+
+      if (uploadError) {
+        if (zipPaths.length > 0) await supabase.storage.from(BUCKET_BACKUPS).remove(zipPaths);
+        await supabase.from("backup_comprovantes").delete().eq("id", backupId);
+        return NextResponse.json(
+          { error: `Erro ao salvar a parte ${i + 1} de ${partes.length} do arquivo ZIP: ${uploadError.message}` },
+          { status: 500 },
+        );
+      }
+      zipPaths.push(zipPath);
     }
 
     const { error: itensError } = await supabase.from("backup_comprovantes_itens").insert(itensParaInserir);
     if (itensError) {
-      await supabase.storage.from(BUCKET_BACKUPS).remove([zipPath]);
+      await supabase.storage.from(BUCKET_BACKUPS).remove(zipPaths);
       await supabase.from("backup_comprovantes").delete().eq("id", backupId);
       return NextResponse.json({ error: `Erro ao registrar itens do backup: ${itensError.message}` }, { status: 500 });
     }
 
     await supabase
       .from("backup_comprovantes")
-      .update({ total_itens: itensParaInserir.length, total_bytes_estimado: totalBytes, zip_storage_path: zipPath })
+      .update({ total_itens: itensParaInserir.length, total_bytes_estimado: totalBytes, zip_storage_paths: zipPaths })
       .eq("id", backupId);
 
-    const { data: signedZip } = await supabase.storage.from(BUCKET_BACKUPS).createSignedUrl(zipPath, 60 * 15);
+    const downloadUrls = (
+      await Promise.all(zipPaths.map((p) => supabase.storage.from(BUCKET_BACKUPS).createSignedUrl(p, 60 * 15)))
+    ).map((r) => r.data?.signedUrl ?? null);
 
     await supabase.from("auditoria").insert({
       acao: "CREATE",
       entidade: "backup_comprovantes",
       entidade_id: backupId,
       user_id: auth.admin.userId,
-      detalhes: `Backup gerado com ${itensParaInserir.length} comprovante(s) até ${corteData}.`,
+      detalhes: `Backup gerado com ${itensParaInserir.length} comprovante(s) até ${corteData}, em ${zipPaths.length} arquivo(s) ZIP.`,
       created_at: new Date().toISOString(),
     });
 
@@ -222,7 +258,7 @@ export async function POST(request: NextRequest) {
       totalItens: itensParaInserir.length,
       totalBytes,
       falhas,
-      downloadUrl: signedZip?.signedUrl ?? null,
+      downloadUrls,
     });
   } catch (err) {
     // Qualquer exceção inesperada (ex: erro de rede a meio de um download)

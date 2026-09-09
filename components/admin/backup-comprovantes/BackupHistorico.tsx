@@ -4,7 +4,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import { Download, ShieldAlert, CheckCircle2, Loader2 } from "lucide-react";
 import { formatDateTime, formatDate } from "@/lib/helpers";
-import { formatBytes } from "@/lib/backup-comprovantes";
+import { formatBytes, extractApiErrorMessage } from "@/lib/backup-comprovantes";
 import ConfirmarExclusaoModal from "@/components/admin/backup-comprovantes/ConfirmarExclusaoModal";
 
 interface BackupHistoricoItem {
@@ -17,13 +17,13 @@ interface BackupHistoricoItem {
   excluidoEm: string | null;
   criadorNome: string;
   excluidorNome: string | null;
-  downloadUrl: string | null;
+  downloadUrls: (string | null)[];
 }
 
 const fetchHistorico = async (): Promise<BackupHistoricoItem[]> => {
   const res = await fetch("/api/backup-comprovantes");
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error || "Erro ao buscar histórico.");
+  if (!res.ok) throw new Error(extractApiErrorMessage(json, "Erro ao buscar histórico."));
   return json.itens;
 };
 
@@ -93,14 +93,18 @@ export default function BackupHistorico() {
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <div className="flex items-center gap-2 justify-end">
-                    {item.downloadUrl && (
-                      <a
-                        href={item.downloadUrl}
-                        title="Baixar ZIP"
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted/40 transition"
-                      >
-                        <Download className="size-3.5" />
-                      </a>
+                    {item.downloadUrls.map((url, i) =>
+                      url ? (
+                        <a
+                          key={url}
+                          href={url}
+                          title={item.downloadUrls.length > 1 ? `Baixar parte ${i + 1} de ${item.downloadUrls.length}` : "Baixar ZIP"}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted/40 transition"
+                        >
+                          <Download className="size-3.5" />
+                          {item.downloadUrls.length > 1 && <span>{i + 1}</span>}
+                        </a>
+                      ) : null,
                     )}
                     {item.status === "gerado" && (
                       <button
