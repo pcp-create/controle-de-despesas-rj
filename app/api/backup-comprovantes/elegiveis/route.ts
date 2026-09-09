@@ -22,10 +22,11 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabase
     .from("despesas")
     .select(
-      "id, data_despesa, status_erp, status_aprovacao, comprovante_url, comprovante_nome, comprovante_arquivado_em, valor, cliente, numero_os, tecnico_id, profiles:tecnico_id(nome)",
+      "id, data_despesa, status_erp, status_aprovacao, comprovante_url, comprovante_nome, comprovante_arquivado_em, valor, cliente, numero_os, tecnico_id, lancado_sistema, profiles:tecnico_id(nome)",
     )
     .not("comprovante_url", "is", null)
     .is("comprovante_arquivado_em", null)
+    .eq("lancado_sistema", true)
     .lte("data_despesa", corteData)
     .order("data_despesa", { ascending: true })
     .limit(2000);

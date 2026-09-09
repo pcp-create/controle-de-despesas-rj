@@ -26,6 +26,7 @@ export interface DespesaElegivel {
   numero_os: string;
   tecnico_id: string;
   tecnico_nome?: string | null;
+  lancado_sistema: boolean | null;
 }
 
 export interface ElegibilidadeResultado {
@@ -42,6 +43,9 @@ export interface ElegibilidadeResultado {
  *    aprovação, erro de envio, reprovada mas pendente de correção etc.)
  *    NUNCA são elegíveis, para não perder o comprovante de algo que ainda
  *    pode precisar ser corrigido e relançado.
+ *  - lancado_sistema === true — confirmação adicional de que o Financeiro já
+ *    efetivamente lançou a despesa no sistema (não basta o status do ERP
+ *    estar OK; precisa ter o registro explícito do lançamento feito).
  */
 export function avaliarElegibilidade(
   despesa: DespesaElegivel,
@@ -58,6 +62,9 @@ export function avaliarElegibilidade(
   }
   if (despesa.status_erp !== STATUS_ERP_LANCADO) {
     return { elegivel: false, motivo: "Despesa ainda não lançada/consolidada no ERP" };
+  }
+  if (despesa.lancado_sistema !== true) {
+    return { elegivel: false, motivo: "Despesa ainda não lançada pelo Financeiro no sistema" };
   }
   return { elegivel: true };
 }
