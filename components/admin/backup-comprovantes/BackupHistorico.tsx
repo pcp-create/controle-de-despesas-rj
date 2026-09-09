@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { Download, ShieldAlert, CheckCircle2, Loader2 } from "lucide-react";
+import { Download, ShieldAlert, CheckCircle2, Loader2, Trash2 } from "lucide-react";
 import { formatDateTime, formatDate } from "@/lib/helpers";
 import { formatBytes, extractApiErrorMessage } from "@/lib/backup-comprovantes";
 import ConfirmarExclusaoModal from "@/components/admin/backup-comprovantes/ConfirmarExclusaoModal";
+import RemoverZipModal from "@/components/admin/backup-comprovantes/RemoverZipModal";
 
 interface BackupHistoricoItem {
   id: string;
@@ -13,7 +14,7 @@ interface BackupHistoricoItem {
   corteData: string;
   totalItens: number;
   totalBytesEstimado: number;
-  status: "gerado" | "excluido" | "expirado";
+  status: "gerado" | "excluido" | "expirado" | "cancelado";
   excluidoEm: string | null;
   criadorNome: string;
   excluidorNome: string | null;
@@ -31,20 +32,24 @@ const STATUS_BADGE: Record<string, string> = {
   gerado: "bg-amber-100 text-amber-700",
   excluido: "bg-emerald-100 text-emerald-700",
   expirado: "bg-slate-100 text-slate-600",
+  cancelado: "bg-slate-100 text-slate-600",
 };
 
 const STATUS_LABEL: Record<string, string> = {
   gerado: "Aguardando exclusão",
   excluido: "Originais excluídos",
   expirado: "Expirado",
+  cancelado: "Backup cancelado",
 };
 
 export default function BackupHistorico() {
   const { data, isLoading, mutate } = useSWR("backup-comprovantes-historico", fetchHistorico);
   const [modalBackupId, setModalBackupId] = useState<string | null>(null);
+  const [modalRemoverZipId, setModalRemoverZipId] = useState<string | null>(null);
 
   const itens = data ?? [];
   const modalItem = itens.find((i) => i.id === modalBackupId) ?? null;
+  const modalRemoverZipItem = itens.find((i) => i.id === modalRemoverZipId) ?? null;
 
   return (
     <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
@@ -115,6 +120,15 @@ export default function BackupHistorico() {
                         <ShieldAlert className="size-3.5" />
                       </button>
                     )}
+                    {(item.status === "excluido" || item.status === "gerado") && item.downloadUrls.length > 0 && (
+                      <button
+                        onClick={() => setModalRemoverZipId(item.id)}
+                        title={item.status === "excluido" ? "Remover ZIP e liberar armazenamento" : "Cancelar backup e remover ZIP"}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-destructive/30 text-destructive text-xs font-medium hover:bg-destructive/10 transition"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -130,6 +144,19 @@ export default function BackupHistorico() {
           onClose={() => setModalBackupId(null)}
           onConfirmado={() => {
             setModalBackupId(null);
+            mutate();
+          }}
+        />
+      )}
+
+      {modalRemoverZipItem && (
+        <RemoverZipModal
+          backupId={modalRemoverZipItem.id}
+          totalItens={modalRemoverZipItem.totalItens}
+          originaisJaExcluidos={modalRemoverZipItem.status === "excluido"}
+          onClose={() => setModalRemoverZipId(null)}
+          onRemovido={() => {
+            setModalRemoverZipId(null);
             mutate();
           }}
         />
