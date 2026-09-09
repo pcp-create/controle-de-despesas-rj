@@ -99,3 +99,58 @@ export function formatBytes(bytes: number): string {
   const value = bytes / Math.pow(1024, exp);
   return `${value.toFixed(exp === 0 ? 0 : 1)} ${units[exp]}`;
 }
+
+/** Divide um array em blocos de tamanho fixo — usado para chamadas em lote no Storage/DB. */
+export function chunk<T>(items: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    result.push(items.slice(i, i + size));
+  }
+  return result;
+}
+
+/**
+ * Executa `worker` para cada item de `items` com um limite de concorrência.
+ * Backups com centenas de comprovantes não podem baixar/excluir um arquivo
+ * por vez de forma sequencial — o tempo total ultrapassaria o limite de
+ * execução da função serverless antes de terminar. Rodar em lotes paralelos
+ * mantém o tempo total previsível sem sobrecarregar o Storage.
+ */
+export async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+
+  async function runNext(): Promise<void> {
+    const index = cursor;
+    cursor += 1;
+    if (index >= items.length) return;
+    results[index] = await worker(items[index], index);
+    await runNext();
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => runNext());
+  await Promise.all(workers);
+  return results;
+}
+
+/**
+ * Extrai uma mensagem de erro legível do corpo JSON de uma resposta de API.
+ * Timeouts e erros de plataforma (ex: função encerrada por exceder o tempo
+ * de execução) podem retornar `error` como um objeto estruturado em vez de
+ * string — usar `new Error(json.error)` direto nesse caso vira o texto
+ * "[object Object]" na tela. Esta função sempre devolve uma string útil.
+ */
+export function extractApiErrorMessage(json: unknown, fallback: string): string {
+  if (!json || typeof json !== "object" || !("error" in json)) return fallback;
+  const error = (json as { error?: unknown }).error;
+  if (typeof error === "string" && error.trim()) return error;
+  if (error && typeof error === "object") {
+    const maybeMessage = (error as { message?: unknown }).message;
+    if (typeof maybeMessage === "string" && maybeMessage.trim()) return maybeMessage;
+  }
+  return fallback;
+}

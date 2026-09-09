@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Loader2, Download, ShieldAlert, CheckCircle2, AlertTriangle } from "lucide-react";
-import { formatBytes } from "@/lib/backup-comprovantes";
+import { formatBytes, extractApiErrorMessage } from "@/lib/backup-comprovantes";
 import ConfirmarExclusaoModal from "@/components/admin/backup-comprovantes/ConfirmarExclusaoModal";
 
 interface Props {
@@ -35,7 +35,7 @@ export default function BackupGerarConfirmar({ corteData, despesaIds, onConcluid
         body: JSON.stringify({ corteData, despesaIds }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Erro ao gerar backup.");
+      if (!res.ok) throw new Error(extractApiErrorMessage(json, "Erro ao gerar backup."));
       setBackup(json);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro inesperado.");

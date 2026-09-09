@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Loader2, ShieldAlert, AlertTriangle, X } from "lucide-react";
+import { extractApiErrorMessage } from "@/lib/backup-comprovantes";
 
 interface Props {
   backupId: string;
@@ -30,7 +31,7 @@ export default function ConfirmarExclusaoModal({ backupId, totalItens, onClose, 
         body: JSON.stringify({ senha }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Erro ao confirmar exclusão.");
+      if (!res.ok) throw new Error(extractApiErrorMessage(json, "Erro ao confirmar exclusão."));
       onConfirmado();
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro inesperado.");

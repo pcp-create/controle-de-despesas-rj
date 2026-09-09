@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { Archive, Loader2, AlertTriangle, CheckSquare, Square } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/helpers";
+import { extractApiErrorMessage } from "@/lib/backup-comprovantes";
 import BackupGerarConfirmar from "@/components/admin/backup-comprovantes/BackupGerarConfirmar";
 import BackupHistorico from "@/components/admin/backup-comprovantes/BackupHistorico";
 
@@ -47,7 +48,7 @@ export default function BackupComprovantesPageSupabase() {
     try {
       const res = await fetch(`/api/backup-comprovantes/elegiveis?corte=${corteData}`);
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Erro ao buscar despesas elegíveis.");
+      if (!res.ok) throw new Error(extractApiErrorMessage(json, "Erro ao buscar despesas elegíveis."));
       setItens(json.itens);
       setSelecionados(new Set(json.itens.map((i: DespesaElegivelItem) => i.id)));
     } catch (e) {
