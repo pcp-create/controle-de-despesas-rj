@@ -772,13 +772,31 @@ export async function POST(request: Request) {
       };
       payloads.etapa5 = bodyEtapa5;
 
-      const etapa5 = await m8RequestComRetry(
-        5,
-        `${baseUrl}/v1/compras/notafiscal/${erpIdConfirmado}/centrocusto`,
-        token,
-        { method: "POST", body: bodyEtapa5 },
-        { tentativas: 2, esperasMs: [600] }
-      );
+      let etapa5;
+      try {
+        etapa5 = await m8RequestComRetry(
+          5,
+          `${baseUrl}/v1/compras/notafiscal/${erpIdConfirmado}/centrocusto`,
+          token,
+          { method: "POST", body: bodyEtapa5 },
+          { tentativas: 2, esperasMs: [600] }
+        );
+      } catch (erro) {
+        if (erro instanceof IntegracaoError && erro.message.includes("Soma dos valores de custos ultrapassa")) {
+          // A criação do centro de custo no M8 é aditiva (cada POST soma mais rateio à nota
+          // fiscal, sem substituir o anterior). Se uma tentativa anterior já chegou a registrar
+          // um rateio parcial ou total no M8 (mesmo reportando erro para o cliente por timeout ou
+          // outro motivo), reenviar aqui empilha um novo rateio e ultrapassa 100%. Reintegrar de
+          // novo sem corrigir só piora — é preciso remover o rateio duplicado direto no M8 antes.
+          throw new IntegracaoError(
+            5,
+            `Já existe rateio de centro de custo registrado no M8 para o documento ${erpIdConfirmado} que, somado a este novo envio, ultrapassa 100%. ` +
+              `Isso normalmente indica um rateio duplicado deixado por uma tentativa anterior. Verifique e remova o rateio de centro de custo duplicado direto no M8 (Nota Fiscal → Centro de Custo) antes de reintegrar novamente — reenviar sem corrigir vai empilhar outro rateio.`,
+            { statusHttp: erro.statusHttp, resposta: erro.resposta },
+          );
+        }
+        throw erro;
+      }
 
       respostas.etapa5 = etapa5.respostaCompleta;
       await salvarProgresso(supabase, despesaId, { erp_payload: payloads, erp_resposta: respostas });
