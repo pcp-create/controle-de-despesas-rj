@@ -697,12 +697,37 @@ export async function POST(request: Request) {
       // com tempo crescente — se o M8 ainda estiver persistindo a NF.
     }
 
-    if (!erpId) {
-      throw new IntegracaoError(2, "documentoFiscalId não disponível.");
-    }
+  if (!erpId) {
+    throw new IntegracaoError(2, "documentoFiscalId não disponível.");
+  }
+  const erpIdConfirmado = erpId;
 
-    // ETAPA 3 — Cadastrar produto (com retry de backoff progressivo)
-    if (etapaInicial <= 3) {
+    // ETAPAS 3, 4 e 5 — Produto, parcela e centro de custo são sub-registros
+    // independentes da mesma Nota Fiscal: nenhum depende do resultado dos
+    // outros dois. Por isso são enviados ao M8 em paralelo em vez de em
+    // série — o tempo total passa de "3 chamadas somadas" para "a duração
+    // da mais lenta das 3", que é o principal motivo da integração demorar
+    // ~20s no caminho feliz.
+    //
+    // Para não duplicar um sub-registro em uma nova tentativa após falha
+    // parcial (ex.: produto e parcela foram aceitos pelo M8, mas centro de
+    // custo falhou), cada etapa só é (re)enviada se ainda não constar como
+    // concluída com sucesso em erp_resposta — o mesmo registro usado para
+    // retomar a integração de onde parou.
+    const etapaJaConcluida = (n: number) => {
+      const salvo = respostas[`etapa${n}`] as { sucesso?: boolean } | undefined;
+      return !!salvo && salvo.sucesso !== false;
+    };
+
+    type TarefaEtapa = {
+      etapa: number;
+      payload: JsonObject;
+      executar: () => Promise<{ data: unknown; respostaCompleta: unknown; status: number }>;
+    };
+
+    const tarefas: TarefaEtapa[] = [];
+
+    if (etapaInicial <= 3 && !etapaJaConcluida(3)) {
       const bodyEtapa3 = {
         produtoId: codigoProduto!,
         operacaoFiscalId: 37,
@@ -711,53 +736,41 @@ export async function POST(request: Request) {
         valorUnitario: valorDespesa!,
         observacao: resumo,
       };
-
-      payloads.etapa3 = bodyEtapa3;
-
-      // Tenta imediatamente; só espera — com tempo crescente — se o M8 ainda
-      // estiver persistindo a NF criada na Etapa 2.
-      const etapa3 = await m8RequestComRetry(
-        3,
-        `${baseUrl}/v1/compras/notafiscal/${erpId}/produto`,
-        token,
-        { method: "POST", body: bodyEtapa3 },
-        { tentativas: 3, esperasMs: [400, 800] }
-      );
-
-      respostas.etapa3 = etapa3.respostaCompleta;
-      await salvarProgresso(supabase, despesaId, {
-        erp_payload: payloads,
-        erp_resposta: respostas,
+      tarefas.push({
+        etapa: 3,
+        payload: bodyEtapa3,
+        executar: () =>
+          m8RequestComRetry(
+            3,
+            `${baseUrl}/v1/compras/notafiscal/${erpIdConfirmado}/produto`,
+            token,
+            { method: "POST", body: bodyEtapa3 },
+            { tentativas: 3, esperasMs: [400, 800] }
+          ),
       });
     }
 
-    // ETAPA 4 — Cadastrar parcela
-    if (etapaInicial <= 4) {
+    if (etapaInicial <= 4 && !etapaJaConcluida(4)) {
       const bodyEtapa4 = {
         vencimento: paraIso(despesa.data_vencimento, "Data de vencimento"),
         valor: valorDespesa!,
         condicaoPagamentoId: 9,
       };
-
-      payloads.etapa4 = bodyEtapa4;
-
-      const etapa4 = await m8RequestComRetry(
-        4,
-        `${baseUrl}/v1/compras/notafiscal/${erpId}/parcela`,
-        token,
-        { method: "POST", body: bodyEtapa4 },
-        { tentativas: 2, esperasMs: [600] }
-      );
-
-      respostas.etapa4 = etapa4.respostaCompleta;
-      await salvarProgresso(supabase, despesaId, {
-        erp_payload: payloads,
-        erp_resposta: respostas,
+      tarefas.push({
+        etapa: 4,
+        payload: bodyEtapa4,
+        executar: () =>
+          m8RequestComRetry(
+            4,
+            `${baseUrl}/v1/compras/notafiscal/${erpIdConfirmado}/parcela`,
+            token,
+            { method: "POST", body: bodyEtapa4 },
+            { tentativas: 2, esperasMs: [600] }
+          ),
       });
     }
 
-    // ETAPA 5 — Cadastrar centro de custo
-    if (etapaInicial <= 5) {
+    if (etapaInicial <= 5 && !etapaJaConcluida(5)) {
       const bodyEtapa5 = {
         centroCustoCodigo: centroCustoCodigo!,
         percentual: 100,
@@ -765,22 +778,57 @@ export async function POST(request: Request) {
         operacaoFinanceiraId: operacaoFinanceiraId ?? null,
         complemento: resumo,
       };
+      tarefas.push({
+        etapa: 5,
+        payload: bodyEtapa5,
+        executar: () =>
+          m8RequestComRetry(
+            5,
+            `${baseUrl}/v1/compras/notafiscal/${erpIdConfirmado}/centrocusto`,
+            token,
+            { method: "POST", body: bodyEtapa5 },
+            { tentativas: 2, esperasMs: [600] }
+          ),
+      });
+    }
 
-      payloads.etapa5 = bodyEtapa5;
+    if (tarefas.length > 0) {
+      tarefas.forEach((t) => {
+        payloads[`etapa${t.etapa}`] = t.payload;
+      });
 
-      const etapa5 = await m8RequestComRetry(
-        5,
-        `${baseUrl}/v1/compras/notafiscal/${erpId}/centrocusto`,
-        token,
-        { method: "POST", body: bodyEtapa5 },
-        { tentativas: 2, esperasMs: [600] }
-      );
+      const resultados = await Promise.allSettled(tarefas.map((t) => t.executar()));
 
-      respostas.etapa5 = etapa5.respostaCompleta;
+      let primeiraFalha: IntegracaoError | null = null;
+      resultados.forEach((resultado, i) => {
+        const { etapa } = tarefas[i];
+        if (resultado.status === "fulfilled") {
+          respostas[`etapa${etapa}`] = resultado.value.respostaCompleta;
+        } else {
+          const erro =
+            resultado.reason instanceof IntegracaoError
+              ? resultado.reason
+              : new IntegracaoError(etapa, resultado.reason?.message || "Erro desconhecido.");
+          respostas[`etapa${etapa}`] = {
+            sucesso: false,
+            mensagem: erro.message,
+            statusHttp: erro.statusHttp,
+            resposta: erro.resposta,
+            dataHora: new Date().toISOString(),
+          };
+          if (!primeiraFalha || erro.etapa < primeiraFalha.etapa) primeiraFalha = erro;
+        }
+      });
+
+      // Persiste o que já foi aceito pelo M8 antes de decidir o próximo passo:
+      // se houver falha, a próxima tentativa não repete (e não duplica) os
+      // sub-registros que já tiveram sucesso nesta rodada.
       await salvarProgresso(supabase, despesaId, {
         erp_payload: payloads,
         erp_resposta: respostas,
       });
+
+      if (primeiraFalha) throw primeiraFalha;
     }
 
     // ETAPA 6 — Processar Nota Fiscal
