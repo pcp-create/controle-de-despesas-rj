@@ -155,6 +155,18 @@ function formatarCartao(cartao: any): string {
   return "Não informado";
 }
 
+// O M8 rejeita os campos Complemento/Observação da nota fiscal quando o
+// texto excede 500 caracteres (erro "must be a string ... with a maximum
+// length of '500'"). Despesas com observação longa do funcionário facilmente
+// ultrapassam esse limite quando concatenadas com o restante do resumo.
+const LIMITE_TEXTO_M8 = 500;
+
+function limitarTexto(texto: string, limite: number): string {
+  if (texto.length <= limite) return texto;
+  const reticencias = "…";
+  return texto.slice(0, limite - reticencias.length) + reticencias;
+}
+
 function montarResumoDespesa(
   despesa: any,
   tipo: any,
@@ -165,7 +177,7 @@ function montarResumoDespesa(
   const dataDespesa = formatarDataBR(despesa.data_despesa);
   const dataAprovacao = formatarDataBR(despesa.data_aprovacao, true);
 
-  return [
+  const resumo = [
     `Funcionário: ${valorTexto(tecnico?.nome || tecnico?.full_name)}`,
     `Data da despesa: ${dataDespesa}`,
     `Tipo: ${valorTexto(tipo?.nome)}`,
@@ -178,6 +190,8 @@ function montarResumoDespesa(
     `Data aprovação: ${dataAprovacao}`,
     `Aprovado por: ${aprovador?.nome || aprovador?.full_name || "Aprovação Automática"}`,
   ].join(" | ");
+
+  return limitarTexto(resumo, LIMITE_TEXTO_M8);
 }
 
 async function salvarProgresso(
@@ -525,7 +539,7 @@ export async function POST(request: Request) {
   const camposFaltando: string[] = [];
   if (!despesa.tipo_despesa_id) camposFaltando.push("Tipo de despesa");
   if (!codigoProduto) camposFaltando.push("Código de Produto ERP M8");
-  if (!tecnico?.area) camposFaltando.push("Área / Setor do funcionário");
+  if (!tecnico?.area) camposFaltando.push("Área / Setor do funcion��rio");
   if (!tecnico?.pessoa_id) camposFaltando.push("Pessoa ID do funcionário (configure em Administração → Usuários → Configurações ERP)");
   if (!centroCustoCodigo) camposFaltando.push("Código do Centro de Custo ERP M8");
   if (!despesa.data_despesa) camposFaltando.push("Data da despesa");
