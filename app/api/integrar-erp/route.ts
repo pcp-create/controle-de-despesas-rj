@@ -664,7 +664,10 @@ export async function POST(request: Request) {
         pessoaId,
         tipoCompraId: 8,
         emissao: paraIso(despesa.data_despesa, "Data da despesa"),
-        lancamento: agora,
+        // "Data de Entrada" no M8: segue a mesma regra de vencimento (nunca
+        // sobe além do vencimento real da despesa), em vez de sempre usar a
+        // data de hoje.
+        lancamento: calcularVencimentoEnvio(despesa.data_vencimento),
         freteId: 9,
         condicaoPagamentoId: 9,
         sintegraId: 99,
