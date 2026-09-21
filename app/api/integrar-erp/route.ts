@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { motivoBloqueioEnvioERP } from "@/lib/helpers";
+import { motivoBloqueioEnvioERP, getLocalDateString } from "@/lib/helpers";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -42,6 +42,21 @@ class IntegracaoError extends Error {
 
 function normalizarBaseUrl(url: string): string {
   return url.replace(/\/+$/, "");
+}
+
+// ─── Regra de vencimento enviado ao M8 ──────────────────────────────────────
+// A data de vencimento real da despesa (calculada no cadastro, ex.: dia 19)
+// não pode ser "empurrada" para a data de hoje quando a despesa já está
+// vencida. Regra:
+// - Se hoje (data de envio) ainda for MENOR que o vencimento real, sobe a
+//   própria data de envio (hoje) — a despesa ainda não venceu.
+// - Se hoje já for MAIOR OU IGUAL ao vencimento real, sobe o vencimento real
+//   — a despesa já venceu e não deve "andar" para a data de hoje.
+function calcularVencimentoEnvio(dataVencimento: unknown): string {
+  const vencimentoIso = paraIso(dataVencimento, "Data de vencimento");
+  const vencimentoData = vencimentoIso.slice(0, 10);
+  const envioData = getLocalDateString();
+  return envioData < vencimentoData ? paraIso(envioData, "Data de envio") : vencimentoIso;
 }
 
 function aguardar(ms: number): Promise<void> {
@@ -759,7 +774,7 @@ export async function POST(request: Request) {
 
       if (etapaAtual <= 4 && !etapaJaConcluida(4)) {
         const bodyEtapa4 = {
-          vencimento: paraIso(despesa.data_vencimento, "Data de vencimento"),
+          vencimento: calcularVencimentoEnvio(despesa.data_vencimento),
           valor: valorDespesa!,
           condicaoPagamentoId: 9,
         };
