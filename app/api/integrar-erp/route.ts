@@ -722,102 +722,133 @@ export async function POST(request: Request) {
       return !!salvo && salvo.sucesso !== false;
     };
 
-    if (etapaInicial <= 3 && !etapaJaConcluida(3)) {
-      const bodyEtapa3 = {
-        produtoId: codigoProduto!,
-        operacaoFiscalId: 37,
-        destinoEstoqueId: 1,
-        quantidade: 1,
-        valorUnitario: valorDespesa!,
-        observacao: resumo,
-      };
-      payloads.etapa3 = bodyEtapa3;
+    // O M8 já demonstrou um caso em que a Etapa 3 (produto) responde sucesso
+    // com um id, mas o item não é de fato persistido na Nota Fiscal — só se
+    // descobre isso quando a Etapa 6 (processar) falha com "Documento não
+    // possui itens". Como o retorno de sucesso da Etapa 3 já havia sido
+    // salvo, um reprocessamento simples pularia direto para a Etapa 6 de
+    // novo e repetiria o mesmo erro para sempre. Por isso, ao detectar esse
+    // erro específico, força um novo envio da Etapa 3 e tenta mais uma vez
+    // (uma única vez) antes de desistir.
+    let etapaAtual = etapaInicial;
+    let jaForcouReenvioProduto = false;
 
-      const etapa3 = await m8RequestComRetry(
-        3,
-        `${baseUrl}/v1/compras/notafiscal/${erpIdConfirmado}/produto`,
-        token,
-        { method: "POST", body: bodyEtapa3 },
-        { tentativas: 3, esperasMs: [400, 800] }
-      );
+    for (let tentativaCompleta = 1; tentativaCompleta <= 2; tentativaCompleta++) {
+      if (etapaAtual <= 3 && !etapaJaConcluida(3)) {
+        const bodyEtapa3 = {
+          produtoId: codigoProduto!,
+          operacaoFiscalId: 37,
+          destinoEstoqueId: 1,
+          quantidade: 1,
+          valorUnitario: valorDespesa!,
+          observacao: resumo,
+        };
+        payloads.etapa3 = bodyEtapa3;
 
-      respostas.etapa3 = etapa3.respostaCompleta;
-      await salvarProgresso(supabase, despesaId, { erp_payload: payloads, erp_resposta: respostas });
-    }
-
-    if (etapaInicial <= 4 && !etapaJaConcluida(4)) {
-      const bodyEtapa4 = {
-        vencimento: paraIso(despesa.data_vencimento, "Data de vencimento"),
-        valor: valorDespesa!,
-        condicaoPagamentoId: 9,
-      };
-      payloads.etapa4 = bodyEtapa4;
-
-      const etapa4 = await m8RequestComRetry(
-        4,
-        `${baseUrl}/v1/compras/notafiscal/${erpIdConfirmado}/parcela`,
-        token,
-        { method: "POST", body: bodyEtapa4 },
-        { tentativas: 2, esperasMs: [600] }
-      );
-
-      respostas.etapa4 = etapa4.respostaCompleta;
-      await salvarProgresso(supabase, despesaId, { erp_payload: payloads, erp_resposta: respostas });
-    }
-
-    if (etapaInicial <= 5 && !etapaJaConcluida(5)) {
-      const bodyEtapa5 = {
-        centroCustoCodigo: centroCustoCodigo!,
-        percentual: 100,
-        valor: valorDespesa!,
-        operacaoFinanceiraId: operacaoFinanceiraId ?? null,
-        complemento: resumo,
-      };
-      payloads.etapa5 = bodyEtapa5;
-
-      let etapa5;
-      try {
-        etapa5 = await m8RequestComRetry(
-          5,
-          `${baseUrl}/v1/compras/notafiscal/${erpIdConfirmado}/centrocusto`,
+        const etapa3 = await m8RequestComRetry(
+          3,
+          `${baseUrl}/v1/compras/notafiscal/${erpIdConfirmado}/produto`,
           token,
-          { method: "POST", body: bodyEtapa5 },
-          { tentativas: 2, esperasMs: [600] }
+          { method: "POST", body: bodyEtapa3 },
+          { tentativas: 3, esperasMs: [400, 800] }
         );
-      } catch (erro) {
-        if (erro instanceof IntegracaoError && erro.message.includes("Soma dos valores de custos ultrapassa")) {
-          // A criação do centro de custo no M8 é aditiva (cada POST soma mais rateio à nota
-          // fiscal, sem substituir o anterior). Se uma tentativa anterior já chegou a registrar
-          // um rateio parcial ou total no M8 (mesmo reportando erro para o cliente por timeout ou
-          // outro motivo), reenviar aqui empilha um novo rateio e ultrapassa 100%. Reintegrar de
-          // novo sem corrigir só piora — é preciso remover o rateio duplicado direto no M8 antes.
-          throw new IntegracaoError(
-            5,
-            `Já existe rateio de centro de custo registrado no M8 para o documento ${erpIdConfirmado} que, somado a este novo envio, ultrapassa 100%. ` +
-              `Isso normalmente indica um rateio duplicado deixado por uma tentativa anterior. Verifique e remova o rateio de centro de custo duplicado direto no M8 (Nota Fiscal → Centro de Custo) antes de reintegrar novamente — reenviar sem corrigir vai empilhar outro rateio.`,
-            { statusHttp: erro.statusHttp, resposta: erro.resposta },
-          );
-        }
-        throw erro;
+
+        respostas.etapa3 = etapa3.respostaCompleta;
+        await salvarProgresso(supabase, despesaId, { erp_payload: payloads, erp_resposta: respostas });
       }
 
-      respostas.etapa5 = etapa5.respostaCompleta;
-      await salvarProgresso(supabase, despesaId, { erp_payload: payloads, erp_resposta: respostas });
-    }
+      if (etapaAtual <= 4 && !etapaJaConcluida(4)) {
+        const bodyEtapa4 = {
+          vencimento: paraIso(despesa.data_vencimento, "Data de vencimento"),
+          valor: valorDespesa!,
+          condicaoPagamentoId: 9,
+        };
+        payloads.etapa4 = bodyEtapa4;
 
-    // ETAPA 6 — Processar Nota Fiscal
-    if (etapaInicial <= 6) {
-      payloads.etapa6 = null;
+        const etapa4 = await m8RequestComRetry(
+          4,
+          `${baseUrl}/v1/compras/notafiscal/${erpIdConfirmado}/parcela`,
+          token,
+          { method: "POST", body: bodyEtapa4 },
+          { tentativas: 2, esperasMs: [600] }
+        );
 
-      const etapa6 = await m8RequestComRetry(
-        6,
-        `${baseUrl}/v1/compras/notafiscal/${erpId}/processar`,
-        token,
-        { method: "POST" },
-        { tentativas: 2, esperasMs: [600] }
-      );
+        respostas.etapa4 = etapa4.respostaCompleta;
+        await salvarProgresso(supabase, despesaId, { erp_payload: payloads, erp_resposta: respostas });
+      }
 
-      respostas.etapa6 = etapa6.respostaCompleta;
+      if (etapaAtual <= 5 && !etapaJaConcluida(5)) {
+        const bodyEtapa5 = {
+          centroCustoCodigo: centroCustoCodigo!,
+          percentual: 100,
+          valor: valorDespesa!,
+          operacaoFinanceiraId: operacaoFinanceiraId ?? null,
+          complemento: resumo,
+        };
+        payloads.etapa5 = bodyEtapa5;
+
+        let etapa5;
+        try {
+          etapa5 = await m8RequestComRetry(
+            5,
+            `${baseUrl}/v1/compras/notafiscal/${erpIdConfirmado}/centrocusto`,
+            token,
+            { method: "POST", body: bodyEtapa5 },
+            { tentativas: 2, esperasMs: [600] }
+          );
+        } catch (erro) {
+          if (erro instanceof IntegracaoError && erro.message.includes("Soma dos valores de custos ultrapassa")) {
+            // A criação do centro de custo no M8 é aditiva (cada POST soma mais rateio à nota
+            // fiscal, sem substituir o anterior). Se uma tentativa anterior já chegou a registrar
+            // um rateio parcial ou total no M8 (mesmo reportando erro para o cliente por timeout ou
+            // outro motivo), reenviar aqui empilha um novo rateio e ultrapassa 100%. Reintegrar de
+            // novo sem corrigir só piora — é preciso remover o rateio duplicado direto no M8 antes.
+            throw new IntegracaoError(
+              5,
+              `Já existe rateio de centro de custo registrado no M8 para o documento ${erpIdConfirmado} que, somado a este novo envio, ultrapassa 100%. ` +
+                `Isso normalmente indica um rateio duplicado deixado por uma tentativa anterior. Verifique e remova o rateio de centro de custo duplicado direto no M8 (Nota Fiscal → Centro de Custo) antes de reintegrar novamente — reenviar sem corrigir vai empilhar outro rateio.`,
+              { statusHttp: erro.statusHttp, resposta: erro.resposta },
+            );
+          }
+          throw erro;
+        }
+
+        respostas.etapa5 = etapa5.respostaCompleta;
+        await salvarProgresso(supabase, despesaId, { erp_payload: payloads, erp_resposta: respostas });
+      }
+
+      // ETAPA 6 — Processar Nota Fiscal
+      if (etapaAtual <= 6) {
+        payloads.etapa6 = null;
+
+        try {
+          const etapa6 = await m8RequestComRetry(
+            6,
+            `${baseUrl}/v1/compras/notafiscal/${erpId}/processar`,
+            token,
+            { method: "POST" },
+            { tentativas: 2, esperasMs: [600] }
+          );
+
+          respostas.etapa6 = etapa6.respostaCompleta;
+          break;
+        } catch (erro) {
+          const itemAusente =
+            erro instanceof IntegracaoError && erro.message.includes("Documento não possui itens");
+
+          if (itemAusente && !jaForcouReenvioProduto) {
+            jaForcouReenvioProduto = true;
+            delete respostas.etapa3;
+            etapaAtual = 3;
+            await salvarProgresso(supabase, despesaId, { erp_resposta: respostas });
+            continue;
+          }
+
+          throw erro;
+        }
+      }
+
+      break;
     }
 
     const integradoEm = new Date().toISOString();
