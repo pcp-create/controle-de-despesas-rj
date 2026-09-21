@@ -491,43 +491,41 @@ export async function POST(request: Request) {
   const tecnico = despesa.tecnico as any;
   const aprovador = despesa.aprovador as any;
 
-  // Busca os dados do cartão vinculado à despesa.
-  // O select("*") evita dependência de outros nomes de campos além de ultimos_digitos.
-  let cartao: any = null;
+  // Busca os dados do cartão vinculado à despesa e o centro de custo em
+  // paralelo — são consultas independentes (nenhuma depende do resultado da
+  // outra), então não há motivo para esperar uma terminar antes de iniciar a
+  // outra.
+  // O select("*") do cartão evita dependência de outros nomes de campos além de ultimos_digitos.
+  const [cartaoResultado, ccResultado] = await Promise.all([
+    despesa.cartao_id
+      ? supabase.from("cartoes").select("*").eq("id", despesa.cartao_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    supabase
+      .from("tipos_despesa_centro_custo")
+      .select("centro_custo_erp")
+      .eq("tipo_despesa_id", despesa.tipo_despesa_id)
+      .eq("area", tecnico?.area || "")
+      .maybeSingle(),
+  ]);
 
-  if (despesa.cartao_id) {
-    const { data: cartaoEncontrado, error: cartaoError } = await supabase
-      .from("cartoes")
-      .select("*")
-      .eq("id", despesa.cartao_id)
-      .maybeSingle();
-
-    if (cartaoError) {
-      return NextResponse.json(
-        {
-          error: `Erro ao consultar o cartão da despesa: ${cartaoError.message}`,
-          etapa: 0,
-        },
-        { status: 500 }
-      );
-    }
-
-    cartao = cartaoEncontrado;
-  }
-
-  const { data: cc, error: ccError } = await supabase
-    .from("tipos_despesa_centro_custo")
-    .select("centro_custo_erp")
-    .eq("tipo_despesa_id", despesa.tipo_despesa_id)
-    .eq("area", tecnico?.area || "")
-    .maybeSingle();
-
-  if (ccError) {
+  if (cartaoResultado.error) {
     return NextResponse.json(
-      { error: `Erro ao consultar centro de custo: ${ccError.message}`, etapa: 0 },
+      {
+        error: `Erro ao consultar o cartão da despesa: ${cartaoResultado.error.message}`,
+        etapa: 0,
+      },
       { status: 500 }
     );
   }
+  const cartao: any = cartaoResultado.data;
+
+  if (ccResultado.error) {
+    return NextResponse.json(
+      { error: `Erro ao consultar centro de custo: ${ccResultado.error.message}`, etapa: 0 },
+      { status: 500 }
+    );
+  }
+  const cc = ccResultado.data;
 
   const codigoProduto = paraNumero(tipo?.codigo_produto_erp);
   const centroCustoCodigo = paraNumero(cc?.centro_custo_erp);
@@ -590,15 +588,6 @@ export async function POST(request: Request) {
   };
 
   try {
-    await salvarProgresso(supabase, despesaId, {
-      lancado_sistema: true,
-      lancado_sistema_em: despesa.lancado_sistema_em || agora,
-      lancado_sistema_por: despesa.lancado_sistema_por || userId,
-      erp_status: "processando",
-      erp_erro: null,
-      erp_etapa_erro: null,
-    });
-
     // ETAPA 1 — Gerar token
     const loginBody = {
       tenant: M8_TENANT!,
@@ -608,13 +597,27 @@ export async function POST(request: Request) {
       domain: M8_DOMAIN!,
     };
 
-    const auth = await m8RequestComRetry<{ token?: string }>(
-      1,
-      `${baseUrl}/v1/auth/token`,
-      null,
-      { method: "POST", body: loginBody, autenticado: false },
-      { tentativas: 2, esperasMs: [500] }
-    );
+    // Marcar "processando" no banco e autenticar no M8 são independentes —
+    // nenhuma depende do resultado da outra, então rodam em paralelo. Se a
+    // autenticação falhar, o catch abaixo sobrescreve o status para "erro"
+    // de qualquer forma.
+    const [auth] = await Promise.all([
+      m8RequestComRetry<{ token?: string }>(
+        1,
+        `${baseUrl}/v1/auth/token`,
+        null,
+        { method: "POST", body: loginBody, autenticado: false },
+        { tentativas: 2, esperasMs: [500] }
+      ),
+      salvarProgresso(supabase, despesaId, {
+        lancado_sistema: true,
+        lancado_sistema_em: despesa.lancado_sistema_em || agora,
+        lancado_sistema_por: despesa.lancado_sistema_por || userId,
+        erp_status: "processando",
+        erp_erro: null,
+        erp_etapa_erro: null,
+      }),
+    ]);
 
     token = auth.data?.token || null;
     if (!token) {
@@ -832,17 +835,23 @@ export async function POST(request: Request) {
       erp_resposta: respostas,
     });
 
-    const { error: auditoriaError } = await supabase.from("auditoria").insert({
-      user_id: userId,
-      acao: "UPDATE",
-      entidade: "despesa",
-      entidade_id: despesaId,
-      detalhes: `Integração ERP M8 concluída — Documento Fiscal ID: ${erpId} — Número: ${numeroDocumentoErp}`,
-    });
-
-    if (auditoriaError) {
-      console.error("Falha ao registrar auditoria:", auditoriaError.message);
-    }
+    // Registro de auditoria é apenas um log complementar — a integração em si já
+    // está 100% persistida no passo anterior. Não há motivo para o usuário esperar
+    // por esta escrita antes de receber a resposta de sucesso.
+    supabase
+      .from("auditoria")
+      .insert({
+        user_id: userId,
+        acao: "UPDATE",
+        entidade: "despesa",
+        entidade_id: despesaId,
+        detalhes: `Integração ERP M8 concluída — Documento Fiscal ID: ${erpId} — Número: ${numeroDocumentoErp}`,
+      })
+      .then(({ error: auditoriaError }) => {
+        if (auditoriaError) {
+          console.error("Falha ao registrar auditoria:", auditoriaError.message);
+        }
+      });
 
     return NextResponse.json({
       success: true,
