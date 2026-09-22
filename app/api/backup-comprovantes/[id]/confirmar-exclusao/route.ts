@@ -25,7 +25,7 @@ interface ConfirmarExclusaoBody {
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: backupId } = await params;
 
-  const auth = await requireAdmin();
+  const auth = await requireAdmin(["administrador", "financeiro"]);
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }

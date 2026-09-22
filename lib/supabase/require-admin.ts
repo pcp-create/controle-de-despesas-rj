@@ -9,6 +9,7 @@ export interface AdminSession {
   userId: string;
   email: string | null;
   nome: string | null;
+  perfil: string;
 }
 
 export type RequireAdminResult =
@@ -17,7 +18,8 @@ export type RequireAdminResult =
 
 /**
  * Valida, a partir dos cookies de sessão da requisição, que existe um usuário
- * autenticado E que o perfil dele em `profiles` é 'administrador'.
+ * autenticado E que o perfil dele em `profiles` está entre os perfis
+ * permitidos (por padrão, apenas 'administrador').
  *
  * Esta é a ÚNICA verificação de admin usada pelas rotas de backup de
  * comprovantes — nenhuma delas confia em um `userId`/`perfil` enviado pelo
@@ -25,7 +27,9 @@ export type RequireAdminResult =
  * integrar-erp) não faziam essa validação no servidor; este helper existe
  * para que as rotas novas, que apagam arquivos, não repitam esse padrão.
  */
-export async function requireAdmin(): Promise<RequireAdminResult> {
+export async function requireAdmin(
+  allowedProfiles: string[] = ["administrador"],
+): Promise<RequireAdminResult> {
   const sessionClient = await createSessionClient();
   const { data: userData, error: userError } = await sessionClient.auth.getUser();
 
@@ -47,8 +51,8 @@ export async function requireAdmin(): Promise<RequireAdminResult> {
     return { ok: false, status: 403, error: "Usuário inativo." };
   }
 
-  if (profile.perfil !== "administrador") {
-    return { ok: false, status: 403, error: "Apenas administradores podem executar esta ação." };
+  if (!allowedProfiles.includes(profile.perfil)) {
+    return { ok: false, status: 403, error: "Você não tem permissão para executar esta ação." };
   }
 
   return {
@@ -57,6 +61,7 @@ export async function requireAdmin(): Promise<RequireAdminResult> {
       userId: userData.user.id,
       email: userData.user.email ?? null,
       nome: profile.nome ?? null,
+      perfil: profile.perfil,
     },
   };
 }
