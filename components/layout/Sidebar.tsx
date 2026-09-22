@@ -63,21 +63,21 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "Gestão",
-    visibleFor: ["administrador","gestor"],
+    visibleFor: ["administrador","gestor","financeiro"],
     items: [
       { key: "aprovacao",    label: "Aprovações",       icon: <CheckSquare className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
       { key: "frotas",       label: "Frotas",           icon: <Car         className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
-      { key: "tipos-despesa",label: "Tipos de Despesa", icon: <Tag         className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
+      { key: "tipos-despesa",label: "Tipos de Despesa", icon: <Tag         className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor","financeiro"] },
       { key: "integracoes-erp", label: "Integrações ERP", icon: <TrendingUp className="w-5 h-5 shrink-0" />, profiles: ["administrador","gestor"] },
     ],
   },
   {
     label: "Administração",
-    visibleFor: ["administrador"],
+    visibleFor: ["administrador","financeiro"],
     items: [
-      { key: "usuarios",  label: "Usuários",  icon: <Users         className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
+      { key: "usuarios",  label: "Usuários",  icon: <Users         className="w-5 h-5 shrink-0" />, profiles: ["administrador","financeiro"] },
       { key: "auditoria", label: "Auditoria", icon: <ClipboardList className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
-      { key: "backup-comprovantes", label: "Backup de Comprovantes", icon: <Archive className="w-5 h-5 shrink-0" />, profiles: ["administrador"] },
+      { key: "backup-comprovantes", label: "Backup de Comprovantes", icon: <Archive className="w-5 h-5 shrink-0" />, profiles: ["administrador","financeiro"] },
     ],
   },
 ];

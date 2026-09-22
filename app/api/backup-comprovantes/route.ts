@@ -4,7 +4,7 @@ import { BUCKET_BACKUPS } from "@/lib/backup-comprovantes";
 
 /** Lista o histórico de backups já gerados, com link de download quando o ZIP ainda existe. */
 export async function GET() {
-  const auth = await requireAdmin();
+  const auth = await requireAdmin(["administrador", "financeiro"]);
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
