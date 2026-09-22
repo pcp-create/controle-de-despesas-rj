@@ -528,10 +528,10 @@ export default function UsuariosPageSupabase() {
           <h1 className="text-xl font-bold text-foreground">Usuários</h1>
           <p className="text-sm text-muted-foreground">{users.length} usuário(s) cadastrado(s)</p>
         </div>
-        {currentUser?.perfil === "administrador" && (
-          <button
-            onClick={() => handleOpenModal()}
-            className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition"
+              {(currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro") && (
+                <button
+                  onClick={() => handleOpenModal()}
+                  className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition"
           >
             <PlusCircle className="w-4 h-4" />
             Novo Usuário
@@ -647,7 +647,7 @@ export default function UsuariosPageSupabase() {
                 </div>
               </div>
 
-              {currentUser?.perfil === "administrador" && (
+              {(currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro") && (
                 <div className="flex gap-2 mt-4 pt-4 border-t border-border">
                   <button
                     onClick={() => handleOpenModal(u)}
@@ -656,7 +656,7 @@ export default function UsuariosPageSupabase() {
                     <Edit2 className="w-3.5 h-3.5" />
                     {u.id === currentUser.id ? "Editar meu perfil" : "Editar"}
                   </button>
-                  {u.id !== currentUser.id && (
+                  {u.id !== currentUser.id && currentUser.perfil === "administrador" && (
                     <>
                       <button
                         onClick={() => handleResetPassword(u)}
