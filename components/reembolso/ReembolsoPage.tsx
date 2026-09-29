@@ -18,6 +18,7 @@ import {
   X,
   Paperclip,
   Loader2,
+  Undo2,
 } from "lucide-react";
 
 // ─── Configs de status ────────────────────────────────────────────────────────
@@ -189,13 +190,94 @@ function ModalAprovacaoFinanceiro({ despesaId: _, onClose, onConfirmar }: ModalA
   );
 }
 
+// ─── Modal de Devolução ao Criador ────────────────────────────────────────────
+interface ModalDevolucaoProps {
+  onClose: () => void;
+  onConfirmar: (motivo: string) => Promise<void>;
+}
+
+function ModalDevolucao({ onClose, onConfirmar }: ModalDevolucaoProps) {
+  const [motivo, setMotivo] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  const handleConfirmar = async () => {
+    if (!motivo.trim()) return;
+    setSalvando(true);
+    await onConfirmar(motivo.trim());
+    setSalvando(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titulo-devolucao"
+        className="relative bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col"
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div>
+            <h2 id="titulo-devolucao" className="text-base font-semibold text-foreground">
+              Devolver ao criador
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              A despesa volta como Reprovada para o colaborador corrigir e reenviar
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Fechar"
+            className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 flex flex-col gap-1.5">
+          <label htmlFor="motivo-devolucao" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Motivo da devolução *
+          </label>
+          <textarea
+            id="motivo-devolucao"
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            placeholder="Descreva o que precisa ser corrigido..."
+            rows={4}
+            autoFocus
+            className="w-full px-3 py-2 rounded-lg border border-input bg-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border">
+          <button
+            onClick={onClose}
+            disabled={salvando}
+            className="px-4 py-2 rounded-lg border border-input text-sm hover:bg-muted transition disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleConfirmar}
+            disabled={salvando || !motivo.trim()}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-destructive text-white text-sm font-medium hover:bg-destructive/90 disabled:opacity-50 transition"
+          >
+            {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+            {salvando ? "Devolvendo..." : "Confirmar devolução"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function ReembolsoPage() {
   const { currentUser } = useAppStore();
-  const { despesas, isLoading, aprovarFinanceiro, processarReembolso, estornarReembolso } = useDespesas(
-    undefined,
-    currentUser?.perfil
-  );
+  const { despesas, isLoading, aprovarFinanceiro, processarReembolso, estornarReembolso, devolverFinanceiro } =
+    useDespesas(undefined, currentUser?.perfil);
+  const podeDevolver = currentUser?.perfil === "financeiro" || currentUser?.perfil === "administrador";
+  const [modalDevolucaoId, setModalDevolucaoId] = useState<string | null>(null);
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
 
@@ -304,6 +386,20 @@ export default function ReembolsoPage() {
     setLoadingId(null);
   };
 
+  const handleDevolver = async (id: string, motivo: string) => {
+    if (!currentUser?.id) return;
+    setLoadingId(id);
+    const result = await devolverFinanceiro(id, motivo, currentUser.id);
+    setModalDevolucaoId(null);
+    if (result.error) {
+      setFeedback({ type: "error", msg: result.error });
+    } else {
+      setFeedback({ type: "success", msg: "Despesa devolvida ao criador para correção." });
+      setTimeout(() => setFeedback(null), 3000);
+    }
+    setLoadingId(null);
+  };
+
   // ── Loading ─────────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -336,6 +432,13 @@ export default function ReembolsoPage() {
           onConfirmar={async (obs, anexoUrl, anexoNome) =>
             handleAprovarFinanceiro(modalAprovacaoId, obs, anexoUrl, anexoNome)
           }
+        />
+      )}
+
+      {modalDevolucaoId && (
+        <ModalDevolucao
+          onClose={() => setModalDevolucaoId(null)}
+          onConfirmar={(motivo) => handleDevolver(modalDevolucaoId, motivo)}
         />
       )}
 
@@ -558,6 +661,16 @@ export default function ReembolsoPage() {
                                 <Banknote className="w-4 h-4" />
                                 {isItemLoading ? "Processando..." : "Lançar Reembolso"}
                               </button>
+                              {podeDevolver && (
+                                <button
+                                  onClick={() => setModalDevolucaoId(d.id)}
+                                  disabled={isItemLoading}
+                                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive/10 disabled:opacity-60 transition"
+                                >
+                                  <Undo2 className="w-4 h-4" />
+                                  Reprovar / Devolver
+                                </button>
+                              )}
                             </>
                           )}
 

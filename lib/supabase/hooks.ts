@@ -952,6 +952,42 @@ export function useDespesas(userId?: string, perfil?: string) {
     return { error: null };
   };
 
+  const devolverFinanceiro = async (id: string, justificativa: string, devolvidoPor: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    if (!justificativa.trim()) return { error: "Informe o motivo da devolução" };
+
+    const { error } = await supabase
+      .from("despesas")
+      .update({
+        status_aprovacao: "Reprovado",
+        status_erp: "Rascunho",
+        justificativa_reprovacao: `[Financeiro] ${justificativa.trim()}`,
+        aprovado_financeiro: false,
+        aprovado_financeiro_em: null,
+        aprovado_financeiro_por: null,
+        reembolso_processado: false,
+        reembolso_processado_em: null,
+        reembolso_processado_por: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("reembolso_processado", false);
+
+    if (error) return { error: error.message };
+
+    await registrarAuditoria({
+      acao: "REJECT",
+      entidade: "despesa",
+      entidadeId: id,
+      usuarioId: devolvidoPor,
+      detalhes: `Reembolso devolvido ao criador pelo financeiro: ${justificativa.trim()}`,
+    });
+
+    mutate();
+    return { error: null };
+  };
+
   // Apenas lançamento no sistema interno (sem chamar API M8)
   const lancarSistema = async (id: string, lancadoPor: string) => {
     const supabase = getSupabase();
@@ -1110,6 +1146,7 @@ export function useDespesas(userId?: string, perfil?: string) {
     enviarDespesa,
     aprovarDespesa,
     reprovarDespesa,
+    devolverFinanceiro,
     aprovarFinanceiro,
     processarReembolso,
     estornarReembolso,
