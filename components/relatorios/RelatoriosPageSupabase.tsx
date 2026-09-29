@@ -6,7 +6,7 @@ import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosRelatorio } from "@/lib/supabase/use-filtros-persistidos";
 import { useDespesas, useTiposDespesa, useProfiles, useControleKm, useFrotas, useTiposDespesaCentroCustoTodos, ControleKm } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
-import { formatCurrency } from "@/lib/helpers";
+import { formatCurrency, anosDisponiveis } from "@/lib/helpers";
 import { calcularEstimativaVeiculo, calcularConsumoRealVeiculo } from "@/lib/consumo-frota";
 import { EMPRESAS_ERP, extrairEmpresaErpId, extrairEmpresaErpNome, extrairComplementoErp } from "@/lib/erp-payload";
 import {
@@ -1154,7 +1154,7 @@ export default function RelatoriosPageSupabase() {
       };
 
 
-  const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
+  const anos = anosDisponiveis(despesas, anoSelecionado);
 
   // Helper: extrai a data de referência conforme campoPeriodo
   const getDataRef = (d: typeof despesas[0]): string =>

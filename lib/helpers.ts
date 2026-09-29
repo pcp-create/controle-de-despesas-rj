@@ -1,5 +1,30 @@
 import type { ERPStatus, ApprovalStatus } from "./types";
 
+type RegistroComDatas = {
+  data_despesa?: string | null;
+  data_vencimento?: string | null;
+  created_at?: string | null;
+};
+
+// Lê o ano direto da string (YYYY-...) para não sofrer deslocamento de fuso.
+function extrairAno(valor?: string | null): number | null {
+  if (!valor) return null;
+  const ano = Number(valor.slice(0, 4));
+  return Number.isInteger(ano) && ano > 1900 ? ano : null;
+}
+
+export function anosDisponiveis(registros: RegistroComDatas[], anoSelecionado?: number): number[] {
+  const anos = new Set<number>([new Date().getFullYear()]);
+  if (anoSelecionado) anos.add(anoSelecionado);
+  for (const r of registros) {
+    for (const valor of [r.data_despesa, r.data_vencimento, r.created_at]) {
+      const ano = extrairAno(valor);
+      if (ano) anos.add(ano);
+    }
+  }
+  return Array.from(anos).sort((a, b) => b - a);
+}
+
 export function formatCurrency(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }

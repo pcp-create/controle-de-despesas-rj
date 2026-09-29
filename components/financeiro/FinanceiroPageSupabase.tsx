@@ -6,7 +6,7 @@ import type { FiltrosFinanceiro } from "@/lib/supabase/use-filtros-persistidos";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
-import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig, motivoBloqueioEnvioERP } from "@/lib/helpers";
+import { anosDisponiveis, formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig, motivoBloqueioEnvioERP } from "@/lib/helpers";
 import { salvarPrefsTabelaFinanceiro, carregarPrefsTabelaFinanceiro } from "@/lib/financeiro-table-prefs";
 import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle, AlertTriangle, Clock, Send, CheckCircle, RefreshCw, Ban, Archive } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -365,7 +365,7 @@ export default function FinanceiroPageSupabase() {
     salvarFin({ modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroLancamento });
   }, [modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroLancamento]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
+  const anos = useMemo(() => anosDisponiveis(despesas, anoSelecionado), [despesas, anoSelecionado]);
 
   const todasDespesas = useMemo(() => {
     return despesas.filter((d) => {

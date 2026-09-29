@@ -22,7 +22,7 @@ import {
   AlertTriangle,
   CheckCircle2,
 } from "lucide-react";
-import { formatCurrency, getStatusGeral } from "@/lib/helpers";
+import { anosDisponiveis, formatCurrency, getStatusGeral } from "@/lib/helpers";
 
 import type { PageKey, NavigateFn } from "@/components/layout/AppShellSupabase";
 import {
@@ -160,7 +160,7 @@ export default function DashboardSupabase({ onNavigate }: Props) {
     salvar({ modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroTipo, filtroFuncionario });
   }, [modoFiltro, mesSelecionado, anoSelecionado, dataInicial, dataFinal, filtroTipo, filtroFuncionario]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
+  const anos = useMemo(() => anosDisponiveis(despesas, anoSelecionado), [despesas, anoSelecionado]);
 
   const myDespesas = useMemo(() => {
     let filtered = despesas;

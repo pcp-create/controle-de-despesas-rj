@@ -14,7 +14,7 @@ import {
   ArrowRight,
   CalendarDays,
 } from "lucide-react";
-import { formatCurrency, erpStatusColor, erpStatusLabel } from "@/lib/helpers";
+import { anosDisponiveis, formatCurrency, erpStatusColor, erpStatusLabel } from "@/lib/helpers";
 import type { PageKey } from "@/components/layout/AppShell";
 import {
   BarChart,
@@ -56,8 +56,7 @@ export default function Dashboard({ onNavigate }: Props) {
   });
   const [dataFinal, setDataFinal] = useState(() => now.toISOString().slice(0, 10));
 
-  // Anos disponíveis (últimos 3 anos)
-  const anos = [now.getFullYear() - 2, now.getFullYear() - 1, now.getFullYear()];
+  const anos = anosDisponiveis(despesas as Parameters<typeof anosDisponiveis>[0], anoSelecionado);
 
   // Despesas filtradas por perfil
   const despesasPerfil = useMemo(() =>
