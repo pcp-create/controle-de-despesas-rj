@@ -22,7 +22,7 @@ export function anosDisponiveis(registros: RegistroComDatas[], anoSelecionado?: 
       if (ano) anos.add(ano);
     }
   }
-  return Array.from(anos).sort((a, b) => b - a);
+  return Array.from(anos).sort((a, b) => a - b);
 }
 
 export function formatCurrency(value: number): string {
