@@ -206,8 +206,15 @@ function montarResumoDespesa(
     `Aprovado por: ${aprovador?.nome || aprovador?.full_name || "Aprovação Automática"}`,
   ].join(" | ");
 
+  if (despesa.pagamento_tipo === "cartao") {
+    const prefixo = `${PREFIXO_COMPLEMENTO_CARTAO}\n`;
+    return prefixo + limitarTexto(resumo, LIMITE_TEXTO_M8 - prefixo.length);
+  }
+
   return limitarTexto(resumo, LIMITE_TEXTO_M8);
 }
+
+const PREFIXO_COMPLEMENTO_CARTAO = "PGT.FATURA CARTAO";
 
 async function salvarProgresso(
   supabase: SupabaseClient,
