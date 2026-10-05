@@ -609,6 +609,79 @@ export function useDespesas(userId?: string, perfil?: string) {
     return { error: null };
   };
 
+  // Edição que recalcula todo o grupo de parcelas: o valor total é redistribuído
+  // entre as parcelas (a última absorve a diferença de arredondamento), parcelas
+  // excedentes são removidas e parcelas faltantes são criadas.
+  const salvarEdicaoComParcelas = async (
+    despesaId: string,
+    base: Partial<Despesa>,
+    valorTotal: number,
+    qtdParcelas: number,
+    calcularVencimentoParcela: (indice: number) => string,
+  ) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+
+    const { data: atual, error: erroAtual } = await supabase
+      .from("despesas")
+      .select("id, tecnico_id, grupo_parcela_id")
+      .eq("id", despesaId)
+      .single();
+    if (erroAtual || !atual) return { error: erroAtual?.message ?? "Despesa não encontrada" };
+
+    let existentes: { id: string; parcela_atual: number }[] = [{ id: atual.id, parcela_atual: 1 }];
+    if (atual.grupo_parcela_id) {
+      const { data: grupo, error: erroGrupo } = await supabase
+        .from("despesas")
+        .select("id, parcela_atual")
+        .eq("grupo_parcela_id", atual.grupo_parcela_id)
+        .order("parcela_atual", { ascending: true });
+      if (erroGrupo) return { error: erroGrupo.message };
+      if (grupo && grupo.length > 0) existentes = grupo;
+    }
+
+    const parcelado = qtdParcelas > 1;
+    const grupoId = parcelado ? (atual.grupo_parcela_id ?? crypto.randomUUID()) : null;
+    const valorBase = Math.floor((valorTotal / qtdParcelas) * 100) / 100;
+    const valorUltima = Number((valorTotal - valorBase * (qtdParcelas - 1)).toFixed(2));
+    const now = new Date().toISOString();
+
+    for (let i = 0; i < qtdParcelas; i++) {
+      const dadosParcela = {
+        ...base,
+        valor: i === qtdParcelas - 1 ? valorUltima : valorBase,
+        parcelado,
+        numero_parcelas: qtdParcelas,
+        parcela_atual: i + 1,
+        grupo_parcela_id: grupoId,
+        data_vencimento: calcularVencimentoParcela(i),
+        updated_at: now,
+      };
+      const existente = existentes[i];
+      const { error } = existente
+        ? await supabase.from("despesas").update(dadosParcela).eq("id", existente.id)
+        : await supabase.from("despesas").insert({ ...dadosParcela, tecnico_id: atual.tecnico_id });
+      if (error) return { error: `Erro na parcela ${i + 1}: ${error.message}` };
+    }
+
+    const excedentes = existentes.slice(qtdParcelas).map((p) => p.id);
+    if (excedentes.length > 0) {
+      const { error } = await supabase.from("despesas").delete().in("id", excedentes);
+      if (error) return { error: error.message };
+    }
+
+    await registrarAuditoria({
+      acao: "UPDATE",
+      entidade: "despesa",
+      entidadeId: despesaId,
+      usuarioId: userId || "sistema",
+      detalhes: `Despesa atualizada: R$ ${valorTotal.toFixed(2)} em ${qtdParcelas} parcela(s)`,
+    });
+
+    mutate();
+    return { error: null };
+  };
+
   const updateDespesaDocumento = async (id: string, documento: string) => {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
@@ -686,10 +759,17 @@ export function useDespesas(userId?: string, perfil?: string) {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
     
-    const { error } = await supabase
+    // Despesas parceladas são excluídas por completo (todas as parcelas do grupo)
+    const { data: alvo } = await supabase
       .from("despesas")
-      .delete()
-      .eq("id", id);
+      .select("grupo_parcela_id")
+      .eq("id", id)
+      .single();
+
+    const query = supabase.from("despesas").delete();
+    const { error } = alvo?.grupo_parcela_id
+      ? await query.eq("grupo_parcela_id", alvo.grupo_parcela_id)
+      : await query.eq("id", id);
 
     if (error) return { error: error.message };
     
@@ -699,7 +779,9 @@ export function useDespesas(userId?: string, perfil?: string) {
       entidade: "despesa",
       entidadeId: id,
       usuarioId: userId || "sistema",
-      detalhes: "Despesa deletada",
+      detalhes: alvo?.grupo_parcela_id
+        ? `Despesa parcelada deletada (grupo ${alvo.grupo_parcela_id})`
+        : "Despesa deletada",
     });
     
     mutate();
@@ -993,15 +1075,34 @@ export function useDespesas(userId?: string, perfil?: string) {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
-    const { error } = await supabase
+    const { data: alvo } = await supabase
       .from("despesas")
-      .update({
-        lancado_sistema: true,
-        lancado_sistema_em: new Date().toISOString(),
-        lancado_sistema_por: lancadoPor,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id);
+      .select("grupo_parcela_id, numero_parcelas, pagamento_tipo")
+      .eq("id", id)
+      .single();
+
+    // Faturado e Boleto parcelados: o lançamento vale para todas as parcelas do grupo.
+    const lancarGrupo =
+      !!alvo?.grupo_parcela_id &&
+      (alvo.numero_parcelas ?? 1) > 1 &&
+      (alvo.pagamento_tipo === "faturado" || alvo.pagamento_tipo === "boleto");
+
+    const agoraIso = new Date().toISOString();
+    const payload = {
+      lancado_sistema: true,
+      lancado_sistema_em: agoraIso,
+      lancado_sistema_por: lancadoPor,
+      updated_at: agoraIso,
+    };
+
+    const { error } = lancarGrupo
+      ? await supabase
+          .from("despesas")
+          .update(payload)
+          .eq("grupo_parcela_id", alvo!.grupo_parcela_id)
+          .eq("lancado_sistema", false)
+          .or("lancamento_cancelado.is.null,lancamento_cancelado.eq.false")
+      : await supabase.from("despesas").update(payload).eq("id", id);
 
     if (error) return { error: error.message };
 
@@ -1010,7 +1111,9 @@ export function useDespesas(userId?: string, perfil?: string) {
       entidade: "despesa",
       entidadeId: id,
       usuarioId: lancadoPor,
-      detalhes: "Despesa lançada no sistema",
+      detalhes: lancarGrupo
+        ? `Despesa parcelada lançada no sistema — todas as parcelas (grupo ${alvo!.grupo_parcela_id})`
+        : "Despesa lançada no sistema",
     });
 
     mutate();
@@ -1142,6 +1245,7 @@ export function useDespesas(userId?: string, perfil?: string) {
     updateDespesaDocumento,
     updateDespesaTipo,
     updateDespesaVencimento,
+    salvarEdicaoComParcelas,
     deleteDespesa,
     enviarDespesa,
     aprovarDespesa,
