@@ -1075,15 +1075,34 @@ export function useDespesas(userId?: string, perfil?: string) {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
-    const { error } = await supabase
+    const { data: alvo } = await supabase
       .from("despesas")
-      .update({
-        lancado_sistema: true,
-        lancado_sistema_em: new Date().toISOString(),
-        lancado_sistema_por: lancadoPor,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id);
+      .select("grupo_parcela_id, numero_parcelas, pagamento_tipo")
+      .eq("id", id)
+      .single();
+
+    // Faturado e Boleto parcelados: o lançamento vale para todas as parcelas do grupo.
+    const lancarGrupo =
+      !!alvo?.grupo_parcela_id &&
+      (alvo.numero_parcelas ?? 1) > 1 &&
+      (alvo.pagamento_tipo === "faturado" || alvo.pagamento_tipo === "boleto");
+
+    const agoraIso = new Date().toISOString();
+    const payload = {
+      lancado_sistema: true,
+      lancado_sistema_em: agoraIso,
+      lancado_sistema_por: lancadoPor,
+      updated_at: agoraIso,
+    };
+
+    const { error } = lancarGrupo
+      ? await supabase
+          .from("despesas")
+          .update(payload)
+          .eq("grupo_parcela_id", alvo!.grupo_parcela_id)
+          .eq("lancado_sistema", false)
+          .or("lancamento_cancelado.is.null,lancamento_cancelado.eq.false")
+      : await supabase.from("despesas").update(payload).eq("id", id);
 
     if (error) return { error: error.message };
 
@@ -1092,7 +1111,9 @@ export function useDespesas(userId?: string, perfil?: string) {
       entidade: "despesa",
       entidadeId: id,
       usuarioId: lancadoPor,
-      detalhes: "Despesa lançada no sistema",
+      detalhes: lancarGrupo
+        ? `Despesa parcelada lançada no sistema — todas as parcelas (grupo ${alvo!.grupo_parcela_id})`
+        : "Despesa lançada no sistema",
     });
 
     mutate();
