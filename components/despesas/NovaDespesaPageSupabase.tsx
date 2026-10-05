@@ -32,7 +32,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   const { currentUser } = useAppStore();
   const { tiposDespesa } = useTiposDespesa();
   const { cartoes } = useCartoes(currentUser?.id);
-  const { addDespesa, updateDespesa } = useDespesas(currentUser?.id);
+  const { addDespesa, salvarEdicaoComParcelas } = useDespesas(currentUser?.id);
   const { frotas } = useFrotas();
 
   const [form, setForm] = useState({
@@ -300,16 +300,14 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     };
 
     if (editDespesa) {
-      // Edição: atualiza somente a despesa existente (sem regerar parcelas)
-      const result = await updateDespesa(editDespesa.id, {
-        ...baseData,
-        valor: Number(form.valor),
-        parcelado: parcelado,
-        numero_parcelas: parcelado ? qtdParcelas : 1,
-        parcela_atual: editDespesa.parcela_atual ?? 1,
-        grupo_parcela_id: editDespesa.grupo_parcela_id ?? null,
-        data_vencimento: calcularVencimento(form.dataDespesa, 0),
-      });
+      // Edição: recalcula o valor total e todas as parcelas do grupo
+      const result = await salvarEdicaoComParcelas(
+        editDespesa.id,
+        baseData,
+        Number(form.valor),
+        parcelado ? qtdParcelas : 1,
+        (i) => calcularVencimento(form.dataDespesa, i),
+      );
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
       } else {

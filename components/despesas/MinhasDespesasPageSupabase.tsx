@@ -97,9 +97,12 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
       );
   }, [despesas, currentUser, search, filterStatus, tiposDespesa]);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Tem certeza que deseja excluir esta despesa?")) return;
-    const result = await deleteDespesa(id);
+  const handleDelete = async (grupo: GrupoDespesa) => {
+    const mensagem = grupo.parcelado
+      ? `Tem certeza que deseja excluir esta despesa e todas as suas ${grupo.numeroParcelas} parcelas?`
+      : "Tem certeza que deseja excluir esta despesa?";
+    if (!confirm(mensagem)) return;
+    const result = await deleteDespesa(grupo.despesaPrincipal.id);
     if (result.error) {
       setFeedback({ type: "error", msg: result.error });
     } else {
@@ -292,14 +295,16 @@ export default function MinhasDespesasPageSupabase({ onNova, onEditar, initialSt
                               </div>
                             )}
                             <button
-                              onClick={() => onEditar(d)}
+                              onClick={() =>
+                                onEditar(grupo.parcelado ? { ...d, valor: grupo.valorTotal, numero_parcelas: grupo.numeroParcelas } : d)
+                              }
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition"
                             >
                               <Edit2 className="w-4 h-4" />
                               Editar
                             </button>
                             <button
-                              onClick={() => handleDelete(d.id)}
+                              onClick={() => handleDelete(grupo)}
                               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive text-sm hover:bg-destructive/10 transition"
                             >
                               <Trash2 className="w-4 h-4" />
