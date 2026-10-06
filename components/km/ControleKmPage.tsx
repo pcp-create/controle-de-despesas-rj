@@ -81,6 +81,7 @@ const EMPTY_FIN = {
 };
 
 const EMPTY_EDIT = {
+  frota_id: "",
   km_inicial: "",
   km_final: "",
   destino: "",
@@ -267,6 +268,7 @@ export default function ControleKmPage() {
   const openEditar = (r: ControleKm) => {
     setTargetRegistro(r);
     setEdit({
+      frota_id: r.frota_id,
       km_inicial: String(r.km_inicial),
       km_final: r.km_final != null ? String(r.km_final) : "",
       destino: r.destino ?? "",
@@ -357,6 +359,13 @@ export default function ControleKmPage() {
 
   const validateEditar = () => {
     const e: Record<string, string> = {};
+    if (!edit.frota_id) e.frota_id = "Selecione o veículo";
+    else if (
+      targetRegistro?.status === "aberto" &&
+      edit.frota_id !== targetRegistro.frota_id &&
+      frotasComViagem.has(edit.frota_id)
+    )
+      e.frota_id = "Este veículo já possui uma viagem em aberto";
     if (!edit.km_inicial.trim() || isNaN(Number(edit.km_inicial)) || Number(edit.km_inicial) < 0)
       e.km_inicial = "Informe o KM inicial válido";
     if (edit.km_final.trim()) {
@@ -377,6 +386,7 @@ export default function ControleKmPage() {
 
     setLoading(true);
     const result = await editarKm(targetRegistro.id, {
+      frota_id: edit.frota_id,
       km_inicial: Number(edit.km_inicial),
       km_final: edit.km_final.trim() ? Number(edit.km_final) : null,
       destino: edit.destino,
@@ -440,7 +450,7 @@ export default function ControleKmPage() {
     URL.revokeObjectURL(url);
   };
 
-  // ─── Render ─────────────────────────────────────────────
+  // ─── Render ────────────────��────────────────────────────
 
   return (
     <>
@@ -1285,6 +1295,34 @@ export default function ControleKmPage() {
             )}
 
             <form onSubmit={handleEditar} className="p-5 flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="edit-frota" className="text-sm font-medium text-foreground">
+                  Veículo <span className="text-destructive">*</span>
+                </label>
+                <select
+                  id="edit-frota"
+                  value={edit.frota_id}
+                  onChange={(e) => setEdit({ ...edit, frota_id: e.target.value })}
+                  className="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="">Selecione o veículo</option>
+                  {frotas
+                    .filter((f) => f.ativo || f.id === targetRegistro.frota_id)
+                    .sort((a, b) => a.placa.localeCompare(b.placa))
+                    .map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.placa} — {f.marca} {f.modelo}
+                      </option>
+                    ))}
+                </select>
+                {errors.frota_id && <span className="text-xs text-destructive">{errors.frota_id}</span>}
+                {edit.frota_id && edit.frota_id !== targetRegistro.frota_id && !errors.frota_id && (
+                  <span className="text-xs text-warning">
+                    O apontamento será movido de {frota?.placa} para{" "}
+                    {frotas.find((f) => f.id === edit.frota_id)?.placa}. A quilometragem dos dois veículos será recalculada.
+                  </span>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-sm font-medium text-foreground">KM Inicial <span className="text-destructive">*</span></label>

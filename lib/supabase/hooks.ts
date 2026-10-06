@@ -1564,6 +1564,7 @@ export function useControleKm(userId?: string) {
   const editarKm = async (
     id: string,
     payload: {
+      frota_id?: string;
       km_inicial: number;
       km_final: number | null;
       destino?: string;
@@ -1583,6 +1584,7 @@ export function useControleKm(userId?: string) {
 
       mutate();
       swrMutate("controle_km"); // invalida a chave global usada pelo FrotasPage
+      swrMutate("frotas");
       return { data: json.data, error: null };
     } catch {
       return { error: "Erro ao ajustar apontamento" };
