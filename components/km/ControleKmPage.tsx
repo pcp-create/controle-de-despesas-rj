@@ -134,6 +134,10 @@ export default function ControleKmPage() {
       .catch(() => {});
   }, []);
 
+  const [kmAbertoConfirmacao, setKmAbertoConfirmacao] = useState<
+    { id: string; usuario_nome: string; km_inicial: number; data_inicio: string; destino: string | null }[] | null
+  >(null);
+
   // Registro aberto do usuário logado
   const registroAberto = useMemo(
     () => registros.find((r) => r.usuario_id === currentUser?.id && r.status === "aberto"),
@@ -230,7 +234,7 @@ export default function ControleKmPage() {
     return `${s}s`;
   };
 
-  // ─── Handlers ───────────────────────────────────────────
+  // ─── Handlers ─────────────────���─────────────────────────
 
   const openIniciar = () => {
     if (registroAberto) {
@@ -313,6 +317,34 @@ export default function ControleKmPage() {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     if (!currentUser?.id) return;
 
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `/api/controle-km-encerrar-aberto?frota_id=${encodeURIComponent(form.frota_id)}&usuario_id=${encodeURIComponent(currentUser.id)}`
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setLoading(false);
+        setFeedback({ type: "error", msg: data.error ?? "Não foi possível verificar o veículo." });
+        return;
+      }
+      if (Array.isArray(data.abertos) && data.abertos.length > 0) {
+        setLoading(false);
+        setKmAbertoConfirmacao(data.abertos);
+        return;
+      }
+    } catch {
+      setLoading(false);
+      setFeedback({ type: "error", msg: "Não foi possível verificar o veículo." });
+      return;
+    }
+
+    await executarIniciar();
+  };
+
+  const executarIniciar = async () => {
+    if (!currentUser?.id) return;
+    setKmAbertoConfirmacao(null);
     setLoading(true);
     const frota = frotas.find((f) => f.id === form.frota_id);
     const kmInicialNum = Number(form.km_inicial);
@@ -906,6 +938,75 @@ export default function ControleKmPage() {
             }`}>
               {feedback.type === "success" ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
               {feedback.msg}
+            </div>
+          )}
+
+          {kmAbertoConfirmacao && (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="km-aberto-titulo"
+              aria-describedby="km-aberto-descricao"
+            >
+              <div className="w-full max-w-md rounded-xl bg-card border border-border shadow-xl">
+                <div className="flex items-start gap-3 p-5 border-b border-border">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 id="km-aberto-titulo" className="text-base font-semibold text-foreground">
+                      Veículo com KM em aberto
+                    </h3>
+                    <p id="km-aberto-descricao" className="text-sm text-muted-foreground mt-1">
+                      Este veículo já possui um apontamento em aberto. Se seguir, ele será encerrado automaticamente com KM final{" "}
+                      <span className="font-semibold text-foreground">
+                        {Number(form.km_inicial || 0).toLocaleString("pt-BR")} km
+                      </span>
+                      .
+                    </p>
+                  </div>
+                </div>
+
+                <ul className="flex flex-col gap-2 p-5">
+                  {kmAbertoConfirmacao.map((r) => (
+                    <li key={r.id} className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                      <p className="text-sm font-semibold text-foreground">{r.usuario_nome}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {"Aberto em "}
+                        {new Date(r.data_inicio).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                        {" · KM inicial "}
+                        {r.km_inicial.toLocaleString("pt-BR")}
+                        {r.destino ? ` · Destino: ${r.destino}` : ""}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="flex justify-end gap-2 px-5 pb-5">
+                  <button
+                    type="button"
+                    onClick={() => setKmAbertoConfirmacao(null)}
+                    className="px-4 py-2 rounded-lg border border-input text-sm font-medium text-foreground hover:bg-muted transition-colors"
+                  >
+                    Não, cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={executarIniciar}
+                    disabled={loading}
+                    className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60"
+                  >
+                    Sim, seguir
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

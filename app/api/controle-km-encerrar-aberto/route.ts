@@ -7,6 +7,64 @@ const supabaseUrl =
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 /**
+ * Lista os apontamentos em aberto de OUTROS usuários para um veículo, com o
+ * nome de quem está com ele, para o usuário confirmar antes de seguir.
+ */
+export async function GET(request: Request) {
+  if (!supabaseServiceKey) {
+    return NextResponse.json({ error: "Configuração do servidor incompleta" }, { status: 500 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const frota_id = searchParams.get("frota_id");
+  const usuario_id = searchParams.get("usuario_id");
+  if (!frota_id || !usuario_id) {
+    return NextResponse.json({ error: "frota_id e usuario_id são obrigatórios." }, { status: 400 });
+  }
+
+  const admin = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  const { data: abertos, error } = await admin
+    .from("controle_km")
+    .select("id, usuario_id, km_inicial, data_inicio, destino")
+    .eq("frota_id", frota_id)
+    .eq("status", "aberto")
+    .neq("usuario_id", usuario_id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const lista = (abertos ?? []) as {
+    id: string;
+    usuario_id: string;
+    km_inicial: number;
+    data_inicio: string;
+    destino: string | null;
+  }[];
+
+  if (lista.length === 0) return NextResponse.json({ abertos: [] });
+
+  const { data: perfis } = await admin
+    .from("profiles")
+    .select("id, nome")
+    .in("id", lista.map((r) => r.usuario_id));
+  const nomes = new Map(((perfis ?? []) as { id: string; nome: string }[]).map((p) => [p.id, p.nome]));
+
+  return NextResponse.json({
+    abertos: lista.map((r) => ({
+      id: r.id,
+      usuario_nome: nomes.get(r.usuario_id) ?? "Usuário desconhecido",
+      km_inicial: Number(r.km_inicial ?? 0),
+      data_inicio: r.data_inicio,
+      destino: r.destino,
+    })),
+  });
+}
+
+/**
  * Encerra automaticamente os apontamentos em aberto de OUTROS usuários para um
  * veículo, antes de um novo apontamento ser aberto nele. O KM final do
  * apontamento encerrado passa a ser o KM inicial do novo apontamento.
