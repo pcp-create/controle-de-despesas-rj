@@ -146,7 +146,9 @@ export default function ControleKmPage() {
     [registros]
   );
 
-  const frotasDisponiveis = frotas.filter((f) => f.ativo && !frotasComViagem.has(f.id));
+  // Veículos com viagem aberta de outro usuário continuam disponíveis: ao abrir
+  // um novo apontamento, o anterior é encerrado automaticamente pelo sistema.
+  const frotasDisponiveis = frotas.filter((f) => f.ativo);
 
   // Lista filtrada — somente funcionário vê apenas os próprios registros
   const registrosFiltrados = useMemo(() => {
@@ -240,7 +242,7 @@ export default function ControleKmPage() {
     const veiculoPadrao = currentUser && "frota_padrao_id" in currentUser
       ? (currentUser as any).frota_padrao_id as string | null
       : null;
-    const padraodDisponivel = veiculoPadrao && !frotasComViagem.has(veiculoPadrao);
+    const padraodDisponivel = veiculoPadrao && frotas.some((f) => f.id === veiculoPadrao && f.ativo);
     setForm({ ...EMPTY_FORM, frota_id: padraodDisponivel ? veiculoPadrao! : "" });
     setErrors({});
     setFeedback(null);
@@ -328,7 +330,13 @@ export default function ControleKmPage() {
     if (result.error) {
       setFeedback({ type: "error", msg: result.error });
     } else {
-      setFeedback({ type: "success", msg: `Viagem iniciada! Veículo: ${frota?.placa}` });
+      const encerrados = "encerradosAutomaticamente" in result ? Number(result.encerradosAutomaticamente ?? 0) : 0;
+      setFeedback({
+        type: "success",
+        msg:
+          `Viagem iniciada! Veículo: ${frota?.placa}` +
+          (encerrados > 0 ? ". O apontamento em aberto de outro usuário foi encerrado automaticamente." : ""),
+      });
       setTimeout(() => closeModal(), 1200);
     }
   };
@@ -945,7 +953,13 @@ export default function ControleKmPage() {
                             Usar outro
                           </button>
                         </div>
-                      ) : (
+                      ) : null}
+                      {veiculoSelecionado && frotasComViagem.has(veiculoSelecionado.id) && (
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                          Este veículo possui um apontamento em aberto de outro usuário. Ao iniciar, ele será encerrado automaticamente com o KM final igual ao KM inicial informado aqui.
+                        </p>
+                      )}
+                      {!veiculoSelecionado && (
                         <button
                           type="button"
                           onClick={() => setMostrarListaVeiculos(true)}
