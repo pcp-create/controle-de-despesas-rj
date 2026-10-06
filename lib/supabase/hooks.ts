@@ -1473,6 +1473,26 @@ export function useControleKm(userId?: string) {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
+    // Se outro usuário estiver com um apontamento em aberto neste veículo,
+    // ele é encerrado automaticamente com KM final = KM inicial deste novo apontamento.
+    let encerradosAutomaticamente = 0;
+    try {
+      const res = await fetch("/api/controle-km-encerrar-aberto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          frota_id: payload.frota_id,
+          usuario_id: payload.usuario_id,
+          km_inicial: payload.km_inicial,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) return { error: json.error || "Erro ao encerrar apontamento em aberto do veículo" };
+      encerradosAutomaticamente = Number(json.encerrados ?? 0);
+    } catch {
+      return { error: "Erro ao encerrar apontamento em aberto do veículo" };
+    }
+
     const { data: inserted, error } = await supabase
       .from("controle_km")
       .insert({
@@ -1492,7 +1512,7 @@ export function useControleKm(userId?: string) {
 
     mutate();
     swrMutate("controle_km"); // invalida a chave global usada pelo FrotasPage
-    return { data: inserted, error: null };
+    return { data: inserted, error: null, encerradosAutomaticamente };
   };
 
   const finalizarKm = async (id: string, km_final: number, observacao?: string, frota_id?: string, ocorrencia?: string) => {
