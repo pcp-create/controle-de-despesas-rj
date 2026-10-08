@@ -41,6 +41,7 @@ interface UsuarioForm {
   gestor_id: string | null;
   frota_padrao_id: string | null;
   chave_pix: string;
+  ativo: boolean;
   senha?: string;
   pessoaId?: string;
 }
@@ -55,6 +56,7 @@ const initialForm: UsuarioForm = {
   gestor_id: null,
   frota_padrao_id: null,
   chave_pix: "",
+  ativo: true,
   senha: "",
   pessoaId: "",
 };
@@ -148,6 +150,7 @@ export default function UsuariosPageSupabase() {
         gestor_id: user.gestor_id || null,
         frota_padrao_id: user.frota_padrao_id || null,
         chave_pix: user.chave_pix || "",
+        ativo: user.ativo !== false,
         senha: "",
         pessoaId: user.pessoa_id ? String(user.pessoa_id) : "",
       });
@@ -198,6 +201,8 @@ export default function UsuariosPageSupabase() {
             frota_padrao_id: form.frota_padrao_id || null,
             chave_pix: form.chave_pix.trim() || null,
             pessoa_id: form.pessoaId ? Number(form.pessoaId) : null,
+            ativo: form.ativo,
+            updated_at: new Date().toISOString(),
           })
           .eq("id", editingUser.id);
 
@@ -250,6 +255,7 @@ export default function UsuariosPageSupabase() {
             area: form.area && form.area.trim() ? form.area : null,
             telefone: form.telefone && form.telefone.trim() ? form.telefone : null,
             pessoa_id: form.pessoaId && form.pessoaId.trim() ? Number(form.pessoaId) : null,
+            ativo: form.ativo,
           })
           .eq("id", userId);
 
@@ -262,7 +268,7 @@ export default function UsuariosPageSupabase() {
         addUser({
           ...form,
           id: userId,
-          ativo: true,
+          ativo: form.ativo,
           primeiroAcesso: false,
         });
         setFeedback({ type: "success", msg: "Usuário criado com sucesso!" });
@@ -823,6 +829,48 @@ export default function UsuariosPageSupabase() {
                       <option value="administrador">Administrador</option>
                     </select>
                   </div>
+
+                  <fieldset className="flex flex-col gap-1.5">
+                    <legend className="text-sm font-medium text-foreground mb-1.5">Status de acesso</legend>
+                    <div
+                      role="radiogroup"
+                      aria-label="Status de acesso"
+                      className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted"
+                    >
+                      {[
+                        { value: true, label: "Ativo" },
+                        { value: false, label: "Desativo" },
+                      ].map((opt) => {
+                        const selected = form.ativo === opt.value;
+                        const isSelf = !!editingUser && editingUser.id === currentUser?.id;
+                        const disabled = isSelf && opt.value === false;
+                        return (
+                          <button
+                            key={opt.label}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            disabled={disabled}
+                            onClick={() => setForm({ ...form, ativo: opt.value })}
+                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                              selected
+                                ? opt.value
+                                  ? "bg-white text-success shadow-sm"
+                                  : "bg-white text-destructive shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {form.ativo
+                        ? "O usuário pode acessar o sistema normalmente."
+                        : "O acesso será bloqueado: o usuário não conseguirá entrar e sessões abertas serão encerradas."}
+                    </p>
+                  </fieldset>
 
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between">
