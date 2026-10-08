@@ -69,10 +69,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!isMounted) return;
 
         if (session?.user) {
-          setUser(session.user);
           const profileData = await fetchProfile();
-          if (isMounted && profileData) {
-            setProfile(profileData);
+          if (!isMounted) return;
+          if (profileData && !profileData.ativo) {
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+          } else {
+            setUser(session.user);
+            if (profileData) setProfile(profileData);
           }
         }
       } catch {
