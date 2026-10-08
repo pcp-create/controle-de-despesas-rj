@@ -752,6 +752,48 @@ export default function UsuariosPageSupabase() {
               {/* Tab: Básico */}
               {activeTab === "basico" && (
                 <>
+                  <fieldset className="flex flex-col gap-1.5">
+                    <legend className="text-sm font-medium text-foreground mb-1.5">Status de acesso</legend>
+                    <div
+                      role="radiogroup"
+                      aria-label="Status de acesso"
+                      className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted"
+                    >
+                      {[
+                        { value: true, label: "Ativo" },
+                        { value: false, label: "Desativo" },
+                      ].map((opt) => {
+                        const selected = form.ativo === opt.value;
+                        const isSelf = !!editingUser && editingUser.id === currentUser?.id;
+                        const disabled = isSelf && opt.value === false;
+                        return (
+                          <button
+                            key={opt.label}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            disabled={disabled}
+                            onClick={() => setForm({ ...form, ativo: opt.value })}
+                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                              selected
+                                ? opt.value
+                                  ? "bg-white text-success shadow-sm"
+                                  : "bg-white text-destructive shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {form.ativo
+                        ? "O usuário pode acessar o sistema normalmente."
+                        : "O acesso será bloqueado: o usuário não conseguirá entrar e sessões abertas serão encerradas."}
+                    </p>
+                  </fieldset>
+
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-foreground">Nome completo</label>
                     <input
@@ -829,48 +871,6 @@ export default function UsuariosPageSupabase() {
                       <option value="administrador">Administrador</option>
                     </select>
                   </div>
-
-                  <fieldset className="flex flex-col gap-1.5">
-                    <legend className="text-sm font-medium text-foreground mb-1.5">Status de acesso</legend>
-                    <div
-                      role="radiogroup"
-                      aria-label="Status de acesso"
-                      className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted"
-                    >
-                      {[
-                        { value: true, label: "Ativo" },
-                        { value: false, label: "Desativo" },
-                      ].map((opt) => {
-                        const selected = form.ativo === opt.value;
-                        const isSelf = !!editingUser && editingUser.id === currentUser?.id;
-                        const disabled = isSelf && opt.value === false;
-                        return (
-                          <button
-                            key={opt.label}
-                            type="button"
-                            role="radio"
-                            aria-checked={selected}
-                            disabled={disabled}
-                            onClick={() => setForm({ ...form, ativo: opt.value })}
-                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${
-                              selected
-                                ? opt.value
-                                  ? "bg-white text-success shadow-sm"
-                                  : "bg-white text-destructive shadow-sm"
-                                : "text-muted-foreground hover:text-foreground"
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {form.ativo
-                        ? "O usuário pode acessar o sistema normalmente."
-                        : "O acesso será bloqueado: o usuário não conseguirá entrar e sessões abertas serão encerradas."}
-                    </p>
-                  </fieldset>
 
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between">
