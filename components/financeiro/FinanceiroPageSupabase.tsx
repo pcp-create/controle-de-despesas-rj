@@ -27,7 +27,7 @@ type ModoFiltro = "mes" | "periodo";
 //   "text"   → busca livre por parte do texto (colunas de texto aberto)
 type FinanceiroSortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "observacao" | "valor" | "status" | "documento" | "cartao" | "lancado";
 const TABLE_COLUMNS: { id: string; sortKey: FinanceiroSortKey | null; label: string; align: "left" | "right"; defaultWidth: number; filterType: "select" | "text" | null }[] = [
-  { id: "lancado",     sortKey: "lancado",     label: "Lançar",      align: "left",  defaultWidth: 170, filterType: "select" },
+  { id: "lancado",     sortKey: "lancado",     label: "Ações / Lançar", align: "left", defaultWidth: 205, filterType: "select" },
   { id: "data",        sortKey: "data",        label: "Data",        align: "left",  defaultWidth: 100, filterType: "select" },
   { id: "vencimento",  sortKey: "vencimento",  label: "Vencimento",  align: "left",  defaultWidth: 120, filterType: "select" },
   { id: "funcionario", sortKey: "funcionario", label: "Funcionário", align: "left",  defaultWidth: 130, filterType: "select" },
@@ -1189,7 +1189,7 @@ export default function FinanceiroPageSupabase() {
                   <th
                     key={label}
                     title={label}
-                    className={`relative px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"}`}
+                    className={`relative px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"} ${index === 0 ? "sticky left-0 z-20 bg-muted border-r border-border" : ""}`}
                   >
                     <div className={`flex items-center gap-1 min-w-0 ${align === "right" ? "justify-end" : ""}`}>
                       {key ? (
@@ -1357,8 +1357,8 @@ export default function FinanceiroPageSupabase() {
 
                 return (
                   <tr key={d.id} className="border-t border-border hover:bg-muted/20 transition">
-                    {/* Coluna Lançar */}
-                    <td className="px-3 py-2 overflow-hidden">
+                    {/* Coluna de ações fixa para ficar disponível mesmo com rolagem horizontal */}
+                    <td className="sticky left-0 z-10 px-3 py-2 overflow-hidden bg-card border-r border-border">
                       {(() => {
                         const fmtDtHr = (iso: string) => {
                           const dt = new Date(iso);
@@ -1369,7 +1369,7 @@ export default function FinanceiroPageSupabase() {
                         return (
                           <div className="flex flex-col gap-1.5 min-w-[130px]">
                             {podeEditarCampos && (
-                              <button type="button" onClick={() => setDespesaEditando(d)} title="Editar todos os campos" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline w-fit">
+                              <button type="button" onClick={() => setDespesaEditando(d)} title="Editar todos os campos" className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/10 transition w-fit">
                                 <Pencil className="w-3 h-3" /> Editar despesa
                               </button>
                             )}
