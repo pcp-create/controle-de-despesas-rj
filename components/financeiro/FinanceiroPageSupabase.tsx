@@ -337,12 +337,15 @@ export default function FinanceiroPageSupabase() {
   const [pagamentoEdicao, setPagamentoEdicao] = useState("cartao");
   const [cartaoEdicao, setCartaoEdicao] = useState("");
   const [buscaCartao, setBuscaCartao] = useState("");
+  const [listaCartoesAberta, setListaCartoesAberta] = useState(false);
+  const botaoCartaoRef = useRef<HTMLButtonElement>(null);
   const { cartoes: cartoesEdicao, isLoading: carregandoCartoes, error: erroCartoes, mutate: recarregarCartoes } = useCartoesFinanceiro(!!despesaEditando);
   const normalizarBuscaCartao = (texto: string) => texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
   const cartoesFiltrados = cartoesEdicao.filter((cartao) => normalizarBuscaCartao([cartao.apelido, cartao.banco, cartao.bandeira, cartao.ultimos_digitos, profiles.find((profile) => profile.id === cartao.user_id)?.nome].join(" ")).includes(normalizarBuscaCartao(buscaCartao.trim())));
   const cartaoSelecionado = cartoesEdicao.find((cartao) => cartao.id === cartaoEdicao) ?? despesaEditando?.cartao;
   const abrirEdicao = (despesa: Despesa) => {
     setBuscaCartao("");
+    setListaCartoesAberta(false);
     setPagamentoEdicao(despesa.pagamento_tipo ?? "cartao");
     setCartaoEdicao(despesa.cartao_id ?? "");
     setDespesaEditando(despesa);
@@ -1174,23 +1177,47 @@ export default function FinanceiroPageSupabase() {
                 <label className="text-xs font-medium">Pagamento<select name="pagamento_tipo" value={pagamentoEdicao} onChange={(event) => setPagamentoEdicao(event.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">{Object.entries(pagamentoTipoConfig).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></label>
                 {pagamentoEdicao === "cartao" && (
                   <div className="md:col-span-2">
-                    <label className="mb-3 block text-xs font-medium">Filtrar cartões
-                      <input type="search" value={buscaCartao} onChange={(event) => setBuscaCartao(event.target.value)} placeholder="Nome, banco, titular ou final do cartão" className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
-                    </label>
-                    <label className="text-xs font-medium">Cartão
-                      <select name="cartao_id" value={cartaoEdicao} onChange={(event) => setCartaoEdicao(event.target.value)} disabled={carregandoCartoes || !!erroCartoes} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm disabled:opacity-60">
-                        <option value="">{carregandoCartoes ? "Carregando cartões..." : "Sem cartão"}</option>
-                        {cartaoEdicao && !cartoesFiltrados.some((cartao) => cartao.id === cartaoEdicao) && (
-                          <option value={cartaoEdicao}>{cartaoSelecionado ? `${cartaoSelecionado.apelido || cartaoSelecionado.banco} · ${cartaoSelecionado.ultimos_digitos} (selecionado)` : "Cartão selecionado"}</option>
-                        )}
-                        {cartoesFiltrados.map((cartao) => (
-                          <option key={cartao.id} value={cartao.id}>
-                            {cartao.apelido || cartao.banco} · {cartao.ultimos_digitos} — {profiles.find((profile) => profile.id === cartao.user_id)?.nome || "Titular não disponível"}{!cartao.ativo ? " (inativo)" : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    {buscaCartao.trim() && !carregandoCartoes && !erroCartoes && <p role="status" className="mt-1 text-xs text-muted-foreground">{cartoesFiltrados.length === 0 ? "Nenhum cartão encontrado. A seleção atual foi mantida." : `${cartoesFiltrados.length} cartão(ões) encontrado(s).`}</p>}
+                    <div onBlur={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setListaCartoesAberta(false);
+                    }} onKeyDown={(event) => {
+                      if (event.key === "Escape" && listaCartoesAberta) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setListaCartoesAberta(false);
+                        botaoCartaoRef.current?.focus();
+                      }
+                    }}>
+                      <label htmlFor="cartao-edicao" className="text-xs font-medium">Cartão</label>
+                      <button id="cartao-edicao" ref={botaoCartaoRef} type="button" aria-expanded={listaCartoesAberta} aria-controls="lista-cartoes-edicao"
+                        disabled={carregandoCartoes || !!erroCartoes}
+                        onClick={() => { setBuscaCartao(""); setListaCartoesAberta(!listaCartoesAberta); }}
+                        className="mt-1 flex w-full items-center justify-between gap-2 rounded-lg border border-input bg-background px-3 py-2 text-left text-sm disabled:opacity-60">
+                        <span className="truncate">{carregandoCartoes ? "Carregando cartões..." : !cartaoEdicao ? "Sem cartão" : cartaoSelecionado ? `${cartaoSelecionado.apelido || cartaoSelecionado.banco} · ${cartaoSelecionado.ultimos_digitos}` : "Cartão selecionado"}</span>
+                        <span aria-hidden="true">▾</span>
+                      </button>
+                      {listaCartoesAberta && (
+                        <div id="lista-cartoes-edicao" className="mt-1 overflow-hidden rounded-lg border border-input bg-card shadow-lg">
+                          <div className="border-b border-border p-2">
+                            <input autoFocus type="search" aria-label="Filtrar cartões" value={buscaCartao}
+                              onChange={(event) => setBuscaCartao(event.target.value)}
+                              onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }}
+                              placeholder="Nome, banco, titular ou final do cartão"
+                              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                          </div>
+                          <div className="max-h-48 overflow-y-auto p-1" role="group" aria-label="Cartões disponíveis">
+                            <button type="button" aria-pressed={!cartaoEdicao} onClick={() => { setCartaoEdicao(""); setListaCartoesAberta(false); botaoCartaoRef.current?.focus(); }} className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-muted focus-visible:bg-muted">Sem cartão</button>
+                            {cartoesFiltrados.map((cartao) => (
+                              <button key={cartao.id} type="button" aria-pressed={cartaoEdicao === cartao.id}
+                                onClick={() => { setCartaoEdicao(cartao.id); setListaCartoesAberta(false); botaoCartaoRef.current?.focus(); }}
+                                className={`w-full rounded-md px-3 py-2 text-left text-sm hover:bg-muted focus-visible:bg-muted ${cartaoEdicao === cartao.id ? "bg-muted font-medium" : ""}`}>
+                                {cartao.apelido || cartao.banco} · {cartao.ultimos_digitos} — {profiles.find((profile) => profile.id === cartao.user_id)?.nome || "Titular não disponível"}{!cartao.ativo ? " (inativo)" : ""}
+                              </button>
+                            ))}
+                            {cartoesFiltrados.length === 0 && <p role="status" className="px-3 py-2 text-xs text-muted-foreground">Nenhum cartão encontrado.</p>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                     {erroCartoes && <p role="alert" className="mt-1 text-xs text-destructive">Não foi possível carregar os cartões. <button type="button" className="underline" onClick={() => void recarregarCartoes()}>Tentar novamente</button></p>}
                     {!carregandoCartoes && !erroCartoes && cartoesEdicao.length === 0 && <p className="mt-1 text-xs text-muted-foreground">Nenhum cartão disponível.</p>}
                   </div>
