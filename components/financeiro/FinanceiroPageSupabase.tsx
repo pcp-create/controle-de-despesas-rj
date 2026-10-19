@@ -46,7 +46,7 @@ const MIN_COL_WIDTH = 60;
 const MAX_COL_WIDTH = 480;
 
 export default function FinanceiroPageSupabase() {
-  const { despesas, isLoading, updateDespesaDocumento, updateDespesaTipo, updateDespesaVencimento, lancarSistema, lancarERP, tentarNovamenteERP, estornarLancamento, cancelarLancamento, estornarCancelamento } = useDespesas();
+  const { despesas, isLoading, updateDespesaDocumento, updateDespesaTipo, updateDespesaVencimento, updateDespesaCamposFinanceiro, lancarSistema, lancarERP, tentarNovamenteERP, estornarLancamento, estornarLancamentoERP, cancelarLancamento, estornarCancelamento } = useDespesas();
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
 
@@ -273,6 +273,18 @@ export default function FinanceiroPageSupabase() {
       setErroERP((prev) => { const n = { ...prev }; delete n[id]; return n; });
     }
     setEnviandoERP((prev) => ({ ...prev, [id]: false }));
+  };
+
+  const handleEstornarERP = async (id: string) => {
+    const userId = authUser?.id ?? currentUser?.id;
+    if (!userId) return;
+    const confirmado = window.confirm("O lançamento será removido da fila local. O lançamento no M8 precisa ser cancelado manualmente. Deseja continuar?");
+    if (!confirmado) return;
+    const result = await estornarLancamentoERP(id, userId);
+    setFeedbackERP(result.error
+      ? { type: "error", msg: result.error }
+      : { type: "warning", msg: "Lançamento estornado localmente. O lançamento no M8 precisa ser cancelado manualmente." });
+    setTimeout(() => setFeedbackERP(null), 12000);
   };
 
   // Mantido para compatibilidade com estornar
@@ -1397,6 +1409,11 @@ export default function FinanceiroPageSupabase() {
                                   <div className="flex flex-col gap-0.5">
                                     <div className="flex items-center gap-1">
                                       <span className="text-[10px] font-semibold text-primary leading-none">✓ Enviado ERP</span>
+                                      {(currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro") && (
+                                        <button type="button" title="Estornar lançamento ERP" onClick={() => handleEstornarERP(d.id)} className="ml-0.5 p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition">
+                                          <RotateCcw className="w-2.5 h-2.5" />
+                                        </button>
+                                      )}
                                     </div>
                                     <span className="text-[10px] text-primary/70 leading-tight pl-2.5">
                                       {p ? p.nome.split(" ")[0] : "—"}

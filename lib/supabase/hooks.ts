@@ -539,7 +539,7 @@ export function useDespesas(userId?: string, perfil?: string) {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
 
-    // Observação: não há mais bloqueio de cadastro por apontamento de KM em aberto.
+    // Observação: não h�� mais bloqueio de cadastro por apontamento de KM em aberto.
     // O abastecimento é salvo normalmente e o apontamento em aberto permanece
     // inalterado — apenas o recálculo de Frotas abaixo considera o novo registro.
     const { data, error } = await supabase
@@ -679,6 +679,18 @@ export function useDespesas(userId?: string, perfil?: string) {
       detalhes: `Despesa atualizada: R$ ${valorTotal.toFixed(2)} em ${qtdParcelas} parcela(s)`,
     });
 
+    mutate();
+    return { error: null };
+  };
+
+  const updateDespesaCamposFinanceiro = async (id: string, campos: Record<string, unknown>) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { error } = await supabase
+      .from("despesas")
+      .update({ ...campos, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return { error: error.message };
     mutate();
     return { error: null };
   };
@@ -1167,6 +1179,23 @@ export function useDespesas(userId?: string, perfil?: string) {
     return { error: null, erp_id: body.erp_id, simulado: body.simulado ?? false, campos: null };
   };
 
+  const estornarLancamentoERP = async (id: string, userId: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return { error: "Supabase não disponível" };
+    const { error } = await supabase.from("despesas").update({
+      erp_status: "pendente",
+      erp_erro: "Lançamento no M8 precisa ser cancelado manualmente.",
+      erp_etapa_erro: null,
+      lancado_erp_em: null,
+      lancado_erp_por: null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", id);
+    if (error) return { error: error.message };
+    await registrarAuditoria({ acao: "UPDATE", entidade: "despesa", entidadeId: id, usuarioId: userId, detalhes: "Estorno local do lançamento ERP solicitado; cancelamento no M8 deve ser feito manualmente." });
+    mutate();
+    return { error: null };
+  };
+
   const estornarLancamento = async (id: string) => {
     const supabase = getSupabase();
     if (!supabase) return { error: "Supabase não disponível" };
@@ -1244,6 +1273,7 @@ export function useDespesas(userId?: string, perfil?: string) {
     addDespesa,
     updateDespesa,
     updateDespesaDocumento,
+    updateDespesaCamposFinanceiro,
     updateDespesaTipo,
     updateDespesaVencimento,
     salvarEdicaoComParcelas,
@@ -1259,6 +1289,7 @@ export function useDespesas(userId?: string, perfil?: string) {
     lancarERP,
     tentarNovamenteERP,
     estornarLancamento,
+    estornarLancamentoERP,
     cancelarLancamento,
     estornarCancelamento,
   };
