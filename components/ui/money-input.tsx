@@ -9,7 +9,7 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | 
 };
 
 export function MoneyInput({ value, onValueChange, ...props }: Props) {
-  return <input {...props} type="text" inputMode="numeric" value={formatMoneyInput(value)}
+  return <input placeholder="0,00" {...props} type="text" inputMode="numeric" value={formatMoneyInput(value)}
     onChange={(event) => onValueChange(parseMoneyDigits(event.target.value))}
     onKeyDown={(event) => {
       props.onKeyDown?.(event);
