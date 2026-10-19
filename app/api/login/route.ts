@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
@@ -10,15 +9,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Usuário e senha são obrigatórios" }, { status: 400 });
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-    // 1. Buscar email pelo usuario com service role (bypassa RLS)
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false },
-    });
-
-    const { data: profileData, error: profileError } = await supabaseAdmin
+    // A política de lookup já existente permite resolver o usuário em email.
+    // Não requer chave administrativa nem altera as políticas do banco.
+    const supabaseServer = await createServerClient();
+    const { data: profileData, error: profileError } = await supabaseServer
       .from("profiles")
       .select("email, ativo, nome, perfil")
       .eq("usuario", usuario.trim().toLowerCase())
@@ -33,7 +27,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Autenticar no Supabase Auth com o email encontrado
-    const supabaseServer = await createServerClient();
     const { data: authData, error: authError } = await supabaseServer.auth.signInWithPassword({
       email: profileData.email,
       password: senha,
