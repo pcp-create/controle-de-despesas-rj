@@ -1227,7 +1227,7 @@ export default function FinanceiroPageSupabase() {
                   <th
                     key={label}
                     title={label || "Editar despesa"}
-                    className={`sticky top-0 border-b border-border bg-muted ${index === 0 ? "px-1 text-center" : "px-3"} py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"} ${index < 2 ? "z-30 border-r border-border" : "z-20"}`}
+                    className={`sticky top-0 border-b border-border bg-muted ${index === 0 ? "px-1 text-center" : "px-3"} py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"} ${index < 2 ? "z-30" : "z-20"}`}
                     style={{ left: index === 0 ? 0 : index === 1 ? colWidths[0] : undefined }}
                     aria-label={index === 0 ? "Editar" : undefined}
                   >
@@ -1357,14 +1357,14 @@ export default function FinanceiroPageSupabase() {
                       className={`absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none group ${resizingIndex === index ? "bg-primary" : "hover:bg-primary/40"}`}
                       title="Arrastar para redimensionar"
                     >
-                      <div className={`absolute top-1/2 -translate-y-1/2 right-0 w-px h-3/5 ${resizingIndex === index ? "bg-primary" : "bg-border group-hover:bg-primary/60"}`} />
+                      <div className={`absolute top-1/2 -translate-y-1/2 right-0 w-px h-3/5 ${resizingIndex === index ? "bg-primary" : index < 2 ? "bg-transparent group-hover:bg-primary/60" : "bg-border group-hover:bg-primary/60"}`} />
                     </div>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {despesasExibidas.map((d) => {
+              {despesasExibidas.map((d, rowIndex) => {
                 const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
                 const tecnico = profiles.find((p) => p.id === d.tecnico_id);
                 const cartao = d.cartao;
@@ -1396,8 +1396,8 @@ export default function FinanceiroPageSupabase() {
                 const aprovado = sg === "aprovado";
 
                 return (
-                  <tr key={d.id} className="border-t border-border hover:bg-muted/20 transition">
-                    <td className="sticky left-0 z-10 p-0 bg-card border-r border-border">
+                  <tr key={d.id} className={`${rowIndex % 2 === 0 ? "bg-card" : "bg-slate-50 dark:bg-slate-900"} hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors`}>
+                    <td className="sticky left-0 z-10 p-0 bg-inherit">
                       {podeEditarCampos && (
                         <button
                           type="button"
@@ -1411,7 +1411,7 @@ export default function FinanceiroPageSupabase() {
                       )}
                     </td>
                     {/* Coluna de ações fixa para ficar disponível mesmo com rolagem horizontal */}
-                    <td style={{ left: colWidths[0] }} className="sticky z-10 px-3 py-2 overflow-hidden bg-card border-r border-border">
+                    <td style={{ left: colWidths[0] }} className="sticky z-10 px-3 py-2 overflow-hidden bg-inherit">
                       {(() => {
                         const fmtDtHr = (iso: string) => {
                           const dt = new Date(iso);
