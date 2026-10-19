@@ -27,7 +27,7 @@ type ModoFiltro = "mes" | "periodo";
 //   "text"   → busca livre por parte do texto (colunas de texto aberto)
 type FinanceiroSortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "observacao" | "valor" | "status" | "documento" | "cartao" | "lancado";
 const TABLE_COLUMNS: { id: string; sortKey: FinanceiroSortKey | null; label: string; align: "left" | "right"; defaultWidth: number; filterType: "select" | "text" | null }[] = [
-  { id: "editar",      sortKey: null,          label: "",             align: "left",  defaultWidth: 42,  filterType: null },
+  { id: "editar",      sortKey: null,          label: "Editar",       align: "left",  defaultWidth: 52,  filterType: null },
   { id: "lancado",     sortKey: "lancado",     label: "Ações / Lançar", align: "left", defaultWidth: 205, filterType: "select" },
   { id: "data",        sortKey: "data",        label: "Data",        align: "left",  defaultWidth: 100, filterType: "select" },
   { id: "vencimento",  sortKey: "vencimento",  label: "Vencimento",  align: "left",  defaultWidth: 120, filterType: "select" },
@@ -97,7 +97,7 @@ export default function FinanceiroPageSupabase() {
       const rz = resizingRef.current;
       if (!rz) return;
       const delta = e.clientX - rz.startX;
-      const newWidth = Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, rz.startWidth + delta));
+      const newWidth = Math.min(MAX_COL_WIDTH, Math.max(rz.index === 0 ? 52 : MIN_COL_WIDTH, rz.startWidth + delta));
       setColWidths((prev) => {
         const next = [...prev];
         next[rz.index] = newWidth;
@@ -133,7 +133,7 @@ export default function FinanceiroPageSupabase() {
     const prefs = carregarPrefsTabelaFinanceiro(tableUserId);
     if (!prefs) return;
     if (Array.isArray(prefs.colWidths) && prefs.colWidths.length === TABLE_COLUMNS.length) {
-      setColWidths(prefs.colWidths.map((w) => Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, Number(w) || MIN_COL_WIDTH))));
+      setColWidths(prefs.colWidths.map((w, index) => index === 0 ? 52 : Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, Number(w) || MIN_COL_WIDTH))));
     }
     const validSortKeys = new Set(TABLE_COLUMNS.map((c) => c.sortKey).filter(Boolean));
     if (prefs.sortKey && validSortKeys.has(prefs.sortKey as SortKey)) {
@@ -336,8 +336,13 @@ export default function FinanceiroPageSupabase() {
   const [salvandoCampos, setSalvandoCampos] = useState(false);
   const [pagamentoEdicao, setPagamentoEdicao] = useState("cartao");
   const [cartaoEdicao, setCartaoEdicao] = useState("");
+  const [buscaCartao, setBuscaCartao] = useState("");
   const { cartoes: cartoesEdicao, isLoading: carregandoCartoes, error: erroCartoes, mutate: recarregarCartoes } = useCartoesFinanceiro(!!despesaEditando);
+  const normalizarBuscaCartao = (texto: string) => texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+  const cartoesFiltrados = cartoesEdicao.filter((cartao) => normalizarBuscaCartao([cartao.apelido, cartao.banco, cartao.bandeira, cartao.ultimos_digitos, profiles.find((profile) => profile.id === cartao.user_id)?.nome].join(" ")).includes(normalizarBuscaCartao(buscaCartao.trim())));
+  const cartaoSelecionado = cartoesEdicao.find((cartao) => cartao.id === cartaoEdicao) ?? despesaEditando?.cartao;
   const abrirEdicao = (despesa: Despesa) => {
+    setBuscaCartao("");
     setPagamentoEdicao(despesa.pagamento_tipo ?? "cartao");
     setCartaoEdicao(despesa.cartao_id ?? "");
     setDespesaEditando(despesa);
@@ -1169,19 +1174,23 @@ export default function FinanceiroPageSupabase() {
                 <label className="text-xs font-medium">Pagamento<select name="pagamento_tipo" value={pagamentoEdicao} onChange={(event) => setPagamentoEdicao(event.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">{Object.entries(pagamentoTipoConfig).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></label>
                 {pagamentoEdicao === "cartao" && (
                   <div className="md:col-span-2">
+                    <label className="mb-3 block text-xs font-medium">Filtrar cartões
+                      <input type="search" value={buscaCartao} onChange={(event) => setBuscaCartao(event.target.value)} placeholder="Nome, banco, titular ou final do cartão" className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" />
+                    </label>
                     <label className="text-xs font-medium">Cartão
                       <select name="cartao_id" value={cartaoEdicao} onChange={(event) => setCartaoEdicao(event.target.value)} disabled={carregandoCartoes || !!erroCartoes} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm disabled:opacity-60">
                         <option value="">{carregandoCartoes ? "Carregando cartões..." : "Sem cartão"}</option>
-                        {cartaoEdicao && !cartoesEdicao.some((cartao) => cartao.id === cartaoEdicao) && (
-                          <option value={cartaoEdicao}>{despesaEditando.cartao ? `${despesaEditando.cartao.banco} — **** ${despesaEditando.cartao.ultimos_digitos} (cartão atual)` : "Cartão atual"}</option>
+                        {cartaoEdicao && !cartoesFiltrados.some((cartao) => cartao.id === cartaoEdicao) && (
+                          <option value={cartaoEdicao}>{cartaoSelecionado ? `${cartaoSelecionado.apelido || cartaoSelecionado.banco} · ${cartaoSelecionado.ultimos_digitos} (selecionado)` : "Cartão selecionado"}</option>
                         )}
-                        {cartoesEdicao.map((cartao) => (
+                        {cartoesFiltrados.map((cartao) => (
                           <option key={cartao.id} value={cartao.id}>
-                            {cartao.apelido ? `${cartao.apelido} — ` : ""}{cartao.banco} — {cartao.bandeira} — **** {cartao.ultimos_digitos} — {profiles.find((profile) => profile.id === cartao.user_id)?.nome || "Titular não disponível"}{!cartao.ativo ? " (inativo)" : ""}
+                            {cartao.apelido || cartao.banco} · {cartao.ultimos_digitos} — {profiles.find((profile) => profile.id === cartao.user_id)?.nome || "Titular não disponível"}{!cartao.ativo ? " (inativo)" : ""}
                           </option>
                         ))}
                       </select>
                     </label>
+                    {buscaCartao.trim() && !carregandoCartoes && !erroCartoes && <p role="status" className="mt-1 text-xs text-muted-foreground">{cartoesFiltrados.length === 0 ? "Nenhum cartão encontrado. A seleção atual foi mantida." : `${cartoesFiltrados.length} cartão(ões) encontrado(s).`}</p>}
                     {erroCartoes && <p role="alert" className="mt-1 text-xs text-destructive">Não foi possível carregar os cartões. <button type="button" className="underline" onClick={() => void recarregarCartoes()}>Tentar novamente</button></p>}
                     {!carregandoCartoes && !erroCartoes && cartoesEdicao.length === 0 && <p className="mt-1 text-xs text-muted-foreground">Nenhum cartão disponível.</p>}
                   </div>
@@ -1218,11 +1227,11 @@ export default function FinanceiroPageSupabase() {
                   <th
                     key={label}
                     title={label || "Editar despesa"}
-                    className={`sticky top-0 border-b border-border bg-muted px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"} ${index < 2 ? "z-30 border-r border-border" : "z-20"}`}
+                    className={`sticky top-0 border-b border-border bg-muted ${index === 0 ? "px-1 text-center" : "px-3"} py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"} ${index < 2 ? "z-30 border-r border-border" : "z-20"}`}
                     style={{ left: index === 0 ? 0 : index === 1 ? colWidths[0] : undefined }}
-                    aria-label={index === 0 ? "Editar despesa" : undefined}
+                    aria-label={index === 0 ? "Editar" : undefined}
                   >
-                    <div className={`flex items-center gap-1 min-w-0 ${align === "right" ? "justify-end" : ""}`}>
+                    <div className={`flex items-center gap-1 min-w-0 ${index === 0 ? "justify-center" : align === "right" ? "justify-end" : ""}`}>
                       {key ? (
                         <button
                           type="button"
@@ -1239,7 +1248,7 @@ export default function FinanceiroPageSupabase() {
                           )}
                         </button>
                       ) : (
-                        <span className="truncate">{index === 0 ? <Pencil className="w-4 h-4" aria-hidden="true" /> : label}</span>
+                        <span className="truncate">{label}</span>
                       )}
                       {key && filterType && (
                         <div className="relative shrink-0">
@@ -1395,7 +1404,7 @@ export default function FinanceiroPageSupabase() {
                           onClick={() => abrirEdicao(d)}
                           title="Editar despesa"
                           aria-label="Editar despesa"
-                          className="flex h-full min-h-[42px] w-full items-center justify-center text-primary hover:bg-primary/10 transition"
+                          className="mx-auto flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
