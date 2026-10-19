@@ -6,7 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "mobile:dev": "pnpm --filter @rj/mobile dev",
+    "mobile:build": "pnpm --filter @rj/mobile build",
+    "mobile:test": "pnpm --filter @rj/mobile test",
+    "android:sync": "pnpm --filter @rj/mobile android:sync",
+    "android:apk": "pnpm --filter @rj/mobile android:apk",
+    "mobile:test:e2e": "pnpm --filter @rj/mobile test:e2e",
+    "android:check": "node scripts/mobile/check-android.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -41,5 +48,6 @@
     "postcss": "^8.5",
     "tailwindcss": "^4.2.0",
     "typescript": "5.7.3"
-  }
+  },
+  "packageManager": "pnpm@11.24.0"
 }

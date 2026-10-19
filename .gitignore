@@ -25,3 +25,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# Mobile
+**/node_modules/
+apps/mobile/dist/
+apps/mobile/android/.gradle/
+apps/mobile/android/**/build/
+apps/mobile/android/local.properties
+apps/mobile/android/app/src/main/assets/public/
+apps/mobile/android/app/src/main/assets/capacitor*.json
+apps/mobile/test-results/
+apps/mobile/playwright-report/
+.env*
+**/.env*
+!apps/mobile/.env.example
+*.keystore
+*.jks

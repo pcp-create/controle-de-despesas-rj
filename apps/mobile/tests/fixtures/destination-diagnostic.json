@@ -1,0 +1,5368 @@
+{
+  "rls": [
+    {
+      "schema": "public",
+      "tabela": "tipos_despesa",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "public",
+      "tabela": "auditoria",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "storage",
+      "tabela": "migrations",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "public",
+      "tabela": "cartoes",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "public",
+      "tabela": "alertas_consumo",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "storage",
+      "tabela": "buckets",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "storage",
+      "tabela": "objects",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "storage",
+      "tabela": "s3_multipart_uploads",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "storage",
+      "tabela": "s3_multipart_uploads_parts",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "public",
+      "tabela": "profiles",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "storage",
+      "tabela": "buckets_vectors",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "storage",
+      "tabela": "vector_indexes",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "storage",
+      "tabela": "buckets_analytics",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "public",
+      "tabela": "tipos_despesa_centro_custo",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "public",
+      "tabela": "frotas",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "public",
+      "tabela": "despesas",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "public",
+      "tabela": "controle_km",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "public",
+      "tabela": "backup_comprovantes_itens",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "public",
+      "tabela": "backup_comprovantes",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "schema": "public",
+      "tabela": "areas",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    }
+  ],
+  "buckets": [
+    {
+      "id": "comprovantes",
+      "public": false,
+      "file_size_limit": 13631488,
+      "allowed_mime_types": [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "application/pdf"
+      ]
+    }
+  ],
+  "triggers": [],
+  "politicas": [
+    {
+      "cmd": "ALL",
+      "qual": "(auth.uid() = user_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "cartoes",
+      "permissive": "PERMISSIVE",
+      "policyname": "Usuário gerencia próprios cartões",
+      "schemaname": "public",
+      "with_check": "(auth.uid() = user_id)"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'administrador'::text))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "cartoes",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admin gerencia todos os cartões",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'administrador'::text))))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = cartoes.user_id) AND (p.gestor_id = auth.uid()))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "cartoes",
+      "permissive": "PERMISSIVE",
+      "policyname": "Gestor vê cartões do time",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "true",
+      "roles": [
+        "public"
+      ],
+      "tablename": "profiles",
+      "permissive": "PERMISSIVE",
+      "policyname": "Lookup público de email por usuario",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "profiles",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admin insere perfis",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM profiles profiles_1\n  WHERE ((profiles_1.id = auth.uid()) AND (profiles_1.perfil = 'administrador'::text))))"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "((EXISTS ( SELECT 1\n   FROM profiles profiles_1\n  WHERE ((profiles_1.id = auth.uid()) AND (profiles_1.perfil = 'administrador'::text)))) OR (auth.uid() = id))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "profiles",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admin atualiza perfis",
+      "schemaname": "public",
+      "with_check": "((EXISTS ( SELECT 1\n   FROM profiles profiles_1\n  WHERE ((profiles_1.id = auth.uid()) AND (profiles_1.perfil = 'administrador'::text)))) OR (auth.uid() = id))"
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles profiles_1\n  WHERE ((profiles_1.id = auth.uid()) AND (profiles_1.perfil = 'administrador'::text))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "profiles",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admin deleta perfis",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = tecnico_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "despesas",
+      "permissive": "PERMISSIVE",
+      "policyname": "Técnico lê próprias despesas",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "despesas",
+      "permissive": "PERMISSIVE",
+      "policyname": "Técnico insere próprias despesas",
+      "schemaname": "public",
+      "with_check": "(auth.uid() = tecnico_id)"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = tecnico_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "despesas",
+      "permissive": "PERMISSIVE",
+      "policyname": "Técnico atualiza próprias despesas",
+      "schemaname": "public",
+      "with_check": "(auth.uid() = tecnico_id)"
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(auth.uid() = tecnico_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "despesas",
+      "permissive": "PERMISSIVE",
+      "policyname": "Técnico deleta próprias despesas",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(auth.uid() IS NOT NULL)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "frotas",
+      "permissive": "PERMISSIVE",
+      "policyname": "Autenticados leem frotas",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = ANY (ARRAY['financeiro'::text, 'administrador'::text])))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "despesas",
+      "permissive": "PERMISSIVE",
+      "policyname": "Financeiro e admin leem todas despesas",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'administrador'::text))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "despesas",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admin gerencia todas despesas",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'administrador'::text))))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(auth.uid() IS NOT NULL)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "tipos_despesa",
+      "permissive": "PERMISSIVE",
+      "policyname": "Autenticados leem tipos_despesa",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'administrador'::text))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "tipos_despesa",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admin gerencia tipos_despesa",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'administrador'::text))))"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'administrador'::text))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "auditoria",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admin gerencia auditoria",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'administrador'::text))))"
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "auditoria",
+      "permissive": "PERMISSIVE",
+      "policyname": "Sistema insere auditoria",
+      "schemaname": "public",
+      "with_check": "(auth.uid() IS NOT NULL)"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = user_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "auditoria",
+      "permissive": "PERMISSIVE",
+      "policyname": "Usuário lê própria auditoria",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'administrador'::text))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "frotas",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admin gerencia frotas",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'administrador'::text))))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(auth.uid() IS NOT NULL)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "tipos_despesa_centro_custo",
+      "permissive": "PERMISSIVE",
+      "policyname": "Autenticados leem tipos_despesa_centro_custo",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'administrador'::text))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "tipos_despesa_centro_custo",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admin gerencia tipos_despesa_centro_custo",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'administrador'::text))))"
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Autenticados fazem upload de comprovantes",
+      "schemaname": "storage",
+      "with_check": "(bucket_id = 'comprovantes'::text)"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(bucket_id = 'comprovantes'::text)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Autenticados leem comprovantes",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(bucket_id = 'comprovantes'::text)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Autenticados deletam comprovantes",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(bucket_id = 'comprovantes'::text)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Autenticados atualizam comprovantes",
+      "schemaname": "storage",
+      "with_check": "(bucket_id = 'comprovantes'::text)"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.perfil = 'administrador'::text))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "backup_comprovantes",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admins podem tudo em backup_comprovantes",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.perfil = 'administrador'::text))))"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = ANY (ARRAY['financeiro'::text, 'administrador'::text])))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "despesas",
+      "permissive": "PERMISSIVE",
+      "policyname": "Financeiro atualiza despesas",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = ANY (ARRAY['financeiro'::text, 'administrador'::text])))))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(auth.uid() = usuario_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "controle_km",
+      "permissive": "PERMISSIVE",
+      "policyname": "usuarios_veem_proprios_km",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = ANY (ARRAY['gestor'::text, 'administrador'::text, 'financeiro'::text])))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "controle_km",
+      "permissive": "PERMISSIVE",
+      "policyname": "gestores_veem_todos_km",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "controle_km",
+      "permissive": "PERMISSIVE",
+      "policyname": "usuarios_inserem_km",
+      "schemaname": "public",
+      "with_check": "(auth.uid() = usuario_id)"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(auth.uid() = usuario_id)",
+      "roles": [
+        "public"
+      ],
+      "tablename": "controle_km",
+      "permissive": "PERMISSIVE",
+      "policyname": "usuarios_atualizam_proprio_km",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'administrador'::text))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "controle_km",
+      "permissive": "PERMISSIVE",
+      "policyname": "admin_deleta_km",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "true",
+      "roles": [
+        "public"
+      ],
+      "tablename": "tipos_despesa_centro_custo",
+      "permissive": "PERMISSIVE",
+      "policyname": "todos_leem_centro_custo",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "tipos_despesa_centro_custo",
+      "permissive": "PERMISSIVE",
+      "policyname": "admin_insere_centro_custo",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = ANY (ARRAY['administrador'::text, 'gestor'::text])))))"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = ANY (ARRAY['administrador'::text, 'gestor'::text])))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "tipos_despesa_centro_custo",
+      "permissive": "PERMISSIVE",
+      "policyname": "admin_atualiza_centro_custo",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = ANY (ARRAY['administrador'::text, 'gestor'::text])))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "tipos_despesa_centro_custo",
+      "permissive": "PERMISSIVE",
+      "policyname": "admin_deleta_centro_custo",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "true",
+      "roles": [
+        "public"
+      ],
+      "tablename": "areas",
+      "permissive": "PERMISSIVE",
+      "policyname": "todos_leem_areas",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "areas",
+      "permissive": "PERMISSIVE",
+      "policyname": "admin_insere_areas",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = ANY (ARRAY['administrador'::text, 'gestor'::text])))))"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = ANY (ARRAY['administrador'::text, 'gestor'::text])))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "areas",
+      "permissive": "PERMISSIVE",
+      "policyname": "admin_atualiza_areas",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'administrador'::text))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "areas",
+      "permissive": "PERMISSIVE",
+      "policyname": "admin_deleta_areas",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'gestor'::text))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "despesas",
+      "permissive": "PERMISSIVE",
+      "policyname": "Gestor lê todas despesas",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'gestor'::text))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "despesas",
+      "permissive": "PERMISSIVE",
+      "policyname": "Gestor atualiza todas despesas",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.perfil = 'gestor'::text))))"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.perfil = 'administrador'::text))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "backup_comprovantes_itens",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admins podem tudo em backup_comprovantes_itens",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.perfil = 'administrador'::text))))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "((bucket_id = 'backups-comprovantes'::text) AND (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.perfil = 'administrador'::text)))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admins podem ler backups-comprovantes",
+      "schemaname": "storage",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admins podem gravar backups-comprovantes",
+      "schemaname": "storage",
+      "with_check": "((bucket_id = 'backups-comprovantes'::text) AND (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.perfil = 'administrador'::text)))))"
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "((bucket_id = 'backups-comprovantes'::text) AND (EXISTS ( SELECT 1\n   FROM profiles p\n  WHERE ((p.id = auth.uid()) AND (p.perfil = 'administrador'::text)))))",
+      "roles": [
+        "public"
+      ],
+      "tablename": "objects",
+      "permissive": "PERMISSIVE",
+      "policyname": "Admins podem remover backups-comprovantes",
+      "schemaname": "storage",
+      "with_check": null
+    }
+  ],
+  "permissoes": [
+    {
+      "grantee": "anon",
+      "table_name": "tipos_despesa",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "tipos_despesa",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "tipos_despesa",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "tipos_despesa",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "tipos_despesa",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "tipos_despesa",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "tipos_despesa",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "tipos_despesa",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "tipos_despesa",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "tipos_despesa",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "tipos_despesa",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "tipos_despesa",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "tipos_despesa",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "tipos_despesa",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "auditoria",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "auditoria",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "auditoria",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "auditoria",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "auditoria",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "auditoria",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "auditoria",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "auditoria",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "auditoria",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "auditoria",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "auditoria",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "auditoria",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "auditoria",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "auditoria",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "cartoes",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "cartoes",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "cartoes",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "cartoes",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "cartoes",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "cartoes",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "cartoes",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "cartoes",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "cartoes",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "cartoes",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "cartoes",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "cartoes",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "cartoes",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "cartoes",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "alertas_consumo",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "alertas_consumo",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "alertas_consumo",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "alertas_consumo",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "alertas_consumo",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "alertas_consumo",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "alertas_consumo",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "alertas_consumo",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "alertas_consumo",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "alertas_consumo",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "alertas_consumo",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "alertas_consumo",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "alertas_consumo",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "alertas_consumo",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets",
+      "table_schema": "storage",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets",
+      "table_schema": "storage",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets",
+      "table_schema": "storage",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets",
+      "table_schema": "storage",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets",
+      "table_schema": "storage",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets",
+      "table_schema": "storage",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets",
+      "table_schema": "storage",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets",
+      "table_schema": "storage",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets",
+      "table_schema": "storage",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets",
+      "table_schema": "storage",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets",
+      "table_schema": "storage",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets",
+      "table_schema": "storage",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets",
+      "table_schema": "storage",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets",
+      "table_schema": "storage",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "objects",
+      "table_schema": "storage",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "objects",
+      "table_schema": "storage",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "objects",
+      "table_schema": "storage",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "objects",
+      "table_schema": "storage",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "objects",
+      "table_schema": "storage",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "objects",
+      "table_schema": "storage",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "objects",
+      "table_schema": "storage",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "objects",
+      "table_schema": "storage",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "objects",
+      "table_schema": "storage",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "objects",
+      "table_schema": "storage",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "objects",
+      "table_schema": "storage",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "objects",
+      "table_schema": "storage",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "objects",
+      "table_schema": "storage",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "objects",
+      "table_schema": "storage",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "s3_multipart_uploads",
+      "table_schema": "storage",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "s3_multipart_uploads",
+      "table_schema": "storage",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "s3_multipart_uploads_parts",
+      "table_schema": "storage",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "s3_multipart_uploads_parts",
+      "table_schema": "storage",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "profiles",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "profiles",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "profiles",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "profiles",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "profiles",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "profiles",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "profiles",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "profiles",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "profiles",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "profiles",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "profiles",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "profiles",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "profiles",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "profiles",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets_vectors",
+      "table_schema": "storage",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets_vectors",
+      "table_schema": "storage",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "vector_indexes",
+      "table_schema": "storage",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "vector_indexes",
+      "table_schema": "storage",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets_analytics",
+      "table_schema": "storage",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets_analytics",
+      "table_schema": "storage",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets_analytics",
+      "table_schema": "storage",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets_analytics",
+      "table_schema": "storage",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets_analytics",
+      "table_schema": "storage",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets_analytics",
+      "table_schema": "storage",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "buckets_analytics",
+      "table_schema": "storage",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets_analytics",
+      "table_schema": "storage",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets_analytics",
+      "table_schema": "storage",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets_analytics",
+      "table_schema": "storage",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets_analytics",
+      "table_schema": "storage",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets_analytics",
+      "table_schema": "storage",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets_analytics",
+      "table_schema": "storage",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "buckets_analytics",
+      "table_schema": "storage",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "tipos_despesa_centro_custo",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "tipos_despesa_centro_custo",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "tipos_despesa_centro_custo",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "tipos_despesa_centro_custo",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "tipos_despesa_centro_custo",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "tipos_despesa_centro_custo",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "tipos_despesa_centro_custo",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "tipos_despesa_centro_custo",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "tipos_despesa_centro_custo",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "tipos_despesa_centro_custo",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "tipos_despesa_centro_custo",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "tipos_despesa_centro_custo",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "tipos_despesa_centro_custo",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "tipos_despesa_centro_custo",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "frotas",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "frotas",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "frotas",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "frotas",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "frotas",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "frotas",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "frotas",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "frotas",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "frotas",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "frotas",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "frotas",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "frotas",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "frotas",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "frotas",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "despesas",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "despesas",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "despesas",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "despesas",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "despesas",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "despesas",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "despesas",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "despesas",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "despesas",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "despesas",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "despesas",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "despesas",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "despesas",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "despesas",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "controle_km",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "controle_km",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "controle_km",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "controle_km",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "controle_km",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "controle_km",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "controle_km",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "controle_km",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "controle_km",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "controle_km",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "controle_km",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "controle_km",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "controle_km",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "controle_km",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "backup_comprovantes_itens",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "backup_comprovantes_itens",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "backup_comprovantes_itens",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "backup_comprovantes_itens",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "backup_comprovantes_itens",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "backup_comprovantes_itens",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "backup_comprovantes_itens",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "backup_comprovantes_itens",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "backup_comprovantes_itens",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "backup_comprovantes_itens",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "backup_comprovantes_itens",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "backup_comprovantes_itens",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "backup_comprovantes_itens",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "backup_comprovantes_itens",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "backup_comprovantes",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "backup_comprovantes",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "backup_comprovantes",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "backup_comprovantes",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "backup_comprovantes",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "backup_comprovantes",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "backup_comprovantes",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "backup_comprovantes",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "backup_comprovantes",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "backup_comprovantes",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "backup_comprovantes",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "backup_comprovantes",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "backup_comprovantes",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "backup_comprovantes",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "areas",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "areas",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "areas",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "areas",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "areas",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "areas",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "anon",
+      "table_name": "areas",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "areas",
+      "table_schema": "public",
+      "privilege_type": "INSERT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "areas",
+      "table_schema": "public",
+      "privilege_type": "SELECT"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "areas",
+      "table_schema": "public",
+      "privilege_type": "UPDATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "areas",
+      "table_schema": "public",
+      "privilege_type": "DELETE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "areas",
+      "table_schema": "public",
+      "privilege_type": "TRUNCATE"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "areas",
+      "table_schema": "public",
+      "privilege_type": "REFERENCES"
+    },
+    {
+      "grantee": "authenticated",
+      "table_name": "areas",
+      "table_schema": "public",
+      "privilege_type": "TRIGGER"
+    }
+  ],
+  "constraints": [
+    {
+      "tabela": "alertas_consumo",
+      "conname": "alertas_consumo_frota_id_fkey",
+      "definicao": "FOREIGN KEY (frota_id) REFERENCES frotas(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "alertas_consumo",
+      "conname": "alertas_consumo_pkey",
+      "definicao": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "alertas_consumo",
+      "conname": "alertas_consumo_resolvido_por_fkey",
+      "definicao": "FOREIGN KEY (resolvido_por) REFERENCES profiles(id)"
+    },
+    {
+      "tabela": "auditoria",
+      "conname": "auditoria_pkey",
+      "definicao": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "auditoria",
+      "conname": "auditoria_user_id_fkey",
+      "definicao": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE RESTRICT"
+    },
+    {
+      "tabela": "cartoes",
+      "conname": "cartoes_pkey",
+      "definicao": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "cartoes",
+      "conname": "cartoes_user_id_fkey",
+      "definicao": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "controle_km",
+      "conname": "controle_km_frota_id_fkey",
+      "definicao": "FOREIGN KEY (frota_id) REFERENCES frotas(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "controle_km",
+      "conname": "controle_km_pkey",
+      "definicao": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "controle_km",
+      "conname": "controle_km_status_check",
+      "definicao": "CHECK ((status = ANY (ARRAY['aberto'::text, 'finalizado'::text])))"
+    },
+    {
+      "tabela": "controle_km",
+      "conname": "controle_km_usuario_id_fkey",
+      "definicao": "FOREIGN KEY (usuario_id) REFERENCES profiles(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "despesas",
+      "conname": "despesas_cartao_id_fkey",
+      "definicao": "FOREIGN KEY (cartao_id) REFERENCES cartoes(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "despesas",
+      "conname": "despesas_comprovante_backup_id_fkey",
+      "definicao": "FOREIGN KEY (comprovante_backup_id) REFERENCES backup_comprovantes(id)"
+    },
+    {
+      "tabela": "despesas",
+      "conname": "despesas_frota_id_fkey",
+      "definicao": "FOREIGN KEY (frota_id) REFERENCES frotas(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "despesas",
+      "conname": "despesas_gestor_aprovador_id_fkey",
+      "definicao": "FOREIGN KEY (gestor_aprovador_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "despesas",
+      "conname": "despesas_lancamento_cancelado_por_fkey",
+      "definicao": "FOREIGN KEY (lancamento_cancelado_por) REFERENCES profiles(id)"
+    },
+    {
+      "tabela": "despesas",
+      "conname": "despesas_pagamento_tipo_check",
+      "definicao": "CHECK ((pagamento_tipo = ANY (ARRAY['cartao'::text, 'dinheiro'::text, 'faturado'::text, 'boleto'::text])))"
+    },
+    {
+      "tabela": "despesas",
+      "conname": "despesas_pkey",
+      "definicao": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "despesas",
+      "conname": "despesas_status_aprovacao_check",
+      "definicao": "CHECK ((status_aprovacao = ANY (ARRAY['AguardandoGestor'::text, 'AprovadoGestor'::text, 'Reprovado'::text])))"
+    },
+    {
+      "tabela": "despesas",
+      "conname": "despesas_status_erp_check",
+      "definicao": "CHECK ((status_erp = ANY (ARRAY['Rascunho'::text, 'EnviadoAguardandoGestor'::text, 'AprovadoGestorERPAtualizado'::text, 'ErroEnvioERP'::text, 'ErroAtualizarERP'::text])))"
+    },
+    {
+      "tabela": "despesas",
+      "conname": "despesas_tecnico_id_fkey",
+      "definicao": "FOREIGN KEY (tecnico_id) REFERENCES profiles(id) ON DELETE RESTRICT"
+    },
+    {
+      "tabela": "despesas",
+      "conname": "despesas_tipo_despesa_id_fkey",
+      "definicao": "FOREIGN KEY (tipo_despesa_id) REFERENCES tipos_despesa(id) ON DELETE RESTRICT"
+    },
+    {
+      "tabela": "frotas",
+      "conname": "frotas_pkey",
+      "definicao": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "frotas",
+      "conname": "frotas_placa_key",
+      "definicao": "UNIQUE (placa)"
+    },
+    {
+      "tabela": "profiles",
+      "conname": "profiles_frota_padrao_id_fkey",
+      "definicao": "FOREIGN KEY (frota_padrao_id) REFERENCES frotas(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "profiles",
+      "conname": "profiles_gestor_id_fkey",
+      "definicao": "FOREIGN KEY (gestor_id) REFERENCES profiles(id) ON DELETE SET NULL"
+    },
+    {
+      "tabela": "profiles",
+      "conname": "profiles_id_fkey",
+      "definicao": "FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "tabela": "profiles",
+      "conname": "profiles_perfil_check",
+      "definicao": "CHECK ((perfil = ANY (ARRAY['funcionario'::text, 'gestor'::text, 'financeiro'::text, 'administrador'::text])))"
+    },
+    {
+      "tabela": "profiles",
+      "conname": "profiles_pkey",
+      "definicao": "PRIMARY KEY (id)"
+    },
+    {
+      "tabela": "profiles",
+      "conname": "profiles_usuario_key",
+      "definicao": "UNIQUE (usuario)"
+    },
+    {
+      "tabela": "tipos_despesa",
+      "conname": "tipos_despesa_pkey",
+      "definicao": "PRIMARY KEY (id)"
+    }
+  ],
+  "colunas_reais": [
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "alertas_consumo",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "alertas_consumo",
+      "column_name": "frota_id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "alertas_consumo",
+      "column_name": "placa",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "alertas_consumo",
+      "column_name": "modelo",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "alertas_consumo",
+      "column_name": "data",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "alertas_consumo",
+      "column_name": "litros",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "alertas_consumo",
+      "column_name": "km_apontado",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "0",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "alertas_consumo",
+      "column_name": "km_esperado",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "alertas_consumo",
+      "column_name": "percentual",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "alertas_consumo",
+      "column_name": "valor",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "alertas_consumo",
+      "column_name": "ativo",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "true",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "alertas_consumo",
+      "column_name": "resolvido_em",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "alertas_consumo",
+      "column_name": "resolvido_por",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "alertas_consumo",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "alertas_consumo",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "alertas_consumo",
+      "column_name": "justificativa",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "auditoria",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "gen_random_uuid()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "auditoria",
+      "column_name": "user_id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "auditoria",
+      "column_name": "acao",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "auditoria",
+      "column_name": "entidade",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "auditoria",
+      "column_name": "entidade_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "auditoria",
+      "column_name": "detalhes",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "auditoria",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "cartoes",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "gen_random_uuid()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "cartoes",
+      "column_name": "user_id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "cartoes",
+      "column_name": "banco",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "cartoes",
+      "column_name": "bandeira",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "cartoes",
+      "column_name": "ultimos_digitos",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "cartoes",
+      "column_name": "apelido",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "cartoes",
+      "column_name": "is_padrao",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "false",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "cartoes",
+      "column_name": "ativo",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "true",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "cartoes",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "cartoes",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "cartoes",
+      "column_name": "empresa_id_m8",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "controle_km",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "gen_random_uuid()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "controle_km",
+      "column_name": "frota_id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "controle_km",
+      "column_name": "usuario_id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "controle_km",
+      "column_name": "km_inicial",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "controle_km",
+      "column_name": "km_final",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "controle_km",
+      "column_name": "data_inicio",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "controle_km",
+      "column_name": "data_fim",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "controle_km",
+      "column_name": "destino",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "controle_km",
+      "column_name": "motivo",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "controle_km",
+      "column_name": "observacao",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "controle_km",
+      "column_name": "status",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "'aberto'::text",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "controle_km",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "controle_km",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "controle_km",
+      "column_name": "km_percorrido",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "controle_km",
+      "column_name": "duracao_minutos",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "controle_km",
+      "column_name": "ocorrencia",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "despesas",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "gen_random_uuid()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "despesas",
+      "column_name": "tecnico_id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "despesas",
+      "column_name": "tipo_despesa_id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "despesas",
+      "column_name": "cartao_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "cliente",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "numero_os",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "despesas",
+      "column_name": "valor",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "documento",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "observacao",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "comprovante_nome",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "comprovante_url",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "date",
+      "data_type": "date",
+      "table_name": "despesas",
+      "column_name": "data_despesa",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "despesas",
+      "column_name": "data_checkin",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "despesas",
+      "column_name": "data_checkout",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "despesas",
+      "column_name": "numero_diarias",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "status_aprovacao",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "'AguardandoGestor'::text",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "status_erp",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "'Rascunho'::text",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "despesas",
+      "column_name": "gestor_aprovador_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "justificativa_reprovacao",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "despesas",
+      "column_name": "data_envio",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "despesas",
+      "column_name": "data_aprovacao",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "erp_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "jsonb",
+      "data_type": "jsonb",
+      "table_name": "despesas",
+      "column_name": "erp_payload",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "jsonb",
+      "data_type": "jsonb",
+      "table_name": "despesas",
+      "column_name": "erp_resposta",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "despesas",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "despesas",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "despesas",
+      "column_name": "frota_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "despesas",
+      "column_name": "km_atual",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "despesas",
+      "column_name": "parcelado",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "false",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "despesas",
+      "column_name": "numero_parcelas",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "1",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "despesas",
+      "column_name": "parcela_atual",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "1",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "despesas",
+      "column_name": "grupo_parcela_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "date",
+      "data_type": "date",
+      "table_name": "despesas",
+      "column_name": "data_vencimento",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "pagamento_tipo",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "'cartao'::text",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "despesas",
+      "column_name": "reembolso_processado",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "false",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "despesas",
+      "column_name": "reembolso_processado_em",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "reembolso_processado_por",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "despesas",
+      "column_name": "aprovado_financeiro",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "false",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "despesas",
+      "column_name": "aprovado_financeiro_em",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "aprovado_financeiro_por",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "despesas",
+      "column_name": "lancado_erp",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "false",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "despesas",
+      "column_name": "lancado_erp_em",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "lancado_erp_por",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "despesas",
+      "column_name": "lancado_sistema",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "false",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "despesas",
+      "column_name": "lancado_sistema_em",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "lancado_sistema_por",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "erp_status",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "'pendente'::text",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "despesas",
+      "column_name": "erp_etapa_erro",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "erp_erro",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "int8",
+      "data_type": "bigint",
+      "table_name": "despesas",
+      "column_name": "numero_documento_erp",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "despesas",
+      "column_name": "litros_abastecidos",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "despesas",
+      "column_name": "valor_litro",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "tipo_combustivel",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "observacao_financeiro",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "anexo_financeiro_url",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "anexo_financeiro_nome",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "despesas",
+      "column_name": "lancamento_cancelado",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "false",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "despesas",
+      "column_name": "lancamento_cancelado_em",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "despesas",
+      "column_name": "lancamento_cancelado_por",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "lancamento_cancelado_motivo",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "despesas",
+      "column_name": "hora_despesa",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "despesas",
+      "column_name": "comprovante_arquivado_em",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "despesas",
+      "column_name": "comprovante_backup_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "frotas",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "gen_random_uuid()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "frotas",
+      "column_name": "placa",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "frotas",
+      "column_name": "modelo",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "frotas",
+      "column_name": "marca",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "frotas",
+      "column_name": "ano",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "frotas",
+      "column_name": "cor",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "frotas",
+      "column_name": "tipo",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "frotas",
+      "column_name": "quilometragem",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "0",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "frotas",
+      "column_name": "observacao",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "frotas",
+      "column_name": "ativo",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "true",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "frotas",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "frotas",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "frotas",
+      "column_name": "km_atualizado_em",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "frotas",
+      "column_name": "km_media_litro",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "frotas",
+      "column_name": "alerta_ativo",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "false",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "frotas",
+      "column_name": "ultimo_calculo_em",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "frotas",
+      "column_name": "ultimo_calculo_km_apontado",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "frotas",
+      "column_name": "ultimo_calculo_km_esperado",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "frotas",
+      "column_name": "ultimo_calculo_percentual",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "frotas",
+      "column_name": "saldo_inicial_combustivel_litros",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "0",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "profiles",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "nome",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "email",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "usuario",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "perfil",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "profiles",
+      "column_name": "ativo",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "true",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "profiles",
+      "column_name": "gestor_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "profiles",
+      "column_name": "primeiro_acesso",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "true",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "profiles",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "profiles",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "area",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "empresa_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "fornecedor_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "condicao_pagamento_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "operacao_financeira_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "moeda_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "centro_custo_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "senha",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "telefone",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "profiles",
+      "column_name": "frota_padrao_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "profiles",
+      "column_name": "pessoa_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "chave_pix",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "table_name": "tipos_despesa",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "gen_random_uuid()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "tipos_despesa",
+      "column_name": "nome",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "tipos_despesa",
+      "column_name": "descricao",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "table_name": "tipos_despesa",
+      "column_name": "limite_maximo",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "int4",
+      "data_type": "integer",
+      "table_name": "tipos_despesa",
+      "column_name": "limite_ocorrencias_diarias",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "tipos_despesa",
+      "column_name": "calcula_diarias",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "false",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "tipos_despesa",
+      "column_name": "exige_comprovante",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "false",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "tipos_despesa",
+      "column_name": "documento_padrao",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "tipos_despesa",
+      "column_name": "centro_custo_erp_id",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    },
+    {
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "table_name": "tipos_despesa",
+      "column_name": "ativo",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "true",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "tipos_despesa",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "table_name": "tipos_despesa",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "is_generated": "NEVER",
+      "column_default": "now()",
+      "generation_expression": null
+    },
+    {
+      "udt_name": "text",
+      "data_type": "text",
+      "table_name": "tipos_despesa",
+      "column_name": "codigo_produto_erp",
+      "is_nullable": "YES",
+      "is_generated": "NEVER",
+      "column_default": null,
+      "generation_expression": null
+    }
+  ],
+  "colunas_referencia": [
+    {
+      "coluna": "ativo",
+      "tabela": "alertas_consumo",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "coluna": "created_at",
+      "tabela": "alertas_consumo",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "data",
+      "tabela": "alertas_consumo",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "frota_id",
+      "tabela": "alertas_consumo",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "id",
+      "tabela": "alertas_consumo",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "justificativa",
+      "tabela": "alertas_consumo",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "km_apontado",
+      "tabela": "alertas_consumo",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "coluna": "km_esperado",
+      "tabela": "alertas_consumo",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "litros",
+      "tabela": "alertas_consumo",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "modelo",
+      "tabela": "alertas_consumo",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "percentual",
+      "tabela": "alertas_consumo",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "placa",
+      "tabela": "alertas_consumo",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "resolvido_em",
+      "tabela": "alertas_consumo",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "resolvido_por",
+      "tabela": "alertas_consumo",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "updated_at",
+      "tabela": "alertas_consumo",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "valor",
+      "tabela": "alertas_consumo",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "acao",
+      "tabela": "auditoria",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "created_at",
+      "tabela": "auditoria",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "detalhes",
+      "tabela": "auditoria",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "entidade",
+      "tabela": "auditoria",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "entidade_id",
+      "tabela": "auditoria",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "id",
+      "tabela": "auditoria",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "coluna": "user_id",
+      "tabela": "auditoria",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "apelido",
+      "tabela": "cartoes",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "ativo",
+      "tabela": "cartoes",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "coluna": "banco",
+      "tabela": "cartoes",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "bandeira",
+      "tabela": "cartoes",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "created_at",
+      "tabela": "cartoes",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "empresa_id_m8",
+      "tabela": "cartoes",
+      "udt_name": "int4",
+      "data_type": "integer",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "id",
+      "tabela": "cartoes",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "coluna": "is_padrao",
+      "tabela": "cartoes",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "coluna": "ultimos_digitos",
+      "tabela": "cartoes",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "updated_at",
+      "tabela": "cartoes",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "user_id",
+      "tabela": "cartoes",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "created_at",
+      "tabela": "controle_km",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "data_fim",
+      "tabela": "controle_km",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "data_inicio",
+      "tabela": "controle_km",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "destino",
+      "tabela": "controle_km",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "duracao_minutos",
+      "tabela": "controle_km",
+      "udt_name": "int4",
+      "data_type": "integer",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "frota_id",
+      "tabela": "controle_km",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "id",
+      "tabela": "controle_km",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "coluna": "km_final",
+      "tabela": "controle_km",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "km_inicial",
+      "tabela": "controle_km",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "km_percorrido",
+      "tabela": "controle_km",
+      "udt_name": "int4",
+      "data_type": "integer",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "motivo",
+      "tabela": "controle_km",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "observacao",
+      "tabela": "controle_km",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "ocorrencia",
+      "tabela": "controle_km",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "status",
+      "tabela": "controle_km",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "'aberto'::text"
+    },
+    {
+      "coluna": "updated_at",
+      "tabela": "controle_km",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "usuario_id",
+      "tabela": "controle_km",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "anexo_financeiro_nome",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "anexo_financeiro_url",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "aprovado_financeiro",
+      "tabela": "despesas",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "coluna": "aprovado_financeiro_em",
+      "tabela": "despesas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "aprovado_financeiro_por",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "cartao_id",
+      "tabela": "despesas",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "cliente",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "comprovante_arquivado_em",
+      "tabela": "despesas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "comprovante_backup_id",
+      "tabela": "despesas",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "comprovante_nome",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "comprovante_url",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "created_at",
+      "tabela": "despesas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "data_aprovacao",
+      "tabela": "despesas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "data_checkin",
+      "tabela": "despesas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "data_checkout",
+      "tabela": "despesas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "data_despesa",
+      "tabela": "despesas",
+      "udt_name": "date",
+      "data_type": "date",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "data_envio",
+      "tabela": "despesas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "data_vencimento",
+      "tabela": "despesas",
+      "udt_name": "date",
+      "data_type": "date",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "documento",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "erp_erro",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "erp_etapa_erro",
+      "tabela": "despesas",
+      "udt_name": "int4",
+      "data_type": "integer",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "erp_id",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "erp_payload",
+      "tabela": "despesas",
+      "udt_name": "jsonb",
+      "data_type": "jsonb",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "erp_resposta",
+      "tabela": "despesas",
+      "udt_name": "jsonb",
+      "data_type": "jsonb",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "erp_status",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "'pendente'::text"
+    },
+    {
+      "coluna": "frota_id",
+      "tabela": "despesas",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "gestor_aprovador_id",
+      "tabela": "despesas",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "grupo_parcela_id",
+      "tabela": "despesas",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "hora_despesa",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "id",
+      "tabela": "despesas",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "coluna": "justificativa_reprovacao",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "km_atual",
+      "tabela": "despesas",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "lancado_erp",
+      "tabela": "despesas",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "coluna": "lancado_erp_em",
+      "tabela": "despesas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "lancado_erp_por",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "lancado_sistema",
+      "tabela": "despesas",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "coluna": "lancado_sistema_em",
+      "tabela": "despesas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "lancado_sistema_por",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "lancamento_cancelado",
+      "tabela": "despesas",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "coluna": "lancamento_cancelado_em",
+      "tabela": "despesas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "lancamento_cancelado_motivo",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "lancamento_cancelado_por",
+      "tabela": "despesas",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "litros_abastecidos",
+      "tabela": "despesas",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "numero_diarias",
+      "tabela": "despesas",
+      "udt_name": "int4",
+      "data_type": "integer",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "numero_documento_erp",
+      "tabela": "despesas",
+      "udt_name": "int8",
+      "data_type": "bigint",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "numero_os",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "numero_parcelas",
+      "tabela": "despesas",
+      "udt_name": "int4",
+      "data_type": "integer",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "coluna": "observacao",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "observacao_financeiro",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "pagamento_tipo",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "'cartao'::text"
+    },
+    {
+      "coluna": "parcela_atual",
+      "tabela": "despesas",
+      "udt_name": "int4",
+      "data_type": "integer",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "coluna": "parcelado",
+      "tabela": "despesas",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "coluna": "reembolso_processado",
+      "tabela": "despesas",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "coluna": "reembolso_processado_em",
+      "tabela": "despesas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "reembolso_processado_por",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "status_aprovacao",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "'AguardandoGestor'::text"
+    },
+    {
+      "coluna": "status_erp",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "'Rascunho'::text"
+    },
+    {
+      "coluna": "tecnico_id",
+      "tabela": "despesas",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "tipo_combustivel",
+      "tabela": "despesas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "tipo_despesa_id",
+      "tabela": "despesas",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "updated_at",
+      "tabela": "despesas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "valor",
+      "tabela": "despesas",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "valor_litro",
+      "tabela": "despesas",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "alerta_ativo",
+      "tabela": "frotas",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "coluna": "ano",
+      "tabela": "frotas",
+      "udt_name": "int4",
+      "data_type": "integer",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "ativo",
+      "tabela": "frotas",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "coluna": "cor",
+      "tabela": "frotas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "created_at",
+      "tabela": "frotas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "id",
+      "tabela": "frotas",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "coluna": "km_atualizado_em",
+      "tabela": "frotas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "km_media_litro",
+      "tabela": "frotas",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "marca",
+      "tabela": "frotas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "modelo",
+      "tabela": "frotas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "observacao",
+      "tabela": "frotas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "placa",
+      "tabela": "frotas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "quilometragem",
+      "tabela": "frotas",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "coluna": "saldo_inicial_combustivel_litros",
+      "tabela": "frotas",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "coluna": "tipo",
+      "tabela": "frotas",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "ultimo_calculo_em",
+      "tabela": "frotas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "ultimo_calculo_km_apontado",
+      "tabela": "frotas",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "ultimo_calculo_km_esperado",
+      "tabela": "frotas",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "ultimo_calculo_percentual",
+      "tabela": "frotas",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "updated_at",
+      "tabela": "frotas",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "area",
+      "tabela": "profiles",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "ativo",
+      "tabela": "profiles",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "coluna": "centro_custo_id",
+      "tabela": "profiles",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "chave_pix",
+      "tabela": "profiles",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "condicao_pagamento_id",
+      "tabela": "profiles",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "created_at",
+      "tabela": "profiles",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "email",
+      "tabela": "profiles",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "empresa_id",
+      "tabela": "profiles",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "fornecedor_id",
+      "tabela": "profiles",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "frota_padrao_id",
+      "tabela": "profiles",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "gestor_id",
+      "tabela": "profiles",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "id",
+      "tabela": "profiles",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "moeda_id",
+      "tabela": "profiles",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "nome",
+      "tabela": "profiles",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "operacao_financeira_id",
+      "tabela": "profiles",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "perfil",
+      "tabela": "profiles",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "pessoa_id",
+      "tabela": "profiles",
+      "udt_name": "int4",
+      "data_type": "integer",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "primeiro_acesso",
+      "tabela": "profiles",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "coluna": "senha",
+      "tabela": "profiles",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "telefone",
+      "tabela": "profiles",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "updated_at",
+      "tabela": "profiles",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "usuario",
+      "tabela": "profiles",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "ativo",
+      "tabela": "tipos_despesa",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "true"
+    },
+    {
+      "coluna": "calcula_diarias",
+      "tabela": "tipos_despesa",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "coluna": "centro_custo_erp_id",
+      "tabela": "tipos_despesa",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "codigo_produto_erp",
+      "tabela": "tipos_despesa",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "created_at",
+      "tabela": "tipos_despesa",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "coluna": "descricao",
+      "tabela": "tipos_despesa",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "documento_padrao",
+      "tabela": "tipos_despesa",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "exige_comprovante",
+      "tabela": "tipos_despesa",
+      "udt_name": "bool",
+      "data_type": "boolean",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "coluna": "id",
+      "tabela": "tipos_despesa",
+      "udt_name": "uuid",
+      "data_type": "uuid",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "coluna": "limite_maximo",
+      "tabela": "tipos_despesa",
+      "udt_name": "numeric",
+      "data_type": "numeric",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "limite_ocorrencias_diarias",
+      "tabela": "tipos_despesa",
+      "udt_name": "int4",
+      "data_type": "integer",
+      "resultado": "PRESENTE",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "coluna": "nome",
+      "tabela": "tipos_despesa",
+      "udt_name": "text",
+      "data_type": "text",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "coluna": "updated_at",
+      "tabela": "tipos_despesa",
+      "udt_name": "timestamptz",
+      "data_type": "timestamp with time zone",
+      "resultado": "PRESENTE",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    }
+  ]
+}
