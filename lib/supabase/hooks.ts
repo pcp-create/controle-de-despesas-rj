@@ -568,21 +568,22 @@ export function useDespesas(userId?: string, perfil?: string) {
     // O novo abastecimento já está no banco (mutate() foi chamado acima), por isso
     // fetchDespesas retornará os dados atualizados incluindo o novo registro, que será
     // corretamente considerado em calcularJanelaKmFrota via gerarAlertasConsumo.
-    // Aguarda o resultado (em vez de fire-and-forget) para que a UI possa exibir
-    // feedback imediato sem duplicar o cálculo em outro lugar.
-    let consumoResultado: Awaited<ReturnType<typeof persistirAlertasConsumo>> = null;
+    // O recálculo de consumo é secundário e não deve bloquear a confirmação
+    // nem manter o formulário congelado enquanto consultas todas as despesas.
     if (isAbastecimento(data as Despesa)) {
       const frotaId = (data as Despesa).frota_id ?? undefined;
-      try {
-        const todasDespesas: Despesa[] = await fetchDespesas(undefined, "administrador");
-        const kmAdmin = await fetchControleKm();
-        consumoResultado = await persistirAlertasConsumo(todasDespesas, kmAdmin, frotaId);
-      } catch (err) {
-        console.error("[addDespesa] Erro ao persistir alertas de consumo:", err);
-      }
+      void (async () => {
+        try {
+          const todasDespesas: Despesa[] = await fetchDespesas(undefined, "administrador");
+          const kmAdmin = await fetchControleKm();
+          await persistirAlertasConsumo(todasDespesas, kmAdmin, frotaId);
+        } catch (err) {
+          console.error("[addDespesa] Erro ao persistir alertas de consumo:", err);
+        }
+      })();
     }
 
-    return { data, consumoResultado };
+    return { data, consumoResultado: null };
   };
 
   const updateDespesa = async (id: string, updates: Partial<Despesa>) => {

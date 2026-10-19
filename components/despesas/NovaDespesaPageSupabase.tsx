@@ -195,7 +195,12 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   // Status do valor em relação ao limite
   const statusLimite = useMemo(() => {
     const limite = tipoSelecionado?.limite_maximo;
-    if (!limite) return null;
+    if (limite == null) return null;
+    // Limite igual a zero significa que qualquer valor exige justificativa.
+    if (limite === 0) {
+      const valor = calculaDiarias ? valorPorDiaria : Number(form.valor);
+      return (valor ?? 0) > 0 ? "excede" : null;
+    }
     if (calculaDiarias) {
       if (!valorPorDiaria) return null;
       return valorPorDiaria <= limite ? "ok" : "excede";
@@ -310,7 +315,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         setFeedback({ type: "error", msg: result.error });
       } else {
         setFeedback({ type: "success", msg: "Despesa atualizada! Redirecionando..." });
-        setTimeout(() => onBack(), 1500);
+        setTimeout(() => onBack(), 600);
       }
     } else if (parcelado) {
       // Criação parcelada: gera um grupo de parcelas com UUID compartilhado
@@ -337,7 +342,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       if (!hasError) {
         if (currentUser?.id) limparRascunhoDespesa(currentUser.id);
         setFeedback({ type: "success", msg: `${qtdParcelas} parcelas criadas! Redirecionando...` });
-        setTimeout(() => onBack(), 1500);
+        setTimeout(() => onBack(), 600);
       }
     } else {
       // Criação simples
@@ -371,7 +376,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           );
         } else {
           setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
-          setTimeout(() => onBack(), 1500);
+          setTimeout(() => onBack(), 600);
         }
       }
     }
@@ -856,7 +861,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 </div>
 
                 {/* Indicador de limite */}
-                {tipoSelecionado?.limite_maximo && valorPorDiaria !== null && (
+                {tipoSelecionado?.limite_maximo != null && valorPorDiaria !== null && (
                   <div className={`flex items-start gap-2 p-3 rounded-lg text-sm ${
                     statusLimite === "ok"
                       ? "bg-success/10 border border-success/20 text-success"
@@ -868,10 +873,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                       <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                     )}
                     <span>
-                      {statusLimite === "ok"
-                        ? `Valor por diária (${formatCurrency(valorPorDiaria)}) dentro do limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — aprovação automática.`
-                        : `Valor por diária (${formatCurrency(valorPorDiaria)}) excede o limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — será enviado para aprovação do gestor.`
-                      }
+                      {tipoSelecionado.limite_maximo === 0
+                        ? "Este tipo exige justificativa para qualquer valor — será enviado para aprovação do gestor."
+                        : statusLimite === "ok"
+                          ? `Valor por diária (${formatCurrency(valorPorDiaria)}) dentro do limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — aprovação automática.`
+                          : `Valor por diária (${formatCurrency(valorPorDiaria)}) excede o limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — será enviado para aprovação do gestor.`}
                     </span>
                   </div>
                 )}
@@ -1144,7 +1150,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             {statusLimite === "excede" && <span className="text-destructive ml-1">*</span>}
             {statusLimite === "excede" && (
               <span className="ml-2 text-xs text-destructive font-normal">
-                Obrigatória quando o valor excede o limite
+                Obrigatória para este tipo de despesa ou quando o valor excede o limite
               </span>
             )}
           </label>
