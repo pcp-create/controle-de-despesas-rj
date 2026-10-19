@@ -4,7 +4,8 @@ import { useState, useMemo, useRef, useEffect, useCallback, type MouseEvent as R
 import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosFinanceiro } from "@/lib/supabase/use-filtros-persistidos";
 import type { Despesa } from "@/lib/supabase/hooks";
-import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useProfiles, useCartoesFinanceiro } from "@/lib/supabase/hooks";
+import { MoneyInput } from "@/components/ui/money-input";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
 import { anosDisponiveis, formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig, motivoBloqueioEnvioERP } from "@/lib/helpers";
@@ -27,7 +28,7 @@ type ModoFiltro = "mes" | "periodo";
 //   "text"   → busca livre por parte do texto (colunas de texto aberto)
 type FinanceiroSortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "observacao" | "valor" | "status" | "documento" | "cartao" | "lancado";
 const TABLE_COLUMNS: { id: string; sortKey: FinanceiroSortKey | null; label: string; align: "left" | "right"; defaultWidth: number; filterType: "select" | "text" | null }[] = [
-  { id: "editar",      sortKey: null,          label: "",             align: "left",  defaultWidth: 42,  filterType: null },
+  { id: "editar",      sortKey: null,          label: "Editar",       align: "left",  defaultWidth: 52,  filterType: null },
   { id: "lancado",     sortKey: "lancado",     label: "Ações / Lançar", align: "left", defaultWidth: 205, filterType: "select" },
   { id: "data",        sortKey: "data",        label: "Data",        align: "left",  defaultWidth: 100, filterType: "select" },
   { id: "vencimento",  sortKey: "vencimento",  label: "Vencimento",  align: "left",  defaultWidth: 120, filterType: "select" },
@@ -97,7 +98,7 @@ export default function FinanceiroPageSupabase() {
       const rz = resizingRef.current;
       if (!rz) return;
       const delta = e.clientX - rz.startX;
-      const newWidth = Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, rz.startWidth + delta));
+      const newWidth = Math.min(MAX_COL_WIDTH, Math.max(rz.index === 0 ? 52 : MIN_COL_WIDTH, rz.startWidth + delta));
       setColWidths((prev) => {
         const next = [...prev];
         next[rz.index] = newWidth;
@@ -133,7 +134,7 @@ export default function FinanceiroPageSupabase() {
     const prefs = carregarPrefsTabelaFinanceiro(tableUserId);
     if (!prefs) return;
     if (Array.isArray(prefs.colWidths) && prefs.colWidths.length === TABLE_COLUMNS.length) {
-      setColWidths(prefs.colWidths.map((w) => Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, Number(w) || MIN_COL_WIDTH))));
+      setColWidths(prefs.colWidths.map((w, index) => index === 0 ? 52 : Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, Number(w) || MIN_COL_WIDTH))));
     }
     const validSortKeys = new Set(TABLE_COLUMNS.map((c) => c.sortKey).filter(Boolean));
     if (prefs.sortKey && validSortKeys.has(prefs.sortKey as SortKey)) {
@@ -334,6 +335,24 @@ export default function FinanceiroPageSupabase() {
   const [salvandoTipo, setSalvandoTipo] = useState<Record<string, boolean>>({});
   const [despesaEditando, setDespesaEditando] = useState<Despesa | null>(null);
   const [salvandoCampos, setSalvandoCampos] = useState(false);
+  const [valorEdicao, setValorEdicao] = useState("0.00");
+  const [pagamentoEdicao, setPagamentoEdicao] = useState("cartao");
+  const [cartaoEdicao, setCartaoEdicao] = useState("");
+  const [buscaCartao, setBuscaCartao] = useState("");
+  const [listaCartoesAberta, setListaCartoesAberta] = useState(false);
+  const botaoCartaoRef = useRef<HTMLButtonElement>(null);
+  const { cartoes: cartoesEdicao, isLoading: carregandoCartoes, error: erroCartoes, mutate: recarregarCartoes } = useCartoesFinanceiro(!!despesaEditando);
+  const normalizarBuscaCartao = (texto: string) => texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+  const cartoesFiltrados = cartoesEdicao.filter((cartao) => normalizarBuscaCartao([cartao.apelido, cartao.banco, cartao.bandeira, cartao.ultimos_digitos, profiles.find((profile) => profile.id === cartao.user_id)?.nome].join(" ")).includes(normalizarBuscaCartao(buscaCartao.trim())));
+  const cartaoSelecionado = cartoesEdicao.find((cartao) => cartao.id === cartaoEdicao) ?? despesaEditando?.cartao;
+  const abrirEdicao = (despesa: Despesa) => {
+    setBuscaCartao("");
+    setListaCartoesAberta(false);
+    setValorEdicao(String(despesa.valor));
+    setPagamentoEdicao(despesa.pagamento_tipo ?? "cartao");
+    setCartaoEdicao(despesa.cartao_id ?? "");
+    setDespesaEditando(despesa);
+  };
 
   const podeEditarCampos = currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro";
 
@@ -347,7 +366,8 @@ export default function FinanceiroPageSupabase() {
       data_vencimento: form.get("data_vencimento") || null,
       tipo_despesa_id: form.get("tipo_despesa_id"),
       pagamento_tipo: form.get("pagamento_tipo"),
-      valor: Number(form.get("valor")),
+      cartao_id: pagamentoEdicao === "cartao" ? cartaoEdicao || null : null,
+      valor: Number(valorEdicao),
       documento: form.get("documento") || null,
       observacao: form.get("observacao") || null,
     });
@@ -1151,18 +1171,65 @@ export default function FinanceiroPageSupabase() {
 
         {despesaEditando && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <form onSubmit={salvarCamposFinanceiro} className="w-full max-w-2xl rounded-xl bg-card border border-border shadow-xl p-5 space-y-4">
+            <form onSubmit={salvarCamposFinanceiro} className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl p-5 space-y-4">
               <div className="flex items-center justify-between"><div><h2 className="text-lg font-semibold">Editar despesa</h2><p className="text-xs text-muted-foreground">Ajuste os campos antes do lançamento.</p></div><button type="button" onClick={() => setDespesaEditando(null)} aria-label="Fechar"><X className="w-5 h-5" /></button></div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <label className="text-xs font-medium">Data da despesa<input name="data_despesa" type="date" defaultValue={despesaEditando.data_despesa?.slice(0,10)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
                 <label className="text-xs font-medium">Vencimento<input name="data_vencimento" type="date" defaultValue={despesaEditando.data_vencimento?.slice(0,10)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
                 <label className="text-xs font-medium">Tipo de despesa<select name="tipo_despesa_id" defaultValue={despesaEditando.tipo_despesa_id ?? ""} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"><option value="">Selecione</option>{tiposDespesa.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></label>
-                <label className="text-xs font-medium">Pagamento<select name="pagamento_tipo" defaultValue={despesaEditando.pagamento_tipo ?? "cartao"} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">{Object.entries(pagamentoTipoConfig).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></label>
-                <label className="text-xs font-medium">Valor<input name="valor" type="number" min="0" step="0.01" defaultValue={despesaEditando.valor} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
+                <label className="text-xs font-medium">Pagamento<select name="pagamento_tipo" value={pagamentoEdicao} onChange={(event) => setPagamentoEdicao(event.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">{Object.entries(pagamentoTipoConfig).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></label>
+                {pagamentoEdicao === "cartao" && (
+                  <div className="md:col-span-2">
+                    <div onBlur={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setListaCartoesAberta(false);
+                    }} onKeyDown={(event) => {
+                      if (event.key === "Escape" && listaCartoesAberta) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setListaCartoesAberta(false);
+                        botaoCartaoRef.current?.focus();
+                      }
+                    }}>
+                      <label htmlFor="cartao-edicao" className="text-xs font-medium">Cartão</label>
+                      <button id="cartao-edicao" ref={botaoCartaoRef} type="button" aria-expanded={listaCartoesAberta} aria-controls="lista-cartoes-edicao"
+                        disabled={carregandoCartoes || !!erroCartoes}
+                        onClick={() => { setBuscaCartao(""); setListaCartoesAberta(!listaCartoesAberta); }}
+                        className="mt-1 flex w-full items-center justify-between gap-2 rounded-lg border border-input bg-background px-3 py-2 text-left text-sm disabled:opacity-60">
+                        <span className="truncate">{carregandoCartoes ? "Carregando cartões..." : !cartaoEdicao ? "Sem cartão" : cartaoSelecionado ? `${cartaoSelecionado.apelido || cartaoSelecionado.banco} · ${cartaoSelecionado.ultimos_digitos}` : "Cartão selecionado"}</span>
+                        <span aria-hidden="true">▾</span>
+                      </button>
+                      {listaCartoesAberta && (
+                        <div id="lista-cartoes-edicao" className="mt-1 overflow-hidden rounded-lg border border-input bg-card shadow-lg">
+                          <div className="border-b border-border p-2">
+                            <input autoFocus type="search" aria-label="Filtrar cartões" value={buscaCartao}
+                              onChange={(event) => setBuscaCartao(event.target.value)}
+                              onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }}
+                              placeholder="Nome, banco, titular ou final do cartão"
+                              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                          </div>
+                          <div className="max-h-48 overflow-y-auto p-1" role="group" aria-label="Cartões disponíveis">
+                            <button type="button" aria-pressed={!cartaoEdicao} onClick={() => { setCartaoEdicao(""); setListaCartoesAberta(false); botaoCartaoRef.current?.focus(); }} className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-muted focus-visible:bg-muted">Sem cartão</button>
+                            {cartoesFiltrados.map((cartao) => (
+                              <button key={cartao.id} type="button" aria-pressed={cartaoEdicao === cartao.id}
+                                onClick={() => { setCartaoEdicao(cartao.id); setListaCartoesAberta(false); botaoCartaoRef.current?.focus(); }}
+                                className={`w-full rounded-md px-3 py-2 text-left text-sm hover:bg-muted focus-visible:bg-muted ${cartaoEdicao === cartao.id ? "bg-muted font-medium" : ""}`}>
+                                {cartao.apelido || cartao.banco} · {cartao.ultimos_digitos} — {profiles.find((profile) => profile.id === cartao.user_id)?.nome || "Titular não disponível"}{!cartao.ativo ? " (inativo)" : ""}
+                              </button>
+                            ))}
+                            {cartoesFiltrados.length === 0 && <p role="status" className="px-3 py-2 text-xs text-muted-foreground">Nenhum cartão encontrado.</p>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {erroCartoes && <p role="alert" className="mt-1 text-xs text-destructive">Não foi possível carregar os cartões. <button type="button" className="underline" onClick={() => void recarregarCartoes()}>Tentar novamente</button></p>}
+                    {!carregandoCartoes && !erroCartoes && cartoesEdicao.length === 0 && <p className="mt-1 text-xs text-muted-foreground">Nenhum cartão disponível.</p>}
+                  </div>
+                )}
+                <label className="text-xs font-medium">Valor<MoneyInput name="valor" value={valorEdicao} onValueChange={setValorEdicao} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
                 <label className="text-xs font-medium">Documento<select name="documento" defaultValue={despesaEditando.documento ?? ""} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"><option value="">Selecione</option>{OPCOES_DOCUMENTO.map((op) => <option key={op}>{op}</option>)}</select></label>
                 <label className="text-xs font-medium md:col-span-2">Observação<textarea name="observacao" defaultValue={despesaEditando.observacao ?? ""} rows={3} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none" /></label>
               </div>
-              <div className="flex justify-end gap-2"><button type="button" onClick={() => setDespesaEditando(null)} className="rounded-lg border border-input px-4 py-2 text-sm">Cancelar</button><button type="submit" disabled={salvandoCampos} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-60">{salvandoCampos ? "Salvando..." : "Salvar alterações"}</button></div>
+              <div className="flex justify-end gap-2"><button type="button" onClick={() => setDespesaEditando(null)} className="rounded-lg border border-input px-4 py-2 text-sm">Cancelar</button><button type="submit" disabled={salvandoCampos || (pagamentoEdicao === "cartao" && (carregandoCartoes || !!erroCartoes))} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-60">{salvandoCampos ? "Salvando..." : "Salvar alterações"}</button></div>
             </form>
           </div>
         )}
@@ -1178,21 +1245,23 @@ export default function FinanceiroPageSupabase() {
           </button>
         </div>
         <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "calc(100vh - 320px)", minHeight: "400px" }}>
-          <table className="text-xs" style={{ tableLayout: "fixed", width: colWidths.reduce((a, b) => a + b, 0) }}>
+          <table className="text-xs border-separate border-spacing-0 [&_td]:border-b [&_td]:border-border" style={{ tableLayout: "fixed", width: colWidths.reduce((a, b) => a + b, 0) }}>
             <colgroup>
               {colWidths.map((w, i) => (
                 <col key={TABLE_COLUMNS[i].id} style={{ width: w }} />
               ))}
             </colgroup>
-            <thead className="bg-muted sticky top-0 z-10">
+            <thead>
               <tr>
                 {TABLE_COLUMNS.map(({ sortKey: key, label, align, filterType }, index) => (
                   <th
                     key={label}
-                    title={label}
-                    className={`relative px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"} ${index === 0 ? "sticky left-0 z-20 bg-muted border-r border-border" : index === 1 ? "sticky left-[42px] z-20 bg-muted border-r border-border" : ""}`}
+                    title={label || "Editar despesa"}
+                    className={`sticky top-0 border-b border-border bg-muted ${index === 0 ? "px-1 text-center" : "px-3"} py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"} ${index < 2 ? "z-30" : "z-20"}`}
+                    style={{ left: index === 0 ? 0 : index === 1 ? colWidths[0] : undefined }}
+                    aria-label={index === 0 ? "Editar" : undefined}
                   >
-                    <div className={`flex items-center gap-1 min-w-0 ${align === "right" ? "justify-end" : ""}`}>
+                    <div className={`flex items-center gap-1 min-w-0 ${index === 0 ? "justify-center" : align === "right" ? "justify-end" : ""}`}>
                       {key ? (
                         <button
                           type="button"
@@ -1318,14 +1387,14 @@ export default function FinanceiroPageSupabase() {
                       className={`absolute top-0 right-0 h-full w-1.5 cursor-col-resize select-none group ${resizingIndex === index ? "bg-primary" : "hover:bg-primary/40"}`}
                       title="Arrastar para redimensionar"
                     >
-                      <div className={`absolute top-1/2 -translate-y-1/2 right-0 w-px h-3/5 ${resizingIndex === index ? "bg-primary" : "bg-border group-hover:bg-primary/60"}`} />
+                      <div className={`absolute top-1/2 -translate-y-1/2 right-0 w-px h-3/5 ${resizingIndex === index ? "bg-primary" : index < 2 ? "bg-transparent group-hover:bg-primary/60" : "bg-border group-hover:bg-primary/60"}`} />
                     </div>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {despesasExibidas.map((d) => {
+              {despesasExibidas.map((d, rowIndex) => {
                 const tipo = tiposDespesa.find((t) => t.id === d.tipo_despesa_id);
                 const tecnico = profiles.find((p) => p.id === d.tecnico_id);
                 const cartao = d.cartao;
@@ -1357,22 +1426,22 @@ export default function FinanceiroPageSupabase() {
                 const aprovado = sg === "aprovado";
 
                 return (
-                  <tr key={d.id} className="border-t border-border hover:bg-muted/20 transition">
-                    <td className="sticky left-0 z-10 p-0 bg-card border-r border-border">
+                  <tr key={d.id} className={`${rowIndex % 2 === 0 ? "bg-card" : "bg-slate-50 dark:bg-slate-900"} hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors`}>
+                    <td className="sticky left-0 z-10 p-0 bg-inherit">
                       {podeEditarCampos && (
                         <button
                           type="button"
-                          onClick={() => setDespesaEditando(d)}
+                          onClick={() => abrirEdicao(d)}
                           title="Editar despesa"
                           aria-label="Editar despesa"
-                          className="flex h-full min-h-[42px] w-full items-center justify-center text-primary hover:bg-primary/10 transition"
+                          className="mx-auto flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
                       )}
                     </td>
                     {/* Coluna de ações fixa para ficar disponível mesmo com rolagem horizontal */}
-                    <td className="sticky left-[42px] z-10 px-3 py-2 overflow-hidden bg-card border-r border-border">
+                    <td style={{ left: colWidths[0] }} className="sticky z-10 px-3 py-2 overflow-hidden bg-inherit">
                       {(() => {
                         const fmtDtHr = (iso: string) => {
                           const dt = new Date(iso);

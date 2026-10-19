@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import { MoneyInput } from "@/components/ui/money-input";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
@@ -654,11 +655,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             <label className="text-sm font-medium text-foreground">
               {calculaDiarias ? "Valor total da nota (R$)" : "Valor (R$)"} <span className="text-destructive">*</span>
             </label>
-            <input
-              type="number"
-              step="0.01"
+            <MoneyInput
+              aria-label="Valor da despesa"
               value={form.valor}
-              onChange={(e) => setForm({ ...form, valor: e.target.value })}
+              onValueChange={(valor) => setForm({ ...form, valor })}
               placeholder="0,00"
               className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
@@ -1104,13 +1104,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">R$</span>
-                    <input
-                      type="number"
+                    <MoneyInput
+                      aria-label="Valor por litro"
                       value={form.valorLitro}
-                      onChange={(e) => setForm({ ...form, valorLitro: e.target.value })}
-                      placeholder="6,19"
-                      min={0}
-                      step={0.001}
+                      onValueChange={(valorLitro) => setForm({ ...form, valorLitro })}
+                      placeholder="0,00"
                       className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>

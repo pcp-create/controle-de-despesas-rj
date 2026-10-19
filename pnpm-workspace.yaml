@@ -1,0 +1,7 @@
+packages:
+  - "apps/*"
+allowBuilds:
+  core-js: false
+  esbuild: true
+  msw: false
+  sharp: true

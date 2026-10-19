@@ -450,6 +450,31 @@ export function useTiposDespesaCentroCustoTodos() {
   };
 }
 
+/** Catálogo financeiro completo, sem filtro por titular ou situação do cartão.
+ * A política financeiro_cartoes_select autoriza a leitura para financeiro/admin.
+ */
+export function useCartoesFinanceiro(enabled = true) {
+  const { profile } = useAuth();
+  const autorizado = profile?.ativo && ["administrador", "financeiro"].includes(profile.perfil);
+  const { data, error, isLoading, mutate } = useSWR<Cartao[]>(
+    enabled && autorizado ? `cartoes-financeiro-${profile.id}` : null,
+    async () => {
+      const supabase = getSupabase();
+      const todos: Cartao[] = [];
+      for (let inicio = 0; ; inicio += 500) {
+        const { data, error } = await supabase.from("cartoes")
+          .select("id,user_id,banco,bandeira,ultimos_digitos,apelido,is_padrao,ativo,empresa_id_m8")
+          .order("banco").order("id").range(inicio, inicio + 499);
+        if (error) throw error;
+        todos.push(...(data || []));
+        if (!data || data.length < 500) return todos;
+      }
+    },
+    { revalidateOnFocus: false },
+  );
+  return { cartoes: data || [], error, isLoading, mutate };
+}
+
 export function useCartoes(userId?: string) {
   const { profile } = useAuth();
   const effectiveId = userId || profile?.id;
@@ -1297,13 +1322,14 @@ export function useDespesas(userId?: string, perfil?: string) {
 
 const fetchFrotas = async (): Promise<Frota[]> => {
   const res = await fetch("/api/frotas");
-  if (!res.ok) return [];
   const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Não foi possível carregar as frotas");
   return json.data || [];
 };
 
 export function useFrotas() {
-  const { data, error, isLoading, mutate } = useSWR("frotas", fetchFrotas, {
+  const { profile } = useAuth();
+  const { data, error, isLoading, mutate } = useSWR(profile?.id ? ["frotas", profile.id] : null, fetchFrotas, {
     revalidateOnFocus: false,
   });
 
