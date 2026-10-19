@@ -183,16 +183,14 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     return diff > 0 ? diff : null;
   }, [calculaDiarias, form.dataCheckin, form.dataCheckout]);
 
-  // Valor por diária: usa o valor TOTAL da despesa (todas as parcelas),
-  // não o valor de uma parcela individual.
+  // Valor por diária: form.valor já representa o valor TOTAL da despesa.
+  // O parcelamento divide esse total em parcelas; não deve multiplicá-lo novamente.
   const valorPorDiaria = useMemo(() => {
     if (!numeroDiarias) return null;
-    // valorTotal já é form.valor * qtdParcelas (calculado abaixo),
-    // mas como depende de qtdParcelas precisamos calculá-lo aqui inline.
-    const vTotal = (Number(form.valor) || 0) * (parcelado ? Math.max(2, numeroParcelas) : 1);
-    if (!vTotal) return null;
-    return vTotal / numeroDiarias;
-  }, [numeroDiarias, form.valor, parcelado, numeroParcelas]);
+    const valorTotalDespesa = Number(form.valor) || 0;
+    if (!valorTotalDespesa) return null;
+    return valorTotalDespesa / numeroDiarias;
+  }, [numeroDiarias, form.valor]);
 
   // Status do valor em relação ao limite
   const statusLimite = useMemo(() => {
