@@ -6,7 +6,7 @@ import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } fro
 import { uploadComprovante } from "@/lib/supabase/storage";
 import { LIMITE_CONSUMO, type AlertaConsumo } from "@/lib/consumo-frota";
 import { salvarRascunhoDespesa, carregarRascunhoDespesa, limparRascunhoDespesa, rascunhoEstaVazio, type DespesaDraftData } from "@/lib/despesa-draft";
-import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2, Receipt, Search } from "lucide-react";
+import { ArrowLeft, Upload, X, Info, Save, Send, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2, Receipt, Search } from "lucide-react";
 import { formatCurrency, getLocalDateString, getLocalTimeString } from "@/lib/helpers";
 
 
@@ -259,8 +259,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     return errs;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const enviarDespesa = submitter?.dataset.action === "salvar-enviar";
     const errs = validate();
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
@@ -314,7 +316,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
       } else {
-        setFeedback({ type: "success", msg: "Despesa atualizada! Redirecionando..." });
+        setFeedback({ type: "success", msg: enviarDespesa ? "Despesa atualizada e enviada! Redirecionando..." : "Despesa atualizada! Redirecionando..." });
         setTimeout(() => onBack(), 600);
       }
     } else if (parcelado) {
@@ -341,7 +343,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
       if (!hasError) {
         if (currentUser?.id) limparRascunhoDespesa(currentUser.id);
-        setFeedback({ type: "success", msg: `${qtdParcelas} parcelas criadas! Redirecionando...` });
+        setFeedback({ type: "success", msg: enviarDespesa ? `${qtdParcelas} parcelas salvas e enviadas! Redirecionando...` : `${qtdParcelas} parcelas criadas! Redirecionando...` });
         setTimeout(() => onBack(), 600);
       }
     } else {
@@ -1242,10 +1244,19 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent/90 disabled:opacity-60 transition flex items-center justify-center gap-2"
+            className="flex-1 py-2.5 rounded-lg border border-accent text-accent text-sm font-semibold hover:bg-accent/10 disabled:opacity-60 transition flex items-center justify-center gap-2"
           >
             <Save className="w-4 h-4" />
             {loading ? "Salvando..." : "Salvar Despesa"}
+          </button>
+          <button
+            type="submit"
+            data-action="salvar-enviar"
+            disabled={loading}
+            className="flex-1 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent/90 disabled:opacity-60 transition flex items-center justify-center gap-2"
+          >
+            <Send className="w-4 h-4" />
+            {loading ? "Enviando..." : "Salvar e Enviar Despesa"}
           </button>
         </div>
       </form>
