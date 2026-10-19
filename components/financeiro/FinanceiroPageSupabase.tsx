@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback, type MouseEvent as ReactMouseEvent } from "react";
 import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosFinanceiro } from "@/lib/supabase/use-filtros-persistidos";
+import type { Despesa } from "@/lib/supabase/hooks";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
@@ -330,6 +331,33 @@ export default function FinanceiroPageSupabase() {
   // Estado para edição inline de tipo: { [despesaId]: tipo_despesa_id }
   const [editandoTipo, setEditandoTipo] = useState<Record<string, string>>({});
   const [salvandoTipo, setSalvandoTipo] = useState<Record<string, boolean>>({});
+  const [despesaEditando, setDespesaEditando] = useState<Despesa | null>(null);
+  const [salvandoCampos, setSalvandoCampos] = useState(false);
+
+  const podeEditarCampos = currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro";
+
+  const salvarCamposFinanceiro = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!despesaEditando) return;
+    const form = new FormData(event.currentTarget);
+    setSalvandoCampos(true);
+    const result = await updateDespesaCamposFinanceiro(despesaEditando.id, {
+      data_despesa: form.get("data_despesa"),
+      data_vencimento: form.get("data_vencimento") || null,
+      tipo_despesa_id: form.get("tipo_despesa_id"),
+      pagamento_tipo: form.get("pagamento_tipo"),
+      valor: Number(form.get("valor")),
+      documento: form.get("documento") || null,
+      observacao: form.get("observacao") || null,
+    });
+    setSalvandoCampos(false);
+    if (result.error) setFeedbackERP({ type: "error", msg: result.error });
+    else {
+      setDespesaEditando(null);
+      setFeedbackERP({ type: "success", msg: "Campos da despesa atualizados." });
+      setTimeout(() => setFeedbackERP(null), 4000);
+    }
+  };
 
   const handleEditarTipo = (id: string, valorAtual: string | null) => {
     setEditandoTipo((prev) => ({ ...prev, [id]: valorAtual || "" }));
@@ -1120,6 +1148,24 @@ export default function FinanceiroPageSupabase() {
           </div>
         </div>
 
+        {despesaEditando && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <form onSubmit={salvarCamposFinanceiro} className="w-full max-w-2xl rounded-xl bg-card border border-border shadow-xl p-5 space-y-4">
+              <div className="flex items-center justify-between"><div><h2 className="text-lg font-semibold">Editar despesa</h2><p className="text-xs text-muted-foreground">Ajuste os campos antes do lançamento.</p></div><button type="button" onClick={() => setDespesaEditando(null)} aria-label="Fechar"><X className="w-5 h-5" /></button></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="text-xs font-medium">Data da despesa<input name="data_despesa" type="date" defaultValue={despesaEditando.data_despesa?.slice(0,10)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
+                <label className="text-xs font-medium">Vencimento<input name="data_vencimento" type="date" defaultValue={despesaEditando.data_vencimento?.slice(0,10)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
+                <label className="text-xs font-medium">Tipo de despesa<select name="tipo_despesa_id" defaultValue={despesaEditando.tipo_despesa_id ?? ""} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"><option value="">Selecione</option>{tiposDespesa.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></label>
+                <label className="text-xs font-medium">Pagamento<select name="pagamento_tipo" defaultValue={despesaEditando.pagamento_tipo ?? "cartao"} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">{Object.entries(pagamentoTipoConfig).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></label>
+                <label className="text-xs font-medium">Valor<input name="valor" type="number" min="0" step="0.01" defaultValue={despesaEditando.valor} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
+                <label className="text-xs font-medium">Documento<select name="documento" defaultValue={despesaEditando.documento ?? ""} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"><option value="">Selecione</option>{OPCOES_DOCUMENTO.map((op) => <option key={op}>{op}</option>)}</select></label>
+                <label className="text-xs font-medium md:col-span-2">Observação<textarea name="observacao" defaultValue={despesaEditando.observacao ?? ""} rows={3} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none" /></label>
+              </div>
+              <div className="flex justify-end gap-2"><button type="button" onClick={() => setDespesaEditando(null)} className="rounded-lg border border-input px-4 py-2 text-sm">Cancelar</button><button type="submit" disabled={salvandoCampos} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-60">{salvandoCampos ? "Salvando..." : "Salvar alterações"}</button></div>
+            </form>
+          </div>
+        )}
+
         {/* Tabela */}
         <div className="flex items-center justify-end px-4 pt-3 -mb-1">
           <button
@@ -1322,6 +1368,11 @@ export default function FinanceiroPageSupabase() {
 
                         return (
                           <div className="flex flex-col gap-1.5 min-w-[130px]">
+                            {podeEditarCampos && (
+                              <button type="button" onClick={() => setDespesaEditando(d)} title="Editar todos os campos" className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline w-fit">
+                                <Pencil className="w-3 h-3" /> Editar despesa
+                              </button>
+                            )}
 
                             {/* ── Linha 1: Lançamento no sistema ── */}
                             {d.lancamento_cancelado ? (
