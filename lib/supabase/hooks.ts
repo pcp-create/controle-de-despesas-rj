@@ -1322,13 +1322,14 @@ export function useDespesas(userId?: string, perfil?: string) {
 
 const fetchFrotas = async (): Promise<Frota[]> => {
   const res = await fetch("/api/frotas");
-  if (!res.ok) return [];
   const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Não foi possível carregar as frotas");
   return json.data || [];
 };
 
 export function useFrotas() {
-  const { data, error, isLoading, mutate } = useSWR("frotas", fetchFrotas, {
+  const { profile } = useAuth();
+  const { data, error, isLoading, mutate } = useSWR(profile?.id ? ["frotas", profile.id] : null, fetchFrotas, {
     revalidateOnFocus: false,
   });
 

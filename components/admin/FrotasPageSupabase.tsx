@@ -76,7 +76,7 @@ function calcularLacunasKm(apontamentos: ControleKm[]) {
 }
 
 export default function FrotasPageSupabase() {
-  const { frotas, isLoading, addFrota, updateFrota, deleteFrota, mutate: mutateFrotas } = useFrotas();
+  const { frotas, isLoading, error: erroFrotas, addFrota, updateFrota, deleteFrota, mutate: mutateFrotas } = useFrotas();
   const currentUser = useAppStore((s) => s.currentUser);
   const { despesas } = useDespesas();
   const { registros: apontamentosKm, editarKm } = useControleKm();
@@ -787,7 +787,12 @@ export default function FrotasPageSupabase() {
       </div>
 
       {/* Lista */}
-      {isLoading ? (
+      {erroFrotas ? (
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm">
+          <p>Não foi possível carregar as frotas. {erroFrotas.message}</p>
+          <button type="button" onClick={() => void mutateFrotas()} className="mt-2 font-medium text-primary underline">Tentar novamente</button>
+        </div>
+      ) : isLoading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="w-8 h-8 animate-spin text-accent" />
         </div>

@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { createClient as createServerClient } from "@/lib/supabase/server";
 
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -15,15 +16,14 @@ function getAdminClient() {
 
 // GET - listar frotas
 export async function GET() {
-  const admin = getAdminClient();
-  if (!admin) {
-    return NextResponse.json(
-      { error: "Configuração do servidor incompleta" },
-      { status: 500 }
-    );
+  const supabase = await createServerClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
-  const { data, error } = await admin
+  // A política existente permite aos autenticados consultar as frotas.
+  const { data, error } = await supabase
     .from("frotas")
     .select("*")
     .order("placa");

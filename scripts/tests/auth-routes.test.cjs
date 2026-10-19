@@ -17,6 +17,7 @@ function route(name, client) {
     process: { env: {} }, // No service role or environment credentials available.
     require(name) {
       if (name === 'next/server') return { NextResponse };
+      if (name === '@supabase/supabase-js') return { createClient() { throw new Error('Administrative client must not be used'); } };
       if (name === '@/lib/supabase/server') return { createClient: async () => client };
       throw new Error('Unexpected dependency: ' + name);
     },
@@ -74,4 +75,33 @@ test('inactive profiles cannot sign in', async () => {
 test('invalid passwords remain unauthorized', async () => {
   const c = client({ authError: { message: 'Invalid login credentials' } });
   assert.equal((await route('login', c).POST(request({ usuario: 'teste', senha: 'wrong' }))).status, 401);
+});
+
+function fleetClient({ user = { id: 'owner' }, error = null } = {}) {
+  const calls = [];
+  return {
+    calls,
+    auth: { getUser: async () => ({ data: { user }, error: null }) },
+    from(table) {
+      calls.push(table);
+      return { select: () => ({ order: async () => ({ data: error ? null : [{ id: 'fleet-1', placa: 'TEST123' }], error }) }) };
+    },
+  };
+}
+test('fleets use the authenticated session without a service key', async () => {
+  const c = fleetClient();
+  const res = await route('frotas', c).GET();
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).data[0].id, 'fleet-1');
+  assert.deepEqual(c.calls, ['frotas']);
+});
+test('fleets reject unauthenticated requests before querying', async () => {
+  const c = fleetClient({ user: null });
+  assert.equal((await route('frotas', c).GET()).status, 401);
+  assert.equal(c.calls.length, 0);
+});
+test('fleet query failures are reported instead of an empty list', async () => {
+  const res = await route('frotas', fleetClient({ error: { message: 'Query failed' } })).GET();
+  assert.equal(res.status, 500);
+  assert.equal((await res.json()).error, 'Query failed');
 });
