@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect, useCallback, type MouseEvent as R
 import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosFinanceiro } from "@/lib/supabase/use-filtros-persistidos";
 import type { Despesa } from "@/lib/supabase/hooks";
-import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useProfiles, useCartoesFinanceiro } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
 import { anosDisponiveis, formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig, motivoBloqueioEnvioERP } from "@/lib/helpers";
@@ -334,6 +334,14 @@ export default function FinanceiroPageSupabase() {
   const [salvandoTipo, setSalvandoTipo] = useState<Record<string, boolean>>({});
   const [despesaEditando, setDespesaEditando] = useState<Despesa | null>(null);
   const [salvandoCampos, setSalvandoCampos] = useState(false);
+  const [pagamentoEdicao, setPagamentoEdicao] = useState("cartao");
+  const [cartaoEdicao, setCartaoEdicao] = useState("");
+  const { cartoes: cartoesEdicao, isLoading: carregandoCartoes, error: erroCartoes, mutate: recarregarCartoes } = useCartoesFinanceiro(!!despesaEditando);
+  const abrirEdicao = (despesa: Despesa) => {
+    setPagamentoEdicao(despesa.pagamento_tipo ?? "cartao");
+    setCartaoEdicao(despesa.cartao_id ?? "");
+    setDespesaEditando(despesa);
+  };
 
   const podeEditarCampos = currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro";
 
@@ -347,6 +355,7 @@ export default function FinanceiroPageSupabase() {
       data_vencimento: form.get("data_vencimento") || null,
       tipo_despesa_id: form.get("tipo_despesa_id"),
       pagamento_tipo: form.get("pagamento_tipo"),
+      cartao_id: pagamentoEdicao === "cartao" ? cartaoEdicao || null : null,
       valor: Number(form.get("valor")),
       documento: form.get("documento") || null,
       observacao: form.get("observacao") || null,
@@ -1151,18 +1160,37 @@ export default function FinanceiroPageSupabase() {
 
         {despesaEditando && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <form onSubmit={salvarCamposFinanceiro} className="w-full max-w-2xl rounded-xl bg-card border border-border shadow-xl p-5 space-y-4">
+            <form onSubmit={salvarCamposFinanceiro} className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border shadow-xl p-5 space-y-4">
               <div className="flex items-center justify-between"><div><h2 className="text-lg font-semibold">Editar despesa</h2><p className="text-xs text-muted-foreground">Ajuste os campos antes do lançamento.</p></div><button type="button" onClick={() => setDespesaEditando(null)} aria-label="Fechar"><X className="w-5 h-5" /></button></div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <label className="text-xs font-medium">Data da despesa<input name="data_despesa" type="date" defaultValue={despesaEditando.data_despesa?.slice(0,10)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
                 <label className="text-xs font-medium">Vencimento<input name="data_vencimento" type="date" defaultValue={despesaEditando.data_vencimento?.slice(0,10)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
                 <label className="text-xs font-medium">Tipo de despesa<select name="tipo_despesa_id" defaultValue={despesaEditando.tipo_despesa_id ?? ""} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"><option value="">Selecione</option>{tiposDespesa.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></label>
-                <label className="text-xs font-medium">Pagamento<select name="pagamento_tipo" defaultValue={despesaEditando.pagamento_tipo ?? "cartao"} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">{Object.entries(pagamentoTipoConfig).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></label>
+                <label className="text-xs font-medium">Pagamento<select name="pagamento_tipo" value={pagamentoEdicao} onChange={(event) => setPagamentoEdicao(event.target.value)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">{Object.entries(pagamentoTipoConfig).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></label>
+                {pagamentoEdicao === "cartao" && (
+                  <div className="md:col-span-2">
+                    <label className="text-xs font-medium">Cartão
+                      <select name="cartao_id" value={cartaoEdicao} onChange={(event) => setCartaoEdicao(event.target.value)} disabled={carregandoCartoes || !!erroCartoes} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm disabled:opacity-60">
+                        <option value="">{carregandoCartoes ? "Carregando cartões..." : "Sem cartão"}</option>
+                        {cartaoEdicao && !cartoesEdicao.some((cartao) => cartao.id === cartaoEdicao) && (
+                          <option value={cartaoEdicao}>{despesaEditando.cartao ? `${despesaEditando.cartao.banco} — **** ${despesaEditando.cartao.ultimos_digitos} (cartão atual)` : "Cartão atual"}</option>
+                        )}
+                        {cartoesEdicao.map((cartao) => (
+                          <option key={cartao.id} value={cartao.id}>
+                            {cartao.apelido ? `${cartao.apelido} — ` : ""}{cartao.banco} — {cartao.bandeira} — **** {cartao.ultimos_digitos} — {profiles.find((profile) => profile.id === cartao.user_id)?.nome || "Titular não disponível"}{!cartao.ativo ? " (inativo)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {erroCartoes && <p role="alert" className="mt-1 text-xs text-destructive">Não foi possível carregar os cartões. <button type="button" className="underline" onClick={() => void recarregarCartoes()}>Tentar novamente</button></p>}
+                    {!carregandoCartoes && !erroCartoes && cartoesEdicao.length === 0 && <p className="mt-1 text-xs text-muted-foreground">Nenhum cartão disponível.</p>}
+                  </div>
+                )}
                 <label className="text-xs font-medium">Valor<input name="valor" type="number" min="0" step="0.01" defaultValue={despesaEditando.valor} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
                 <label className="text-xs font-medium">Documento<select name="documento" defaultValue={despesaEditando.documento ?? ""} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"><option value="">Selecione</option>{OPCOES_DOCUMENTO.map((op) => <option key={op}>{op}</option>)}</select></label>
                 <label className="text-xs font-medium md:col-span-2">Observação<textarea name="observacao" defaultValue={despesaEditando.observacao ?? ""} rows={3} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none" /></label>
               </div>
-              <div className="flex justify-end gap-2"><button type="button" onClick={() => setDespesaEditando(null)} className="rounded-lg border border-input px-4 py-2 text-sm">Cancelar</button><button type="submit" disabled={salvandoCampos} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-60">{salvandoCampos ? "Salvando..." : "Salvar alterações"}</button></div>
+              <div className="flex justify-end gap-2"><button type="button" onClick={() => setDespesaEditando(null)} className="rounded-lg border border-input px-4 py-2 text-sm">Cancelar</button><button type="submit" disabled={salvandoCampos || (pagamentoEdicao === "cartao" && (carregandoCartoes || !!erroCartoes))} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-60">{salvandoCampos ? "Salvando..." : "Salvar alterações"}</button></div>
             </form>
           </div>
         )}
@@ -1178,19 +1206,21 @@ export default function FinanceiroPageSupabase() {
           </button>
         </div>
         <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "calc(100vh - 320px)", minHeight: "400px" }}>
-          <table className="text-xs" style={{ tableLayout: "fixed", width: colWidths.reduce((a, b) => a + b, 0) }}>
+          <table className="text-xs border-separate border-spacing-0 [&_td]:border-b [&_td]:border-border" style={{ tableLayout: "fixed", width: colWidths.reduce((a, b) => a + b, 0) }}>
             <colgroup>
               {colWidths.map((w, i) => (
                 <col key={TABLE_COLUMNS[i].id} style={{ width: w }} />
               ))}
             </colgroup>
-            <thead className="bg-muted sticky top-0 z-10">
+            <thead>
               <tr>
                 {TABLE_COLUMNS.map(({ sortKey: key, label, align, filterType }, index) => (
                   <th
                     key={label}
-                    title={label}
-                    className={`relative px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"} ${index === 0 ? "sticky left-0 z-20 bg-muted border-r border-border" : index === 1 ? "sticky left-[42px] z-20 bg-muted border-r border-border" : ""}`}
+                    title={label || "Editar despesa"}
+                    className={`sticky top-0 border-b border-border bg-muted px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"} ${index < 2 ? "z-30 border-r border-border" : "z-20"}`}
+                    style={{ left: index === 0 ? 0 : index === 1 ? colWidths[0] : undefined }}
+                    aria-label={index === 0 ? "Editar despesa" : undefined}
                   >
                     <div className={`flex items-center gap-1 min-w-0 ${align === "right" ? "justify-end" : ""}`}>
                       {key ? (
@@ -1209,7 +1239,7 @@ export default function FinanceiroPageSupabase() {
                           )}
                         </button>
                       ) : (
-                        <span className="truncate">{label}</span>
+                        <span className="truncate">{index === 0 ? <Pencil className="w-4 h-4" aria-hidden="true" /> : label}</span>
                       )}
                       {key && filterType && (
                         <div className="relative shrink-0">
@@ -1362,7 +1392,7 @@ export default function FinanceiroPageSupabase() {
                       {podeEditarCampos && (
                         <button
                           type="button"
-                          onClick={() => setDespesaEditando(d)}
+                          onClick={() => abrirEdicao(d)}
                           title="Editar despesa"
                           aria-label="Editar despesa"
                           className="flex h-full min-h-[42px] w-full items-center justify-center text-primary hover:bg-primary/10 transition"
@@ -1372,7 +1402,7 @@ export default function FinanceiroPageSupabase() {
                       )}
                     </td>
                     {/* Coluna de ações fixa para ficar disponível mesmo com rolagem horizontal */}
-                    <td className="sticky left-[42px] z-10 px-3 py-2 overflow-hidden bg-card border-r border-border">
+                    <td style={{ left: colWidths[0] }} className="sticky z-10 px-3 py-2 overflow-hidden bg-card border-r border-border">
                       {(() => {
                         const fmtDtHr = (iso: string) => {
                           const dt = new Date(iso);
