@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import { MoneyInput } from "@/components/ui/money-input";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
@@ -654,11 +655,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             <label className="text-sm font-medium text-foreground">
               {calculaDiarias ? "Valor total da nota (R$)" : "Valor (R$)"} <span className="text-destructive">*</span>
             </label>
-            <input
-              type="number"
-              step="0.01"
+            <MoneyInput
+              aria-label="Valor da despesa"
               value={form.valor}
-              onChange={(e) => setForm({ ...form, valor: e.target.value })}
+              onValueChange={(valor) => setForm({ ...form, valor })}
               placeholder="0,00"
               className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />

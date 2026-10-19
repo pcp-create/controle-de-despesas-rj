@@ -5,6 +5,7 @@ import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosFinanceiro } from "@/lib/supabase/use-filtros-persistidos";
 import type { Despesa } from "@/lib/supabase/hooks";
 import { useDespesas, useTiposDespesa, useProfiles, useCartoesFinanceiro } from "@/lib/supabase/hooks";
+import { MoneyInput } from "@/components/ui/money-input";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
 import { anosDisponiveis, formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig, motivoBloqueioEnvioERP } from "@/lib/helpers";
@@ -334,6 +335,7 @@ export default function FinanceiroPageSupabase() {
   const [salvandoTipo, setSalvandoTipo] = useState<Record<string, boolean>>({});
   const [despesaEditando, setDespesaEditando] = useState<Despesa | null>(null);
   const [salvandoCampos, setSalvandoCampos] = useState(false);
+  const [valorEdicao, setValorEdicao] = useState("0.00");
   const [pagamentoEdicao, setPagamentoEdicao] = useState("cartao");
   const [cartaoEdicao, setCartaoEdicao] = useState("");
   const [buscaCartao, setBuscaCartao] = useState("");
@@ -346,6 +348,7 @@ export default function FinanceiroPageSupabase() {
   const abrirEdicao = (despesa: Despesa) => {
     setBuscaCartao("");
     setListaCartoesAberta(false);
+    setValorEdicao(String(despesa.valor));
     setPagamentoEdicao(despesa.pagamento_tipo ?? "cartao");
     setCartaoEdicao(despesa.cartao_id ?? "");
     setDespesaEditando(despesa);
@@ -364,7 +367,7 @@ export default function FinanceiroPageSupabase() {
       tipo_despesa_id: form.get("tipo_despesa_id"),
       pagamento_tipo: form.get("pagamento_tipo"),
       cartao_id: pagamentoEdicao === "cartao" ? cartaoEdicao || null : null,
-      valor: Number(form.get("valor")),
+      valor: Number(valorEdicao),
       documento: form.get("documento") || null,
       observacao: form.get("observacao") || null,
     });
@@ -1222,7 +1225,7 @@ export default function FinanceiroPageSupabase() {
                     {!carregandoCartoes && !erroCartoes && cartoesEdicao.length === 0 && <p className="mt-1 text-xs text-muted-foreground">Nenhum cartão disponível.</p>}
                   </div>
                 )}
-                <label className="text-xs font-medium">Valor<input name="valor" type="number" min="0" step="0.01" defaultValue={despesaEditando.valor} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
+                <label className="text-xs font-medium">Valor<MoneyInput name="valor" value={valorEdicao} onValueChange={setValorEdicao} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
                 <label className="text-xs font-medium">Documento<select name="documento" defaultValue={despesaEditando.documento ?? ""} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"><option value="">Selecione</option>{OPCOES_DOCUMENTO.map((op) => <option key={op}>{op}</option>)}</select></label>
                 <label className="text-xs font-medium md:col-span-2">Observação<textarea name="observacao" defaultValue={despesaEditando.observacao ?? ""} rows={3} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none" /></label>
               </div>
