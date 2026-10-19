@@ -6,7 +6,7 @@ import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } fro
 import { uploadComprovante } from "@/lib/supabase/storage";
 import { LIMITE_CONSUMO, type AlertaConsumo } from "@/lib/consumo-frota";
 import { salvarRascunhoDespesa, carregarRascunhoDespesa, limparRascunhoDespesa, rascunhoEstaVazio, type DespesaDraftData } from "@/lib/despesa-draft";
-import { ArrowLeft, Upload, X, Info, Save, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2, Receipt, Search } from "lucide-react";
+import { ArrowLeft, Upload, X, Info, Save, Send, Loader2, BedDouble, CalendarRange, AlertTriangle, CheckCircle2, Fuel, Car, CreditCard, ChevronDown, ChevronUp, Banknote, Building2, Receipt, Search } from "lucide-react";
 import { formatCurrency, getLocalDateString, getLocalTimeString } from "@/lib/helpers";
 
 
@@ -195,7 +195,12 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
   // Status do valor em relação ao limite
   const statusLimite = useMemo(() => {
     const limite = tipoSelecionado?.limite_maximo;
-    if (!limite) return null;
+    if (limite == null) return null;
+    // Limite igual a zero significa que qualquer valor exige justificativa.
+    if (limite === 0) {
+      const valor = calculaDiarias ? valorPorDiaria : Number(form.valor);
+      return (valor ?? 0) > 0 ? "excede" : null;
+    }
     if (calculaDiarias) {
       if (!valorPorDiaria) return null;
       return valorPorDiaria <= limite ? "ok" : "excede";
@@ -254,8 +259,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     return errs;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    const enviarDespesa = submitter?.dataset.action === "salvar-enviar";
     const errs = validate();
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
@@ -309,8 +316,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
       } else {
-        setFeedback({ type: "success", msg: "Despesa atualizada! Redirecionando..." });
-        setTimeout(() => onBack(), 1500);
+        setFeedback({ type: "success", msg: enviarDespesa ? "Despesa atualizada e enviada! Redirecionando..." : "Despesa atualizada! Redirecionando..." });
+        setTimeout(() => onBack(), 600);
       }
     } else if (parcelado) {
       // Criação parcelada: gera um grupo de parcelas com UUID compartilhado
@@ -336,8 +343,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
 
       if (!hasError) {
         if (currentUser?.id) limparRascunhoDespesa(currentUser.id);
-        setFeedback({ type: "success", msg: `${qtdParcelas} parcelas criadas! Redirecionando...` });
-        setTimeout(() => onBack(), 1500);
+        setFeedback({ type: "success", msg: enviarDespesa ? `${qtdParcelas} parcelas salvas e enviadas! Redirecionando...` : `${qtdParcelas} parcelas criadas! Redirecionando...` });
+        setTimeout(() => onBack(), 600);
       }
     } else {
       // Criação simples
@@ -371,7 +378,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           );
         } else {
           setFeedback({ type: "success", msg: "Despesa salva! Redirecionando..." });
-          setTimeout(() => onBack(), 1500);
+          setTimeout(() => onBack(), 600);
         }
       }
     }
@@ -856,7 +863,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 </div>
 
                 {/* Indicador de limite */}
-                {tipoSelecionado?.limite_maximo && valorPorDiaria !== null && (
+                {tipoSelecionado?.limite_maximo != null && valorPorDiaria !== null && (
                   <div className={`flex items-start gap-2 p-3 rounded-lg text-sm ${
                     statusLimite === "ok"
                       ? "bg-success/10 border border-success/20 text-success"
@@ -868,10 +875,11 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                       <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                     )}
                     <span>
-                      {statusLimite === "ok"
-                        ? `Valor por diária (${formatCurrency(valorPorDiaria)}) dentro do limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — aprovação automática.`
-                        : `Valor por diária (${formatCurrency(valorPorDiaria)}) excede o limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — será enviado para aprovação do gestor.`
-                      }
+                      {tipoSelecionado.limite_maximo === 0
+                        ? "Este tipo exige justificativa para qualquer valor — será enviado para aprovação do gestor."
+                        : statusLimite === "ok"
+                          ? `Valor por diária (${formatCurrency(valorPorDiaria)}) dentro do limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — aprovação automática.`
+                          : `Valor por diária (${formatCurrency(valorPorDiaria)}) excede o limite de ${formatCurrency(tipoSelecionado.limite_maximo)} — será enviado para aprovação do gestor.`}
                     </span>
                   </div>
                 )}
@@ -1144,7 +1152,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             {statusLimite === "excede" && <span className="text-destructive ml-1">*</span>}
             {statusLimite === "excede" && (
               <span className="ml-2 text-xs text-destructive font-normal">
-                Obrigatória quando o valor excede o limite
+                Obrigatória para este tipo de despesa ou quando o valor excede o limite
               </span>
             )}
           </label>
@@ -1236,10 +1244,19 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent/90 disabled:opacity-60 transition flex items-center justify-center gap-2"
+            className="flex-1 py-2.5 rounded-lg border border-accent text-accent text-sm font-semibold hover:bg-accent/10 disabled:opacity-60 transition flex items-center justify-center gap-2"
           >
             <Save className="w-4 h-4" />
             {loading ? "Salvando..." : "Salvar Despesa"}
+          </button>
+          <button
+            type="submit"
+            data-action="salvar-enviar"
+            disabled={loading}
+            className="flex-1 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent/90 disabled:opacity-60 transition flex items-center justify-center gap-2"
+          >
+            <Send className="w-4 h-4" />
+            {loading ? "Enviando..." : "Salvar e Enviar Despesa"}
           </button>
         </div>
       </form>

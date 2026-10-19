@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback, type MouseEvent as ReactMouseEvent } from "react";
 import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosFinanceiro } from "@/lib/supabase/use-filtros-persistidos";
+import type { Despesa } from "@/lib/supabase/hooks";
 import { useDespesas, useTiposDespesa, useProfiles } from "@/lib/supabase/hooks";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
@@ -26,7 +27,8 @@ type ModoFiltro = "mes" | "periodo";
 //   "text"   → busca livre por parte do texto (colunas de texto aberto)
 type FinanceiroSortKey = "data" | "vencimento" | "funcionario" | "tipo" | "pagamento" | "observacao" | "valor" | "status" | "documento" | "cartao" | "lancado";
 const TABLE_COLUMNS: { id: string; sortKey: FinanceiroSortKey | null; label: string; align: "left" | "right"; defaultWidth: number; filterType: "select" | "text" | null }[] = [
-  { id: "lancado",     sortKey: "lancado",     label: "Lançar",      align: "left",  defaultWidth: 170, filterType: "select" },
+  { id: "editar",      sortKey: null,          label: "",             align: "left",  defaultWidth: 42,  filterType: null },
+  { id: "lancado",     sortKey: "lancado",     label: "Ações / Lançar", align: "left", defaultWidth: 205, filterType: "select" },
   { id: "data",        sortKey: "data",        label: "Data",        align: "left",  defaultWidth: 100, filterType: "select" },
   { id: "vencimento",  sortKey: "vencimento",  label: "Vencimento",  align: "left",  defaultWidth: 120, filterType: "select" },
   { id: "funcionario", sortKey: "funcionario", label: "Funcionário", align: "left",  defaultWidth: 130, filterType: "select" },
@@ -46,7 +48,7 @@ const MIN_COL_WIDTH = 60;
 const MAX_COL_WIDTH = 480;
 
 export default function FinanceiroPageSupabase() {
-  const { despesas, isLoading, updateDespesaDocumento, updateDespesaTipo, updateDespesaVencimento, lancarSistema, lancarERP, tentarNovamenteERP, estornarLancamento, cancelarLancamento, estornarCancelamento } = useDespesas();
+  const { despesas, isLoading, updateDespesaDocumento, updateDespesaTipo, updateDespesaVencimento, updateDespesaCamposFinanceiro, lancarSistema, lancarERP, tentarNovamenteERP, estornarLancamento, estornarLancamentoERP, cancelarLancamento, estornarCancelamento } = useDespesas();
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
 
@@ -275,6 +277,18 @@ export default function FinanceiroPageSupabase() {
     setEnviandoERP((prev) => ({ ...prev, [id]: false }));
   };
 
+  const handleEstornarERP = async (id: string) => {
+    const userId = authUser?.id ?? currentUser?.id;
+    if (!userId) return;
+    const confirmado = window.confirm("O lançamento será removido da fila local. O lançamento no M8 precisa ser cancelado manualmente. Deseja continuar?");
+    if (!confirmado) return;
+    const result = await estornarLancamentoERP(id, userId);
+    setFeedbackERP(result.error
+      ? { type: "error", msg: result.error }
+      : { type: "warning", msg: "Lançamento estornado localmente. O lançamento no M8 precisa ser cancelado manualmente." });
+    setTimeout(() => setFeedbackERP(null), 12000);
+  };
+
   // Mantido para compatibilidade com estornar
   const handleLancar = async (id: string) => handleLancarSistema(id);
 
@@ -318,6 +332,33 @@ export default function FinanceiroPageSupabase() {
   // Estado para edição inline de tipo: { [despesaId]: tipo_despesa_id }
   const [editandoTipo, setEditandoTipo] = useState<Record<string, string>>({});
   const [salvandoTipo, setSalvandoTipo] = useState<Record<string, boolean>>({});
+  const [despesaEditando, setDespesaEditando] = useState<Despesa | null>(null);
+  const [salvandoCampos, setSalvandoCampos] = useState(false);
+
+  const podeEditarCampos = currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro";
+
+  const salvarCamposFinanceiro = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!despesaEditando) return;
+    const form = new FormData(event.currentTarget);
+    setSalvandoCampos(true);
+    const result = await updateDespesaCamposFinanceiro(despesaEditando.id, {
+      data_despesa: form.get("data_despesa"),
+      data_vencimento: form.get("data_vencimento") || null,
+      tipo_despesa_id: form.get("tipo_despesa_id"),
+      pagamento_tipo: form.get("pagamento_tipo"),
+      valor: Number(form.get("valor")),
+      documento: form.get("documento") || null,
+      observacao: form.get("observacao") || null,
+    });
+    setSalvandoCampos(false);
+    if (result.error) setFeedbackERP({ type: "error", msg: result.error });
+    else {
+      setDespesaEditando(null);
+      setFeedbackERP({ type: "success", msg: "Campos da despesa atualizados." });
+      setTimeout(() => setFeedbackERP(null), 4000);
+    }
+  };
 
   const handleEditarTipo = (id: string, valorAtual: string | null) => {
     setEditandoTipo((prev) => ({ ...prev, [id]: valorAtual || "" }));
@@ -1108,6 +1149,24 @@ export default function FinanceiroPageSupabase() {
           </div>
         </div>
 
+        {despesaEditando && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <form onSubmit={salvarCamposFinanceiro} className="w-full max-w-2xl rounded-xl bg-card border border-border shadow-xl p-5 space-y-4">
+              <div className="flex items-center justify-between"><div><h2 className="text-lg font-semibold">Editar despesa</h2><p className="text-xs text-muted-foreground">Ajuste os campos antes do lançamento.</p></div><button type="button" onClick={() => setDespesaEditando(null)} aria-label="Fechar"><X className="w-5 h-5" /></button></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="text-xs font-medium">Data da despesa<input name="data_despesa" type="date" defaultValue={despesaEditando.data_despesa?.slice(0,10)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
+                <label className="text-xs font-medium">Vencimento<input name="data_vencimento" type="date" defaultValue={despesaEditando.data_vencimento?.slice(0,10)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
+                <label className="text-xs font-medium">Tipo de despesa<select name="tipo_despesa_id" defaultValue={despesaEditando.tipo_despesa_id ?? ""} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"><option value="">Selecione</option>{tiposDespesa.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}</select></label>
+                <label className="text-xs font-medium">Pagamento<select name="pagamento_tipo" defaultValue={despesaEditando.pagamento_tipo ?? "cartao"} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">{Object.entries(pagamentoTipoConfig).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</select></label>
+                <label className="text-xs font-medium">Valor<input name="valor" type="number" min="0" step="0.01" defaultValue={despesaEditando.valor} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" /></label>
+                <label className="text-xs font-medium">Documento<select name="documento" defaultValue={despesaEditando.documento ?? ""} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"><option value="">Selecione</option>{OPCOES_DOCUMENTO.map((op) => <option key={op}>{op}</option>)}</select></label>
+                <label className="text-xs font-medium md:col-span-2">Observação<textarea name="observacao" defaultValue={despesaEditando.observacao ?? ""} rows={3} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none" /></label>
+              </div>
+              <div className="flex justify-end gap-2"><button type="button" onClick={() => setDespesaEditando(null)} className="rounded-lg border border-input px-4 py-2 text-sm">Cancelar</button><button type="submit" disabled={salvandoCampos} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-60">{salvandoCampos ? "Salvando..." : "Salvar alterações"}</button></div>
+            </form>
+          </div>
+        )}
+
         {/* Tabela */}
         <div className="flex items-center justify-end px-4 pt-3 -mb-1">
           <button
@@ -1131,7 +1190,7 @@ export default function FinanceiroPageSupabase() {
                   <th
                     key={label}
                     title={label}
-                    className={`relative px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"}`}
+                    className={`relative px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap ${align === "right" ? "text-right" : "text-left"} ${index === 0 ? "sticky left-0 z-20 bg-muted border-r border-border" : index === 1 ? "sticky left-[42px] z-20 bg-muted border-r border-border" : ""}`}
                   >
                     <div className={`flex items-center gap-1 min-w-0 ${align === "right" ? "justify-end" : ""}`}>
                       {key ? (
@@ -1299,8 +1358,21 @@ export default function FinanceiroPageSupabase() {
 
                 return (
                   <tr key={d.id} className="border-t border-border hover:bg-muted/20 transition">
-                    {/* Coluna Lançar */}
-                    <td className="px-3 py-2 overflow-hidden">
+                    <td className="sticky left-0 z-10 p-0 bg-card border-r border-border">
+                      {podeEditarCampos && (
+                        <button
+                          type="button"
+                          onClick={() => setDespesaEditando(d)}
+                          title="Editar despesa"
+                          aria-label="Editar despesa"
+                          className="flex h-full min-h-[42px] w-full items-center justify-center text-primary hover:bg-primary/10 transition"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+                    </td>
+                    {/* Coluna de ações fixa para ficar disponível mesmo com rolagem horizontal */}
+                    <td className="sticky left-[42px] z-10 px-3 py-2 overflow-hidden bg-card border-r border-border">
                       {(() => {
                         const fmtDtHr = (iso: string) => {
                           const dt = new Date(iso);
@@ -1310,7 +1382,6 @@ export default function FinanceiroPageSupabase() {
 
                         return (
                           <div className="flex flex-col gap-1.5 min-w-[130px]">
-
                             {/* ── Linha 1: Lançamento no sistema ── */}
                             {d.lancamento_cancelado ? (
                               <div className="flex flex-col gap-0.5">
@@ -1397,6 +1468,11 @@ export default function FinanceiroPageSupabase() {
                                   <div className="flex flex-col gap-0.5">
                                     <div className="flex items-center gap-1">
                                       <span className="text-[10px] font-semibold text-primary leading-none">✓ Enviado ERP</span>
+                                      {(currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro") && (
+                                        <button type="button" title="Estornar lançamento ERP" onClick={() => handleEstornarERP(d.id)} className="ml-0.5 p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition">
+                                          <RotateCcw className="w-2.5 h-2.5" />
+                                        </button>
+                                      )}
                                     </div>
                                     <span className="text-[10px] text-primary/70 leading-tight pl-2.5">
                                       {p ? p.nome.split(" ")[0] : "—"}
