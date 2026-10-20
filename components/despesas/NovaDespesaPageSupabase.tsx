@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import { MoneyInput } from "@/components/ui/money-input";
 import { useAppStore } from "@/lib/store";
-import { useDespesas, useTiposDespesa, useCartoes, useFrotas, type Despesa } from "@/lib/supabase/hooks";
+import { useDespesas, useTiposDespesa, useCartoes, useCartoesFinanceiro, useFrotas, type Despesa } from "@/lib/supabase/hooks";
 import { uploadComprovante } from "@/lib/supabase/storage";
 import { LIMITE_CONSUMO, type AlertaConsumo } from "@/lib/consumo-frota";
 import { salvarRascunhoDespesa, carregarRascunhoDespesa, limparRascunhoDespesa, rascunhoEstaVazio, type DespesaDraftData } from "@/lib/despesa-draft";
@@ -14,6 +14,8 @@ import { formatCurrency, getLocalDateString, getLocalTimeString } from "@/lib/he
 interface Props {
   onBack: () => void;
   editDespesa?: Despesa | null;
+  parcelasEdicao?: Despesa[];
+  onSalvarInterno?: (campos: Record<string, unknown>, valorTotal: number) => Promise<{ error?: string | null }>;
 }
 
 // ─── Regra de vencimento ─────────────────────────────────────────────────────
@@ -29,10 +31,12 @@ function calcularVencimento(dataDespesa: string, offsetMeses: number = 0): strin
   return venc.toISOString().slice(0, 10);
 }
 
-export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) {
+export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarInterno, parcelasEdicao }: Props) {
   const { currentUser } = useAppStore();
   const { tiposDespesa } = useTiposDespesa();
-  const { cartoes } = useCartoes(currentUser?.id);
+  const { cartoes: cartoesUsuario } = useCartoes(currentUser?.id);
+  const { cartoes: cartoesFinanceiro } = useCartoesFinanceiro(!!onSalvarInterno);
+  const cartoes = onSalvarInterno ? cartoesFinanceiro : cartoesUsuario;
   const { addDespesa, salvarEdicaoComParcelas } = useDespesas(currentUser?.id);
   const { frotas } = useFrotas();
 
@@ -54,8 +58,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       ? editDespesa.hora_despesa.slice(0, 5)
       : getLocalTimeString(),
     // Campos de hospedagem
-    dataCheckin:  editDespesa?.data_checkin  || "",
-    dataCheckout: editDespesa?.data_checkout || "",
+    dataCheckin:  editDespesa?.data_checkin?.slice(0, 10) || "",
+    dataCheckout: editDespesa?.data_checkout?.slice(0, 10) || "",
     // Campos de combustível — pré-seleciona veículo padrão em nova despesa
     frotaId: editDespesa?.frota_id || ((currentUser as any)?.frota_padrao_id as string | null) || "",
     kmAtual: editDespesa?.km_atual?.toString() || "",
@@ -220,10 +224,10 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
     if (!parcelado || !form.dataDespesa || valorTotal <= 0) return [];
     return Array.from({ length: qtdParcelas }, (_, i) => ({
       numero: i + 1,
-      valor: valorParcela,
-      vencimento: calcularVencimento(form.dataDespesa, i),
+      valor: onSalvarInterno ? (i === qtdParcelas - 1 ? Math.round(valorTotal * 100) - Math.floor(Math.round(valorTotal * 100) / qtdParcelas) * (qtdParcelas - 1) : Math.floor(Math.round(valorTotal * 100) / qtdParcelas)) / 100 : valorParcela,
+      vencimento: onSalvarInterno ? parcelasEdicao?.[i]?.data_vencimento || calcularVencimento(form.dataDespesa, i) : calcularVencimento(form.dataDespesa, i),
     }));
-  }, [parcelado, form.dataDespesa, valorTotal, qtdParcelas, valorParcela]);
+  }, [parcelado, form.dataDespesa, valorTotal, qtdParcelas, valorParcela, onSalvarInterno, parcelasEdicao]);
 
   const validate = () => {
     const errs: Record<string, string> = {};
@@ -305,7 +309,14 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
       erp_resposta: null,
     };
 
-    if (editDespesa) {
+    if (onSalvarInterno) {
+      const { status_aprovacao, status_erp, gestor_aprovador_id, justificativa_reprovacao, data_envio, data_aprovacao, erp_id, erp_payload, erp_resposta, ...campos } = baseData;
+      try {
+        const result = await onSalvarInterno({ ...campos, numero_parcelas: qtdParcelas }, Number(form.valor));
+        if (result.error) setFeedback({ type: "error", msg: result.error });
+        else onBack();
+      } catch { setFeedback({ type: "error", msg: "Não foi possível salvar a correção." }); }
+    } else if (editDespesa) {
       // Edição: recalcula o valor total e todas as parcelas do grupo
       const result = await salvarEdicaoComParcelas(
         editDespesa.id,
@@ -613,7 +624,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
                 className="px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">Selecione o cartão...</option>
-                {cartoes.filter((c) => c.ativo).map((c) => {
+                {onSalvarInterno && form.cartaoId && !cartoes.some(c => c.id === form.cartaoId) && <option value={form.cartaoId}>Cartão atual</option>}
+                {cartoes.filter((c) => c.ativo || !!onSalvarInterno).map((c) => {
                   const label = c.apelido
                     ? `${c.apelido} — ${c.banco} ${c.bandeira} *${c.ultimos_digitos}`
                     : `${c.banco} ${c.bandeira} *${c.ultimos_digitos}`;
@@ -689,6 +701,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
         {/* -------- Bloco de Parcelamento — cartão e boleto -------- */}
         {(pagamentoTipo === "cartao" || pagamentoTipo === "boleto") && (
         <div className="rounded-xl border border-border bg-muted/30 p-4 flex flex-col gap-3">
+          {onSalvarInterno && <p className="text-xs text-muted-foreground">A correção redistribui o valor total recalculando as parcelas. Os vencimentos existentes e as aprovações são preservados.</p>}
           {/* Toggle parcelado */}
           <label className="flex items-center justify-between cursor-pointer select-none">
             <div className="flex items-center gap-2">
@@ -1247,7 +1260,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
             <Save className="w-4 h-4" />
             {loading ? "Salvando..." : "Salvar Despesa"}
           </button>
-          <button
+          {!onSalvarInterno && <button
             type="submit"
             data-action="salvar-enviar"
             disabled={loading}
@@ -1255,7 +1268,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa }: Props) 
           >
             <Send className="w-4 h-4" />
             {loading ? "Enviando..." : "Salvar e Enviar Despesa"}
-          </button>
+          </button>}
         </div>
       </form>
     </div>

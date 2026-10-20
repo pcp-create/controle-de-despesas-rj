@@ -1,5 +1,6 @@
 "use client";
 
+import { totalDasParcelas, valorParaLimite } from "@/lib/despesa-valores";
 import type { Despesa } from "@/lib/supabase/hooks";
 import type { Profile } from "@/lib/supabase/hooks";
 import {
@@ -226,6 +227,10 @@ export default function DespesaExpandida({
   showLancamentos = true,
   acoes,
 }: Props) {
+  const totalHospedagem = parcelas.length > 0
+    ? totalDasParcelas(parcelas)
+    : d.parcelado && d.numero_parcelas > 1 ? NaN : Number(d.valor);
+  const valorDiaria = valorParaLimite(totalHospedagem, true, d.numero_diarias);
   const tecnico    = profiles.find((p) => p.id === d.tecnico_id);
   const gestor     = profiles.find((p) => p.id === d.gestor_aprovador_id);
   const financeiro = profiles.find((p) => p.id === d.aprovado_financeiro_por);
@@ -324,7 +329,7 @@ export default function DespesaExpandida({
                 label="Diárias"
                 value={
                   <span>
-                    <strong>{d.numero_diarias}</strong> × {formatCurrency(Number(d.valor) / d.numero_diarias)}
+                    <strong>{d.numero_diarias}</strong> × {Number.isFinite(valorDiaria) ? formatCurrency(valorDiaria) : "Valor total indisponível"}
                   </span>
                 }
               />

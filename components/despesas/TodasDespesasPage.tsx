@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles, type Despesa } from "@/lib/supabase/hooks";
 import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
-import EditarDespesaInterna from "./EditarDespesaInterna";
+import NovaDespesaPageSupabase from "./NovaDespesaPageSupabase";
 import { useAuth } from "@/lib/supabase/auth-context";
 import DespesaExpandida from "./DespesaExpandida";
 import {
@@ -98,6 +98,22 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
       );
   }, [despesas, search, filterStatus, filterTecnico, tiposDespesa, profiles]);
 
+  if (editando && podeEditar) return <NovaDespesaPageSupabase
+    key={editando.id}
+    editDespesa={editando}
+    parcelasEdicao={grupos.find(g => g.despesaPrincipal.id === editando.id)?.parcelas}
+    onBack={() => setEditando(null)}
+    onSalvarInterno={async (campos, valorTotal) => {
+      const response = await fetch("/api/despesas/editar", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editando.id, grupoCompleto: true, campos: { ...campos, valor: valorTotal } }),
+      });
+      const result = await response.json();
+      if (!response.ok) return { error: result.error || "Não foi possível salvar" };
+      await mutate();
+      return { error: null };
+    }} />;
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -108,7 +124,7 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      {editando && podeEditar && <EditarDespesaInterna key={editando.id} despesa={editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); void mutate(); }} />}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
@@ -249,9 +265,9 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
 
                 {podeEditar && (
                   <div className="flex flex-wrap gap-2 border-t border-border px-4 py-2">
-                    {grupo.parcelas.map(parcela => <button key={parcela.id} type="button" onClick={() => setEditando(parcela)} className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">
-                      {grupo.parcelado ? `Editar parcela ${parcela.parcela_atual}/${parcela.numero_parcelas}` : "Editar despesa"}
-                    </button>)}
+                    <button type="button" onClick={() => setEditando({ ...d, valor: grupo.valorTotal, numero_parcelas: grupo.numeroParcelas, parcelado: grupo.parcelado })} className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">
+                      Editar despesa
+                    </button>
                   </div>
                 )}
                 {isExpanded && (
