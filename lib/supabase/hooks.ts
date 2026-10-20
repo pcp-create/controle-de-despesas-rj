@@ -1,5 +1,6 @@
 "use client";
 
+import { totalDasParcelas, valorParaLimite } from "@/lib/despesa-valores";
 import { readAllPages } from "@/lib/supabase/paginate";
 import useSWR, { mutate as swrMutate } from "swr";
 import { createClient } from "@/lib/supabase/client";
@@ -833,22 +834,30 @@ export function useDespesas(userId?: string, perfil?: string) {
     if (!supabase) return { ok: false, msg: "Supabase não disponível" };
 
     // Buscar despesa + tipo para verificar limites
-    const { data: despesaData } = await supabase
+    const { data: despesaData, error: erroDespesa } = await supabase
       .from("despesas")
       .select("*, tipo_despesa:tipos_despesa(*)")
       .eq("id", id)
       .single();
 
-    const tipoDespesa = despesaData?.tipo_despesa as TipoDespesa | null;
-    const valor = Number(despesaData?.valor ?? 0);
-    const limite = tipoDespesa?.limite_maximo;
-
-    // --- Lógica de diárias (ex: Hotel) ---
-    // Se o tipo calcula por diária, compara (valor / diárias) com o limite
-    let valorParaComparacao = valor;
-    if (tipoDespesa?.calcula_diarias && despesaData?.numero_diarias && despesaData.numero_diarias > 0) {
-      valorParaComparacao = valor / despesaData.numero_diarias;
+    if (erroDespesa || !despesaData) return { ok: false, msg: "Não foi possível consultar a despesa para verificar os limites." };
+    const tipoDespesa = despesaData.tipo_despesa as TipoDespesa | null;
+    let valor = Number(despesaData.valor);
+    if (despesaData.grupo_parcela_id) {
+      try {
+        const parcelas = await readAllPages<{ valor: number }>((from, to) => supabase
+          .from("despesas").select("valor")
+          .eq("grupo_parcela_id", despesaData.grupo_parcela_id)
+          .order("id").range(from, to));
+        if (parcelas.length !== despesaData.numero_parcelas) return { ok: false, msg: "Grupo de parcelas incompleto. Confira o lançamento antes de enviar." };
+        valor = totalDasParcelas(parcelas);
+      } catch { return { ok: false, msg: "Não foi possível consultar o total das parcelas. Tente novamente." }; }
+    } else if (despesaData.parcelado && despesaData.numero_parcelas > 1) {
+      return { ok: false, msg: "Despesa parcelada sem grupo. Confira o lançamento antes de enviar." };
     }
+    const limite = tipoDespesa?.limite_maximo;
+    // O limite considera a despesa inteira, nunca o valor de uma parcela isolada.
+    const valorParaComparacao = valorParaLimite(valor, !!tipoDespesa?.calcula_diarias, despesaData.numero_diarias);
 
     const dentroDoValorLimite = limite !== null && limite !== undefined && valorParaComparacao <= limite;
 
