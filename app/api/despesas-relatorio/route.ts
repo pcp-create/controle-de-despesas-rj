@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { readAllPages } from "@/lib/supabase/paginate";
 import { NextResponse } from "next/server";
 
 const supabaseUrl =
@@ -19,7 +20,8 @@ export async function GET() {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const { data, error } = await admin
+  try {
+    const data = await readAllPages((from, to) => admin
     .from("despesas")
     .select(`
       *,
@@ -28,11 +30,12 @@ export async function GET() {
       tecnico:profiles!despesas_tecnico_id_fkey(id, nome, email),
       frota:frotas(id, placa, modelo, km_media_litro)
     `)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(from, to));
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ data });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Não foi possível carregar todas as despesas" }, { status: 500 });
   }
-
-  return NextResponse.json({ data });
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { readAllPages } from "@/lib/supabase/paginate";
 import useSWR, { mutate as swrMutate } from "swr";
 import { createClient } from "@/lib/supabase/client";
 import { registrarAuditoria } from "@/lib/supabase/audit";
@@ -206,24 +207,25 @@ const fetchDespesas = async (userId?: string, perfil?: string): Promise<Despesa[
   const supabase = getSupabase();
   if (!supabase) return [];
   
-  let query = supabase
-    .from("despesas")
-    .select(`
-      *,
-      tipo_despesa:tipos_despesa(*),
-      cartao:cartoes(*),
-      tecnico:profiles!despesas_tecnico_id_fkey(id, nome, email),
-      frota:frotas(id, placa, modelo, km_media_litro)
-    `)
-    .order("created_at", { ascending: false });
+  return readAllPages<Despesa>((from, to) => {
+    let query = supabase
+      .from("despesas")
+      .select(`
+        *,
+        tipo_despesa:tipos_despesa(*),
+        cartao:cartoes(*),
+        tecnico:profiles!despesas_tecnico_id_fkey(id, nome, email),
+        frota:frotas(id, placa, modelo, km_media_litro)
+      `)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
 
-  if (userId) {
-    query = query.eq("tecnico_id", userId);
-  }
+    if (userId) {
+      query = query.eq("tecnico_id", userId);
+    }
 
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
+    return query.range(from, to);
+  });
 };
 
 const fetchProfiles = async (): Promise<Profile[]> => {
