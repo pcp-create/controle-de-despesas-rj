@@ -159,3 +159,11 @@ test('full expense correction uses the transactional group operation', async () 
   assert.equal(calls[0].args.p_campos.valor, 114.13);
   assert.equal(c.writes.length, 0);
 });
+test('group correction validates the installment count before calling the database', async () => {
+  for (const numero_parcelas of [0, 49, 2.5, null]) {
+    const c = editClient();
+    c.rpc = async () => { throw new Error('Invalid count reached the database'); };
+    const res = await route('despesas/editar', c).PATCH(request({...correction, grupoCompleto: true, campos: {...correction.campos, numero_parcelas}}));
+    assert.equal(res.status, 400);
+  }
+});

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 const textFields = ["cliente", "numero_os", "observacao", "data_despesa", "data_vencimento", "tipo_despesa_id", "cartao_id", "documento", "pagamento_tipo", "frota_id", "tipo_combustivel", "hora_despesa", "data_checkin", "data_checkout", "comprovante_nome", "comprovante_url"];
-const numberFields = ["valor", "km_atual", "litros_abastecidos", "valor_litro", "numero_diarias"];
+const numberFields = ["valor", "km_atual", "litros_abastecidos", "valor_litro", "numero_diarias", "numero_parcelas"];
 
 export async function PATCH(request: Request) {
   const supabase = await createClient();
@@ -26,6 +26,9 @@ export async function PATCH(request: Request) {
   }
   if (!(typeof campos.valor === "number" && campos.valor > 0) || !campos.tipo_despesa_id || !campos.data_despesa || !["cartao", "dinheiro", "faturado", "boleto"].includes(String(campos.pagamento_tipo))) {
     return NextResponse.json({ error: "Preencha tipo, data, pagamento e valor maior que zero." }, { status: 400 });
+  }
+  if ("numero_parcelas" in campos && (body.grupoCompleto !== true || !Number.isInteger(campos.numero_parcelas) || Number(campos.numero_parcelas) < 1 || Number(campos.numero_parcelas) > 48)) {
+    return NextResponse.json({ error: "Informe entre 1 e 48 parcelas para o grupo completo." }, { status: 400 });
   }
   if (campos.pagamento_tipo !== "cartao") campos.cartao_id = null;
   if (body.grupoCompleto === true) {

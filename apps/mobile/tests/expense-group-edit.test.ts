@@ -30,7 +30,7 @@ async function cardsAs(id: string, role = 'authenticated') {
 const group = '0994bd2a-1e14-42b0-ad50-0d5f43e3cd40';
 const expense = '0994bd2a-1e14-42b0-ad50-0d5f43e3cd41';
 beforeAll(async () => {
-  await pg.exec(readFileSync(new URL('../../../supabase/migrations/20261020000100_corrigir_despesa_grupo.sql', import.meta.url), 'utf8'));
+  await pg.exec(readFileSync(new URL('../../../supabase/migrations/20261020000200_redimensionar_parcelas.sql', import.meta.url), 'utf8'));
   await pg.query("insert into tipos_despesa(id,nome) values ($1,'Teste')", [group]);
   for (let i = 0; i < 3; i++) await pg.query(`insert into despesas(id,tecnico_id,tipo_despesa_id,cliente,numero_os,valor,data_despesa,data_vencimento,status_aprovacao,status_erp,parcelado,numero_parcelas,parcela_atual,grupo_parcela_id)
     values ($1,$2,$3,'Cliente','123',20,'2026-08-01','2026-10-19','AprovadoGestor','AprovadoGestorERPAtualizado',true,3,$4,$3)`, [expense.slice(0,-1) + (i+1), employee, group, i+1]);
@@ -51,10 +51,29 @@ it('denies employees and protected fields', async () => {
   await expect(correct(employee, {valor: 50})).rejects.toThrow();
   await expect(correct(finance, {valor: 50, status_aprovacao: 'Rascunho'})).rejects.toThrow();
 });
+it('increases and decreases installments, retaining approval and exact total', async () => {
+  await correct(finance, {valor: 100, numero_parcelas: 5, data_checkin: '2026-09-29', data_checkout: '2026-10-02'});
+  let result = await pg.query('select valor::text, numero_parcelas, status_aprovacao, data_checkin::text from despesas order by parcela_atual');
+  expect(result.rows).toHaveLength(5);
+  expect(result.rows.every((r: any) => r.numero_parcelas === 5 && r.status_aprovacao === 'AprovadoGestor' && r.data_checkin.startsWith('2026-09-29'))).toBe(true);
+  expect(result.rows.reduce((a: number,r: any) => a + Number(r.valor),0)).toBe(100);
+  await correct(finance, {valor: 100, numero_parcelas: 2});
+  result = await pg.query('select valor::text, numero_parcelas from despesas');
+  expect(result.rows).toHaveLength(2);
+  expect(result.rows.every((r: any) => r.numero_parcelas === 2 && Number(r.valor) === 50)).toBe(true);
+  await correct(finance, {valor: 100, numero_parcelas: 3});
+});
+it('rejects resizing posted expenses and invalid counts', async () => {
+  for (const count of [0, 49, 2.5, null]) await expect(correct(finance, {valor: 100, numero_parcelas: count})).rejects.toThrow();
+  await pg.query('update despesas set lancado_sistema=true where id=$1', [expense]);
+  await expect(correct(finance, {valor: 100, numero_parcelas: 4})).rejects.toThrow();
+  await pg.query('update despesas set lancado_sistema=false where id=$1', [expense]);
+});
 it('rolls back the entire group when a later installment fails', async () => {
   await pg.exec(`create function reject_last() returns trigger language plpgsql as $$ begin if NEW.parcela_atual = 3 then raise exception 'failure'; end if; return NEW; end $$;
     create trigger reject_last before update on despesas for each row execute function reject_last();`);
-  await expect(correct(finance, {valor: 90})).rejects.toThrow();
+  await expect(correct(finance, {valor: 90, numero_parcelas: 5})).rejects.toThrow();
   const {rows} = await pg.query('select sum(valor)::text as total from despesas');
   expect(Number((rows[0] as any).total)).toBe(100);
+  expect((await pg.query('select id from despesas')).rows).toHaveLength(3);
 });

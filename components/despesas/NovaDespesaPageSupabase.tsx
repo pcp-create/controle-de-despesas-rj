@@ -58,8 +58,8 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
       ? editDespesa.hora_despesa.slice(0, 5)
       : getLocalTimeString(),
     // Campos de hospedagem
-    dataCheckin:  editDespesa?.data_checkin  || "",
-    dataCheckout: editDespesa?.data_checkout || "",
+    dataCheckin:  editDespesa?.data_checkin?.slice(0, 10) || "",
+    dataCheckout: editDespesa?.data_checkout?.slice(0, 10) || "",
     // Campos de combustível — pré-seleciona veículo padrão em nova despesa
     frotaId: editDespesa?.frota_id || ((currentUser as any)?.frota_padrao_id as string | null) || "",
     kmAtual: editDespesa?.km_atual?.toString() || "",
@@ -225,7 +225,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
     return Array.from({ length: qtdParcelas }, (_, i) => ({
       numero: i + 1,
       valor: onSalvarInterno ? (i === qtdParcelas - 1 ? Math.round(valorTotal * 100) - Math.floor(Math.round(valorTotal * 100) / qtdParcelas) * (qtdParcelas - 1) : Math.floor(Math.round(valorTotal * 100) / qtdParcelas)) / 100 : valorParcela,
-      vencimento: onSalvarInterno ? parcelasEdicao?.[i]?.data_vencimento || form.dataDespesa : calcularVencimento(form.dataDespesa, i),
+      vencimento: onSalvarInterno ? parcelasEdicao?.[i]?.data_vencimento || calcularVencimento(form.dataDespesa, i) : calcularVencimento(form.dataDespesa, i),
     }));
   }, [parcelado, form.dataDespesa, valorTotal, qtdParcelas, valorParcela, onSalvarInterno, parcelasEdicao]);
 
@@ -312,7 +312,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
     if (onSalvarInterno) {
       const { status_aprovacao, status_erp, gestor_aprovador_id, justificativa_reprovacao, data_envio, data_aprovacao, erp_id, erp_payload, erp_resposta, ...campos } = baseData;
       try {
-        const result = await onSalvarInterno(campos, Number(form.valor));
+        const result = await onSalvarInterno({ ...campos, numero_parcelas: qtdParcelas }, Number(form.valor));
         if (result.error) setFeedback({ type: "error", msg: result.error });
         else onBack();
       } catch { setFeedback({ type: "error", msg: "Não foi possível salvar a correção." }); }
@@ -701,7 +701,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
         {/* -------- Bloco de Parcelamento — cartão e boleto -------- */}
         {(pagamentoTipo === "cartao" || pagamentoTipo === "boleto") && (
         <div className="rounded-xl border border-border bg-muted/30 p-4 flex flex-col gap-3">
-          {onSalvarInterno && <p className="text-xs text-muted-foreground">A correção redistribui o valor total mantendo a quantidade de parcelas, os vencimentos e as aprovações.</p>}
+          {onSalvarInterno && <p className="text-xs text-muted-foreground">A correção redistribui o valor total recalculando as parcelas. Os vencimentos existentes e as aprovações são preservados.</p>}
           {/* Toggle parcelado */}
           <label className="flex items-center justify-between cursor-pointer select-none">
             <div className="flex items-center gap-2">
@@ -711,7 +711,6 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
             <button
               type="button"
               role="switch"
-              disabled={!!onSalvarInterno}
               aria-checked={parcelado}
               onClick={() => setParcelado((v) => !v)}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40 ${
@@ -736,7 +735,6 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      disabled={!!onSalvarInterno}
                       onClick={() => setNumeroParcelas((v) => Math.max(2, v - 1))}
                       className="w-9 h-9 rounded-lg border border-input bg-background flex items-center justify-center hover:bg-muted transition"
                     >
@@ -746,14 +744,12 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
                       type="number"
                       min={2}
                       max={48}
-                      disabled={!!onSalvarInterno}
                       value={numeroParcelas}
                       onChange={(e) => setNumeroParcelas(Math.max(2, Math.min(48, Number(e.target.value))))}
                       className="flex-1 px-3 py-2 rounded-lg border border-input bg-background text-sm text-center focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                     <button
                       type="button"
-                      disabled={!!onSalvarInterno}
                       onClick={() => setNumeroParcelas((v) => Math.min(48, v + 1))}
                       className="w-9 h-9 rounded-lg border border-input bg-background flex items-center justify-center hover:bg-muted transition"
                     >
