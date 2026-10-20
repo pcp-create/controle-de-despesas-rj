@@ -37,7 +37,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
   const { cartoes: cartoesUsuario } = useCartoes(currentUser?.id);
   const { cartoes: cartoesFinanceiro } = useCartoesFinanceiro(!!onSalvarInterno);
   const cartoes = onSalvarInterno ? cartoesFinanceiro : cartoesUsuario;
-  const { addDespesa, salvarEdicaoComParcelas } = useDespesas(currentUser?.id);
+  const { addDespesa, salvarEdicaoComParcelas, enviarDespesa: enviarParaAprovacao } = useDespesas(currentUser?.id);
   const { frotas } = useFrotas();
 
   const [form, setForm] = useState({
@@ -81,6 +81,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
     editDespesa?.comprovante_nome ? { nome: editDespesa.comprovante_nome, url: editDespesa.comprovante_url || "" } : null
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [envioPendenteId, setEnvioPendenteId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error" | "warning"; msg: string } | null>(null);
   const [migrationSql, setMigrationSql] = useState<string | null>(null);
 
@@ -264,8 +265,25 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
     return errs;
   };
 
+  async function enviarRegistroSalvo(id: string) {
+    setEnvioPendenteId(id);
+    setLoading(true);
+    try {
+      const result = await enviarParaAprovacao(id);
+      if (!result.ok) {
+        setFeedback({ type: "error", msg: `Despesa salva, mas o envio falhou: ${result.msg} Tente enviar novamente abaixo.` });
+        return;
+      }
+      setFeedback({ type: "success", msg: `${result.msg} Redirecionando...` });
+      setTimeout(() => onBack(), 600);
+    } catch {
+      setFeedback({ type: "error", msg: "Despesa salva, mas não foi possível confirmar o envio. Tente enviar novamente abaixo." });
+    } finally { setLoading(false); }
+  }
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (envioPendenteId || loading) return;
     const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
     const enviarDespesa = submitter?.dataset.action === "salvar-enviar";
     const errs = validate();
@@ -328,6 +346,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
       if (result.error) {
         setFeedback({ type: "error", msg: result.error });
       } else {
+        if (enviarDespesa) { await enviarRegistroSalvo(editDespesa.id); return; }
         setFeedback({ type: "success", msg: enviarDespesa ? "Despesa atualizada e enviada! Redirecionando..." : "Despesa atualizada! Redirecionando..." });
         setTimeout(() => onBack(), 600);
       }
@@ -335,6 +354,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
       // Criação parcelada: gera um grupo de parcelas com UUID compartilhado
       const grupoId = crypto.randomUUID();
       let hasError = false;
+      let primeiraParcelaId: string | null = null;
 
       for (let i = 0; i < qtdParcelas; i++) {
         const result = await addDespesa({
@@ -346,6 +366,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
           grupo_parcela_id: grupoId,
           data_vencimento: calcularVencimento(form.dataDespesa, i),
         });
+        if (!result.error && result.data?.id && !primeiraParcelaId) primeiraParcelaId = result.data.id;
         if (result.error) {
           setFeedback({ type: "error", msg: `Erro na parcela ${i + 1}: ${result.error}` });
           hasError = true;
@@ -355,6 +376,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
 
       if (!hasError) {
         if (currentUser?.id) limparRascunhoDespesa(currentUser.id);
+        if (enviarDespesa && primeiraParcelaId) { await enviarRegistroSalvo(primeiraParcelaId); return; }
         setFeedback({ type: "success", msg: enviarDespesa ? `${qtdParcelas} parcelas salvas e enviadas! Redirecionando...` : `${qtdParcelas} parcelas criadas! Redirecionando...` });
         setTimeout(() => onBack(), 600);
       }
@@ -373,6 +395,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
         setFeedback({ type: "error", msg: result.error });
       } else {
         if (currentUser?.id) limparRascunhoDespesa(currentUser.id);
+        if (enviarDespesa && result.data?.id) { await enviarRegistroSalvo(result.data.id); return; }
         // O cálculo e a persistência do "Último cálculo" (km apontado/esperado/percentual
         // e alerta_ativo da frota) são feitos exclusivamente por
         // addDespesa → persistirAlertasConsumo → gerarAlertasConsumo → POST /api/alertas-consumo.
@@ -513,7 +536,9 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
         </div>
       )}
 
+      {envioPendenteId && feedback?.type === "error" && <button type="button" disabled={loading} onClick={() => void enviarRegistroSalvo(envioPendenteId)} className="mb-4 rounded-lg bg-primary px-4 py-2 text-primary-foreground disabled:opacity-60">{loading ? "Enviando..." : "Tentar enviar novamente"}</button>}
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-border shadow-sm p-5 flex flex-col gap-4">
+        <fieldset disabled={loading || !!envioPendenteId} className="contents">
 
         {/* -------- Forma de Pagamento -------- */}
         <div className="flex flex-col gap-2">
@@ -1243,6 +1268,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
           </div>
         )}
 
+        </fieldset>
         {/* Botões */}
         <div className="flex flex-col sm:flex-row gap-3 pt-2">
           <button
@@ -1254,7 +1280,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
           </button>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !!envioPendenteId}
             className="flex-1 py-2.5 rounded-lg border border-accent text-accent text-sm font-semibold hover:bg-accent/10 disabled:opacity-60 transition flex items-center justify-center gap-2"
           >
             <Save className="w-4 h-4" />
@@ -1263,7 +1289,7 @@ export default function NovaDespesaPageSupabase({ onBack, editDespesa, onSalvarI
           {!onSalvarInterno && <button
             type="submit"
             data-action="salvar-enviar"
-            disabled={loading}
+            disabled={loading || !!envioPendenteId}
             className="flex-1 py-2.5 rounded-lg bg-accent text-white text-sm font-semibold hover:bg-accent/90 disabled:opacity-60 transition flex items-center justify-center gap-2"
           >
             <Send className="w-4 h-4" />
