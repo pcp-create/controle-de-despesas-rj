@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-const textFields = ["cliente", "numero_os", "observacao", "data_despesa", "data_vencimento", "tipo_despesa_id", "cartao_id", "documento", "pagamento_tipo", "frota_id", "tipo_combustivel"];
-const numberFields = ["valor", "km_atual", "litros_abastecidos", "valor_litro"];
+const textFields = ["cliente", "numero_os", "observacao", "data_despesa", "data_vencimento", "tipo_despesa_id", "cartao_id", "documento", "pagamento_tipo", "frota_id", "tipo_combustivel", "hora_despesa", "data_checkin", "data_checkout", "comprovante_nome", "comprovante_url"];
+const numberFields = ["valor", "km_atual", "litros_abastecidos", "valor_litro", "numero_diarias"];
 
 export async function PATCH(request: Request) {
   const supabase = await createClient();
@@ -28,6 +28,11 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Preencha tipo, data, pagamento e valor maior que zero." }, { status: 400 });
   }
   if (campos.pagamento_tipo !== "cartao") campos.cartao_id = null;
+  if (body.grupoCompleto === true) {
+    const { data, error } = await supabase.rpc("corrigir_despesa_grupo", { p_id: body.id, p_campos: campos });
+    if (error) return NextResponse.json({ error: error.code === "PGRST202" ? "A atualização do banco para edição do grupo ainda não foi aplicada." : error.message }, { status: 400 });
+    return NextResponse.json({ data });
+  }
   // Atualiza somente esta despesa/parcela, preservando aprovação, titular e integração.
   const { data, error } = await supabase.from("despesas").update({ ...campos, updated_at: new Date().toISOString() }).eq("id", body.id).select("id").single();
   if (error || !data) return NextResponse.json({ error: error?.message || "Despesa não encontrada ou sem permissão para editar." }, { status: 400 });
