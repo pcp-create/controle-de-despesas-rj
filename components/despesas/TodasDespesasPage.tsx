@@ -4,6 +4,8 @@ import { useState, useMemo } from "react";
 import { useAppStore } from "@/lib/store";
 import { useDespesas, useTiposDespesa, useProfiles, type Despesa } from "@/lib/supabase/hooks";
 import { formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig } from "@/lib/helpers";
+import EditarDespesaInterna from "./EditarDespesaInterna";
+import { useAuth } from "@/lib/supabase/auth-context";
 import DespesaExpandida from "./DespesaExpandida";
 import {
   Search,
@@ -28,9 +30,13 @@ interface GrupoDespesa {
 
 export default function TodasDespesasPage({ initialStatus }: Props) {
   const { currentUser } = useAppStore();
-  const { despesas, isLoading } = useDespesas(undefined, currentUser?.perfil);
+  const { despesas, isLoading, mutate } = useDespesas(undefined, currentUser?.perfil);
   const { tiposDespesa } = useTiposDespesa();
   const { profiles } = useProfiles();
+
+  const { profile } = useAuth();
+  const podeEditar = !!profile?.ativo && ["administrador", "financeiro"].includes(profile.perfil);
+  const [editando, setEditando] = useState<Despesa | null>(null);
 
   const [search, setSearch]               = useState("");
   const [filterStatus, setFilterStatus]   = useState<string>(initialStatus ?? "todos");
@@ -102,6 +108,7 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
+      {editando && podeEditar && <EditarDespesaInterna key={editando.id} despesa={editando} onClose={() => setEditando(null)} onSaved={() => { setEditando(null); void mutate(); }} />}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
@@ -240,6 +247,13 @@ export default function TodasDespesasPage({ initialStatus }: Props) {
                   <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform shrink-0 ${isExpanded ? "rotate-180" : ""}`} />
                 </button>
 
+                {podeEditar && (
+                  <div className="flex flex-wrap gap-2 border-t border-border px-4 py-2">
+                    {grupo.parcelas.map(parcela => <button key={parcela.id} type="button" onClick={() => setEditando(parcela)} className="rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-200">
+                      {grupo.parcelado ? `Editar parcela ${parcela.parcela_atual}/${parcela.numero_parcelas}` : "Editar despesa"}
+                    </button>)}
+                  </div>
+                )}
                 {isExpanded && (
                   <DespesaExpandida
                     d={d}

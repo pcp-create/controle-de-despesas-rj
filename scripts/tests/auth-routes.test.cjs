@@ -105,3 +105,47 @@ test('fleet query failures are reported instead of an empty list', async () => {
   assert.equal(res.status, 500);
   assert.equal((await res.json()).error, 'Query failed');
 });
+
+function editClient(perfil = 'financeiro', ativo = true) {
+  const writes = [];
+  return {
+    writes,
+    auth: { getUser: async () => ({ data: { user: { id: 'editor' } }, error: null }) },
+    from(table) {
+      if (table === 'profiles') return { select: () => ({ eq: () => ({ single: async () => ({ data: { perfil, ativo }, error: null }) }) }) };
+      return { update(fields) { writes.push(fields); return { eq: (key, id) => ({ select: () => ({ single: async () => ({ data: { id }, error: null }) }) }) }; } };
+    },
+  };
+}
+const correction = { id: 'expense', campos: { valor: 114.13, tipo_despesa_id: 'food', data_despesa: '2026-10-20', pagamento_tipo: 'cartao', cartao_id: 'card' } };
+for (const role of ['administrador', 'financeiro']) test(role + ' can correct an approved expense without changing its approval', async () => {
+  const c = editClient(role);
+  const res = await route('despesas/editar', c).PATCH(request(correction));
+  assert.equal(res.status, 200);
+  assert.equal(c.writes[0].valor, 114.13);
+  assert.equal('status_aprovacao' in c.writes[0], false);
+  assert.equal('status_erp' in c.writes[0], false);
+  assert.equal('grupo_parcela_id' in c.writes[0], false);
+});
+for (const role of ['funcionario', 'gestor']) test(role + ' cannot use internal correction', async () => {
+  const c = editClient(role);
+  assert.equal((await route('despesas/editar', c).PATCH(request(correction))).status, 403);
+  assert.equal(c.writes.length, 0);
+});
+test('inactive finance cannot correct expenses', async () => {
+  const c = editClient('financeiro', false);
+  assert.equal((await route('despesas/editar', c).PATCH(request(correction))).status, 403);
+});
+test('internal correction rejects status changes and invalid amounts', async () => {
+  for (const fields of [{status_aprovacao: 'AprovadoGestor'}, {valor: -1}]) {
+    const c = editClient();
+    assert.equal((await route('despesas/editar', c).PATCH(request({...correction, campos: {...correction.campos, ...fields}}))).status, 400);
+    assert.equal(c.writes.length, 0);
+  }
+});
+test('internal correction requires an authenticated session', async () => {
+  const c = editClient();
+  c.auth.getUser = async () => ({ data: { user: null }, error: null });
+  assert.equal((await route('despesas/editar', c).PATCH(request(correction))).status, 401);
+  assert.equal(c.writes.length, 0);
+});
