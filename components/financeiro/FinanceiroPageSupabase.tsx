@@ -10,7 +10,7 @@ import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
 import { anosDisponiveis, formatCurrency, formatDate, getStatusGeral, statusGeralConfig, pagamentoTipoConfig, motivoBloqueioEnvioERP } from "@/lib/helpers";
 import { salvarPrefsTabelaFinanceiro, carregarPrefsTabelaFinanceiro } from "@/lib/financeiro-table-prefs";
-import { DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle, AlertTriangle, Clock, Send, CheckCircle, RefreshCw, Ban, Archive } from "lucide-react";
+import { Loader2, DollarSign, TrendingUp, Search, Eye, CalendarDays, Pencil, Check, X, ChevronUp, ChevronDown, ChevronsUpDown, Filter, SendHorizonal, RotateCcw, AlertCircle, AlertTriangle, Clock, Send, CheckCircle, RefreshCw, Ban, Archive } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -63,6 +63,8 @@ export default function FinanceiroPageSupabase() {
   const [confirmLancar, setConfirmLancar] = useState<string | null>(null); // despesa id
   const [lancando, setLancando] = useState<Record<string, boolean>>({});
   const [erroLancar, setErroLancar] = useState<string | null>(null);
+  const enviosEmAndamento = useRef(new Set<string>());
+  const [tarefasERP, setTarefasERP] = useState<Record<string, { status: "processando" | "sucesso" | "erro"; mensagem: string }>>({});
   const [enviandoERP, setEnviandoERP] = useState<Record<string, boolean>>({});
   const [erroERP, setErroERP] = useState<Record<string, string>>({});
   const [feedbackERP, setFeedbackERP] = useState<{ type: "success" | "warning" | "error"; msg: string } | null>(null);
@@ -197,7 +199,7 @@ export default function FinanceiroPageSupabase() {
   // Lança apenas no sistema interno
   const handleLancarSistema = async (id: string) => {
     const userId = authUser?.id ?? currentUser?.id;
-    if (!userId) return;
+    if (!userId || enviosEmAndamento.current.has(id)) return;
     setErroLancar(null);
     setLancando((prev) => ({ ...prev, [id]: true }));
     const result = await lancarSistema(id, userId);
@@ -217,68 +219,48 @@ export default function FinanceiroPageSupabase() {
     setMotivoCancelamento("");
   };
 
-  const mostrarFeedbackERP = (result: { error?: string | null; erp_id?: string; simulado?: boolean; etapa?: number | null; campos?: string[] | null }) => {
-    if (result.campos && result.campos.length > 0) {
-      // Validação: campos obrigatórios faltando
-      setFeedbackERP({ type: "error", msg: `__campos__${JSON.stringify(result.campos)}` });
-    } else if (result.simulado && result.error) {
-      // Variáveis de ambiente M8 não configuradas — não altera banco
-      setFeedbackERP({ type: "warning", msg: result.error });
-    } else if (result.error) {
-      const etapa = result.etapa != null ? ` (Etapa ${result.etapa})` : "";
-      setFeedbackERP({ type: "error", msg: `Erro ao integrar com ERP M8${etapa}: ${result.error}` });
-    } else {
-      setFeedbackERP({ type: "success", msg: `Integração com ERP M8 concluída! ID do documento: ${result.erp_id || "—"}` });
-    }
-    setTimeout(() => setFeedbackERP(null), 12000);
-  };
-
-  // Lança no sistema + envia para integração ERP M8
-  const handleLancarEnviarERP = async (id: string) => {
+  // Cada despesa processa independentemente; o modal nunca aguarda o ERP.
+  const executarEnvioERP = async (id: string, lancarNoSistema: boolean) => {
     const userId = authUser?.id ?? currentUser?.id;
-    if (!userId) return;
-    setErroLancar(null);
-    setFeedbackERP(null);
-    setLancando((prev) => ({ ...prev, [id]: true }));
-    setEnviandoERP((prev) => ({ ...prev, [id]: true }));
-    const result = await tentarNovamenteERP(id, userId);
-    mostrarFeedbackERP(result as any);
-
-    if (!result?.error && !result?.simulado) {
-      // Integração real bem sucedida: lança no sistema também
-      await lancarSistema(id, userId);
-      setErroERP((prev) => { const n = { ...prev }; delete n[id]; return n; });
-    } else if (result?.error && !result?.simulado && !result?.campos?.length) {
-      // Erro real de integração (não é validação nem vars): lança no sistema e registra erro
-      await lancarSistema(id, userId);
-      setErroERP((prev) => ({ ...prev, [id]: result.error! }));
-    } else {
-      // Vars faltando ou campos incompletos: não lança no sistema
-      setErroERP((prev) => { const n = { ...prev }; delete n[id]; return n; });
-    }
-
-    setLancando((prev) => ({ ...prev, [id]: false }));
-    setEnviandoERP((prev) => ({ ...prev, [id]: false }));
+    if (!userId || enviosEmAndamento.current.has(id)) return;
+    enviosEmAndamento.current.add(id);
     setConfirmLancar(null);
-  };
-
-  // Reenvio ao ERP quando já lançado no sistema mas com erro
-  const handleEnviarERP = async (id: string) => {
-    const userId = authUser?.id ?? currentUser?.id;
-    if (!userId) return;
-    setFeedbackERP(null);
-    setEnviandoERP((prev) => ({ ...prev, [id]: true }));
-    const result = await tentarNovamenteERP(id, userId);
-    mostrarFeedbackERP(result as any);
-    if (result?.error) {
-      setErroERP((prev) => ({ ...prev, [id]: result.error! }));
-    } else {
-      setErroERP((prev) => { const n = { ...prev }; delete n[id]; return n; });
+    setEnviandoERP(prev => ({ ...prev, [id]: true }));
+    setLancando(prev => ({ ...prev, [id]: true }));
+    setTarefasERP(prev => ({ ...prev, [id]: { status: "processando", mensagem: "Integrando com ERP M8..." } }));
+    try {
+      const result = await tentarNovamenteERP(id, userId);
+      let erroInterno: string | null = null;
+      if (lancarNoSistema && !result?.simulado && !result?.campos?.length) {
+        const interno = await lancarSistema(id, userId);
+        erroInterno = interno?.error || null;
+      }
+      const mensagem = result?.campos?.length
+        ? `Confira os campos: ${result.campos.join(", ")}`
+        : result?.error || erroInterno || (result?.simulado ? "Integração não realizada: confira a configuração do ERP." : `Concluído — documento ERP ${result?.erp_id || "—"}`);
+      const falhou = !!(result?.error || result?.simulado || result?.campos?.length || erroInterno);
+      setTarefasERP(prev => ({ ...prev, [id]: { status: falhou ? "erro" : "sucesso", mensagem } }));
+      setErroERP(prev => {
+        const next = { ...prev };
+        if (falhou) next[id] = mensagem;
+        else delete next[id];
+        return next;
+      });
+    } catch {
+      const mensagem = "Não foi possível confirmar o resultado do envio. Confira o status antes de tentar novamente.";
+      setTarefasERP(prev => ({ ...prev, [id]: { status: "erro", mensagem } }));
+      setErroERP(prev => ({ ...prev, [id]: mensagem }));
+    } finally {
+      enviosEmAndamento.current.delete(id);
+      setEnviandoERP(prev => ({ ...prev, [id]: false }));
+      setLancando(prev => ({ ...prev, [id]: false }));
     }
-    setEnviandoERP((prev) => ({ ...prev, [id]: false }));
   };
+  const handleLancarEnviarERP = (id: string) => executarEnvioERP(id, true);
+  const handleEnviarERP = (id: string) => executarEnvioERP(id, false);
 
   const handleEstornarERP = async (id: string) => {
+    if (enviosEmAndamento.current.has(id)) return;
     const userId = authUser?.id ?? currentUser?.id;
     if (!userId) return;
     const confirmado = window.confirm("O lançamento será removido da fila local. O lançamento no M8 precisa ser cancelado manualmente. Deseja continuar?");
@@ -897,6 +879,24 @@ export default function FinanceiroPageSupabase() {
     <div className="flex flex-col gap-5">
 
       {/* ── Erro de lançamento ── */}
+      {Object.keys(tarefasERP).length > 0 && (
+        <section aria-label="Andamento dos envios ao ERP" className="rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold">Envios ao ERP · {Object.values(tarefasERP).filter(t => t.status === "processando").length} em andamento</h2>
+            <button type="button" className="text-xs text-primary underline" onClick={() => setTarefasERP(prev => Object.fromEntries(Object.entries(prev).filter(([,t]) => t.status === "processando")))}>Limpar concluídos</button>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">Continue lançando outras despesas. Mantenha esta aba aberta para acompanhar os resultados.</p>
+          <ul className="mt-3 max-h-48 space-y-2 overflow-y-auto" aria-live="polite">
+            {Object.entries(tarefasERP).map(([id, tarefa]) => {
+              const despesa = despesas.find(d => d.id === id);
+              return <li key={id} className="flex items-start gap-2 text-xs">
+                {tarefa.status === "processando" && <Loader2 className="h-4 w-4 shrink-0 animate-spin" />}
+                <span className={tarefa.status === "erro" ? "text-destructive" : ""}><strong>{despesa?.cliente || "Despesa"} · {despesa ? formatCurrency(Number(despesa.valor)) : ""} · {id.slice(0,8)}</strong>: {tarefa.mensagem}</span>
+              </li>;
+            })}
+          </ul>
+        </section>
+      )}
       {erroLancar && (
         <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive text-sm">
           <span>{erroLancar}</span>
@@ -1431,6 +1431,7 @@ export default function FinanceiroPageSupabase() {
                       {podeEditarCampos && (
                         <button
                           type="button"
+                          disabled={!!enviandoERP[d.id]}
                           onClick={() => abrirEdicao(d)}
                           title="Editar despesa"
                           aria-label="Editar despesa"
@@ -1514,6 +1515,7 @@ export default function FinanceiroPageSupabase() {
                                   <button
                                     type="button"
                                     title="Cancelar lançamento"
+                                    disabled={!!enviandoERP[d.id]}
                                     onClick={() => setModalCancelar(d.id)}
                                     className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
                                   >
@@ -1957,7 +1959,7 @@ export default function FinanceiroPageSupabase() {
                       {lancando[confirmLancar as string] ? "Processando..." : "Lançar e Enviar ao ERP (M8)"}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Lança no sistema e integra imediatamente ao ERP M8. As 6 etapas de integração são executadas automaticamente.
+                      Inicia a integração em segundo plano e libera a tela para os próximos lançamentos.
                     </p>
                   </div>
                 </button>
