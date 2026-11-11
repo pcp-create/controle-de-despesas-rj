@@ -1423,7 +1423,8 @@ export default function FinanceiroPageSupabase() {
                   NaoEnviadoERP:               "Não Enviado ao ERP",
                 };
 
-                const aprovado = sg === "aprovado";
+                // Cartão exige aprovação; as demais formas permitem lançamento interno direto.
+                const podeLancar = sg === "aprovado" || (d.pagamento_tipo ?? "cartao") !== "cartao";
 
                 return (
                   <tr key={d.id} className={`${rowIndex % 2 === 0 ? "bg-card" : "bg-slate-50 dark:bg-slate-900"} hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors`}>
@@ -1500,7 +1501,7 @@ export default function FinanceiroPageSupabase() {
                                   );
                                 })()}
                               </div>
-                            ) : aprovado ? (
+                            ) : podeLancar ? (
                               <div className="flex items-center gap-1">
                                 <button
                                   type="button"
