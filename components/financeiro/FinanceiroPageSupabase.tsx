@@ -1710,16 +1710,6 @@ export default function FinanceiroPageSupabase() {
                               {d.parcela_atual}/{d.numero_parcelas}
                             </span>
                           )}
-                          {d.pagamento_tipo === "faturado" && (
-                            <span className="ml-1.5 shrink-0 text-xs font-semibold text-accent bg-accent/10 px-1.5 py-0.5 rounded-full">
-                              Faturado
-                            </span>
-                          )}
-                          {d.pagamento_tipo === "boleto" && (
-                            <span className="ml-1.5 shrink-0 text-xs font-semibold text-warning bg-warning/10 px-1.5 py-0.5 rounded-full">
-                              Boleto
-                            </span>
-                          )}
                           {!d.lancado_sistema && (currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro" || currentUser?.perfil === "gestor") && (
                             <button
                               onClick={() => handleEditarTipo(d.id, d.tipo_despesa_id)}
