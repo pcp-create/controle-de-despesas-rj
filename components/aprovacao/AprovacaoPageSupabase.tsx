@@ -70,11 +70,15 @@ export default function AprovacaoPageSupabase() {
   const [justificativa, setJustificativa] = useState("");
   const [revogandoChave, setRevogandoChave] = useState<string | null>(null);
 
+  const aprovacoesEmAndamento = useRef(new Set<string>());
+  const [aprovando, setAprovando] = useState<Set<string>>(new Set());
+
   // ─── Agrupa despesas parceladas pelo grupo_parcela_id ────────────────────────
   const grupos = useMemo<GrupoDespesa[]>(() => {
     if (!currentUser) return [];
 
     const visiveis = despesas.filter((d) => {
+      if (aprovando.has(d.grupo_parcela_id ?? d.id)) return false;
       if (!d.status_erp || d.status_erp === "Rascunho") return false;
       // Gestor, administrador e financeiro visualizam todas as despesas enviadas
       if (
@@ -133,7 +137,7 @@ export default function AprovacaoPageSupabase() {
         new Date(b.despesaPrincipal.created_at).getTime() -
         new Date(a.despesaPrincipal.created_at).getTime()
       );
-  }, [despesas, currentUser, profiles, search, filterStatus, filterFuncionario, tiposDespesa]);
+  }, [despesas, aprovando, currentUser, profiles, search, filterStatus, filterFuncionario, tiposDespesa]);
 
   // Funcionários que têm despesas visíveis (para o select de filtro)
   const isGestorOuAdmin = currentUser?.perfil === "gestor" || currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro";
@@ -145,39 +149,63 @@ export default function AprovacaoPageSupabase() {
 
   const pendentes = grupos.filter((g) => g.despesaPrincipal.status_aprovacao === "AguardandoGestor").length;
 
-  // Aprova todas as parcelas do grupo
+  // Retira o grupo da fila imediatamente; cada gravação segue independente das demais.
   const handleAprovar = async (grupo: GrupoDespesa) => {
+    if (!currentUser || aprovacoesEmAndamento.current.has(grupo.chave)) return;
     const supabase = createClient();
     if (!supabase) { setFeedback({ type: "error", msg: "Supabase não disponível" }); return; }
 
-    for (const parcela of grupo.parcelas) {
-      const { error } = await supabase
-        .from("despesas")
-        .update({
-          status_aprovacao: "AprovadoGestor",
-          status_erp: "AprovadoGestorERPAtualizado",
-          gestor_aprovador_id: currentUser?.id,
-          data_aprovacao: new Date().toISOString(),
-        })
-        .eq("id", parcela.id);
+    aprovacoesEmAndamento.current.add(grupo.chave);
+    setAprovando(new Set(aprovacoesEmAndamento.current));
+    setExpandedId((atual) => atual === grupo.chave ? null : atual);
+    setFeedback(null);
+    const ids = grupo.parcelas.map((p) => p.id);
+    const campos = {
+      status_aprovacao: "AprovadoGestor",
+      status_erp: "AprovadoGestorERPAtualizado",
+      gestor_aprovador_id: currentUser.id,
+      data_aprovacao: new Date().toISOString(),
+    };
 
-      if (error) { setFeedback({ type: "error", msg: error.message }); return; }
+    try {
+      // Uma única requisição para todas as parcelas, em vez de uma por parcela.
+      const { data, error } = await supabase.from("despesas")
+        .update(campos).in("id", ids).select("id");
+      if (error) throw new Error(error.message);
+      if (data?.length !== ids.length) {
+        void mutate().catch(console.error);
+        throw new Error("Não foi possível confirmar a aprovação de todas as parcelas. Confira suas permissões.");
+      }
+    } catch (error) {
+      setFeedback({ type: "error", msg: `Aprovação não concluída (${grupo.despesaPrincipal.cliente || grupo.chave}): ${error instanceof Error ? error.message : "Falha de conexão. Tente novamente."}` });
+      aprovacoesEmAndamento.current.delete(grupo.chave);
+      setAprovando(new Set(aprovacoesEmAndamento.current));
+      return;
     }
 
-    await registrarAuditoria({
-      acao: "APPROVE",
-      entidade: "despesa",
-      entidadeId: grupo.chave,
-      usuarioId: currentUser?.id || "sistema",
+    // Mescla apenas este grupo; aprovações simultâneas não sobrescrevem umas às outras.
+    try {
+      await mutate((atuais) => atuais?.map((d) => ids.includes(d.id) ? { ...d, ...campos } : d), { revalidate: false });
+    } catch (error) {
+      console.error(error);
+      setFeedback({ type: "error", msg: "Aprovação salva, mas não foi possível atualizar a lista. Atualize a página." });
+      void mutate().catch(console.error);
+    } finally {
+      aprovacoesEmAndamento.current.delete(grupo.chave);
+      setAprovando(new Set(aprovacoesEmAndamento.current));
+    }
+    setFeedback((atual) => atual?.type === "error" ? atual : {
+      type: "success",
+      msg: grupo.parcelado ? `${grupo.numeroParcelas} parcelas aprovadas!` : "Despesa aprovada!",
+    });
+    // Auditoria não bloqueia a próxima aprovação nem desfaz uma gravação confirmada.
+    void registrarAuditoria({
+      acao: "APPROVE", entidade: "despesa", entidadeId: grupo.chave,
+      usuarioId: currentUser.id,
       detalhes: grupo.parcelado
         ? `Grupo de ${grupo.numeroParcelas} parcelas aprovado pelo gestor`
         : "Despesa aprovada pelo gestor",
-    });
-
-    const msg = grupo.parcelado ? `${grupo.numeroParcelas} parcelas aprovadas!` : "Despesa aprovada!";
-    setFeedback({ type: "success", msg });
-    await mutate();
-    setTimeout(() => setFeedback(null), 3000);
+    }).catch(console.error);
   };
 
   // Reprova todas as parcelas do grupo
@@ -282,6 +310,12 @@ export default function AprovacaoPageSupabase() {
           </p>
         </div>
       </div>
+
+      {aprovando.size > 0 && (
+        <div role="status" className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">
+          Confirmando {aprovando.size} aprovação(ões) em segundo plano. Você pode continuar aprovando outras despesas. Mantenha esta página aberta até concluir.
+        </div>
+      )}
 
       {/* Feedback */}
       {feedback && (
