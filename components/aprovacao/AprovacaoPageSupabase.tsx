@@ -550,7 +550,7 @@ export default function AprovacaoPageSupabase() {
                                 className="flex flex-1 basis-0 min-w-0 items-center justify-center gap-1 px-1.5 py-2 sm:flex-none sm:basis-auto sm:gap-1.5 sm:px-3 sm:py-1.5 rounded-lg border border-warning/30 text-warning text-xs sm:text-sm hover:bg-warning/10 transition"
                               >
                                 <Undo2 className="w-4 h-4 shrink-0" />
-                                <span className="min-w-0 [overflow-wrap:anywhere]">{grupo.parcelado ? `Revogar ${grupo.numeroParcelas} Parcelas` : "Revogar ao Criador"}</span>
+                                <span className="min-w-0 [overflow-wrap:anywhere]">Revogar</span>
                               </button>
                             )
                           )}
