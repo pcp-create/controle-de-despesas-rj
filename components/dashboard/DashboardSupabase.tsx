@@ -431,9 +431,10 @@ export default function DashboardSupabase({ onNavigate }: Props) {
           { label: "Reprovadas", value: reprovadas, icon: <CircleX className="w-5 h-5" />, iconBg: "bg-destructive/10", iconColor: "text-destructive", hint: "Reprovadas", onClick: () => handleCardClick("reprovado") },
         ].map(({ label, value, icon, iconBg, iconColor, hint, onClick }) => (
           <button key={label} onClick={onClick} title={hint}
-            className="group bg-white rounded-xl border border-border shadow-sm p-4 flex flex-col text-left hover:shadow-md hover:border-primary/30 active:scale-[0.98] transition-all">
+            className="group min-w-0 bg-white rounded-xl border border-border shadow-sm p-3 sm:p-4 flex flex-col text-left hover:shadow-md hover:border-primary/30 active:scale-[0.98] transition-all"
+            style={{ containerType: "inline-size" }}>
             <div className={`w-9 h-9 rounded-lg flex items-center justify-center mb-3 ${iconBg} ${iconColor}`}>{icon}</div>
-            <p className="text-2xl font-bold text-foreground">{value}</p>
+            <p className={`w-full min-w-0 font-bold text-foreground tabular-nums [overflow-wrap:anywhere] ${typeof value === "string" ? "text-[clamp(0.875rem,12cqw,1.5rem)] leading-tight" : "text-2xl"}`}>{value}</p>
             <p className="text-xs text-muted-foreground mt-1 leading-tight">{label}</p>
             <ArrowRight className="w-3 h-3 text-muted-foreground/30 opacity-0 group-hover:opacity-100 mt-2 transition-opacity self-end" />
           </button>
