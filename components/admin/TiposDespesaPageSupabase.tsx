@@ -410,16 +410,32 @@ export default function TiposDespesaPageSupabase() {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Limite Máximo (R$)</label>
+              <div className="flex items-center justify-between gap-3">
+                <label htmlFor="limite-maximo" className="text-sm font-medium">Limite Máximo (R$)</label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.limite_maximo === ""}
+                    onChange={(e) => setForm({ ...form, limite_maximo: e.target.checked ? "" : "0" })}
+                    disabled={loading}
+                  />
+                  Sem limite
+                </label>
+              </div>
               <input
+                id="limite-maximo"
                 type="number"
+                min="0"
                 step="0.01"
                 value={form.limite_maximo}
                 onChange={(e) => setForm({ ...form, limite_maximo: e.target.value })}
                 className="px-3 py-2 rounded-lg border border-input bg-background text-sm"
-                placeholder="Opcional"
+                placeholder="Sem limite"
                 disabled={loading}
               />
+              <p className="text-xs text-muted-foreground">
+                Em branco: sem limite de valor e sem exigir observação por excesso. Zero: exige justificativa para qualquer valor.
+              </p>
             </div>
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">Limite diário de ocorrências</label>
