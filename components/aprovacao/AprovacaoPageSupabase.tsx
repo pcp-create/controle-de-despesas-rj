@@ -477,7 +477,7 @@ export default function AprovacaoPageSupabase() {
                     numeroParcelas={grupo.numeroParcelas}
                     profiles={profiles}
                     acoes={
-                      <div className="flex flex-col gap-3">
+                      <div className="w-full min-w-0 sm:w-auto flex flex-col gap-3">
                         {/* Formulário de reprovação */}
                         {isReprovando && (
                           <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20 space-y-2">
@@ -522,15 +522,15 @@ export default function AprovacaoPageSupabase() {
                                 onClick={() => setReprovandoChave(grupo.chave)}
                                 className="flex flex-1 basis-0 min-w-0 items-center justify-center gap-1 px-1.5 py-2 sm:flex-none sm:basis-auto sm:gap-1.5 sm:px-3 sm:py-1.5 rounded-lg border border-destructive/30 text-destructive text-xs sm:text-sm hover:bg-destructive/10 transition"
                               >
-                                <XCircle className="w-4 h-4 shrink-0" />
-                                <span className="min-w-0 [overflow-wrap:anywhere]">{grupo.parcelado ? `Reprovar ${grupo.numeroParcelas} Parcelas` : "Reprovar"}</span>
+                                <XCircle className="hidden min-[380px]:block w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                                <span className="min-w-0">{grupo.parcelado ? `Reprovar ${grupo.numeroParcelas} Parcelas` : "Reprovar"}</span>
                               </button>
                               <button
                                 onClick={() => handleAprovar(grupo)}
                                 className="flex flex-1 basis-0 min-w-0 items-center justify-center gap-1 px-1.5 py-2 sm:flex-none sm:basis-auto sm:gap-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-success text-white text-xs sm:text-sm hover:bg-success/90 transition font-medium"
                               >
-                                <CheckCircle className="w-4 h-4 shrink-0" />
-                                <span className="min-w-0 [overflow-wrap:anywhere]">{grupo.parcelado ? `Aprovar ${grupo.numeroParcelas} Parcelas` : "Aprovar"}</span>
+                                <CheckCircle className="hidden min-[380px]:block w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                                <span className="min-w-0">{grupo.parcelado ? `Aprovar ${grupo.numeroParcelas} Parcelas` : "Aprovar"}</span>
                               </button>
                             </>
                           )}
@@ -557,8 +557,8 @@ export default function AprovacaoPageSupabase() {
                                 onClick={() => setRevogandoChave(grupo.chave)}
                                 className="flex flex-1 basis-0 min-w-0 items-center justify-center gap-1 px-1.5 py-2 sm:flex-none sm:basis-auto sm:gap-1.5 sm:px-3 sm:py-1.5 rounded-lg border border-warning/30 text-warning text-xs sm:text-sm hover:bg-warning/10 transition"
                               >
-                                <Undo2 className="w-4 h-4 shrink-0" />
-                                <span className="min-w-0 [overflow-wrap:anywhere]">Revogar</span>
+                                <Undo2 className="hidden min-[380px]:block w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                                <span className="min-w-0">Revogar</span>
                               </button>
                             )
                           )}
