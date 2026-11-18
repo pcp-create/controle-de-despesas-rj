@@ -5,6 +5,7 @@ import { useFiltrosPersistidos } from "@/lib/supabase/use-filtros-persistidos";
 import type { FiltrosFinanceiro } from "@/lib/supabase/use-filtros-persistidos";
 import type { Despesa } from "@/lib/supabase/hooks";
 import { useDespesas, useTiposDespesa, useProfiles, useCartoesFinanceiro } from "@/lib/supabase/hooks";
+import CorrigirVencimentosNovembro from "./CorrigirVencimentosNovembro";
 import { MoneyInput } from "@/components/ui/money-input";
 import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/lib/supabase/auth-context";
@@ -933,6 +934,8 @@ export default function FinanceiroPageSupabase() {
           </div>
         );
       })()}
+
+      {(currentUser?.perfil === "administrador" || currentUser?.perfil === "financeiro") && <CorrigirVencimentosNovembro />}
 
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-start gap-4">
