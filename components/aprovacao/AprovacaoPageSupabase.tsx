@@ -66,6 +66,12 @@ export default function AprovacaoPageSupabase() {
     salvarApr({ filterStatus, filterFuncionario });
   }, [filterStatus, filterFuncionario]); // eslint-disable-line react-hooks/exhaustive-deps
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = window.setTimeout(() => setFeedback(null), feedback.type === "error" ? 6000 : 3000);
+    return () => window.clearTimeout(timer);
+  }, [feedback]);
+
   const [reprovandoChave, setReprovandoChave] = useState<string | null>(null);
   const [justificativa, setJustificativa] = useState("");
   const [revogandoChave, setRevogandoChave] = useState<string | null>(null);
@@ -196,7 +202,7 @@ export default function AprovacaoPageSupabase() {
     }
     setFeedback((atual) => atual?.type === "error" ? atual : {
       type: "success",
-      msg: grupo.parcelado ? `${grupo.numeroParcelas} parcelas aprovadas!` : "Despesa aprovada!",
+      msg: "Despesa aprovada",
     });
     // Auditoria não bloqueia a próxima aprovação nem desfaz uma gravação confirmada.
     void registrarAuditoria({
@@ -251,7 +257,6 @@ export default function AprovacaoPageSupabase() {
     setReprovandoChave(null);
     setJustificativa("");
     await mutate();
-    setTimeout(() => setFeedback(null), 3000);
   };
 
   // Revoga a despesa de volta ao criador para edição
@@ -288,7 +293,6 @@ export default function AprovacaoPageSupabase() {
     const msg = grupo.parcelado ? `${grupo.numeroParcelas} parcelas revogadas ao criador` : "Despesa revogada ao criador";
     setFeedback({ type: "success", msg });
     await mutate();
-    setTimeout(() => setFeedback(null), 3000);
   };
 
   if (isLoading) {
@@ -317,14 +321,18 @@ export default function AprovacaoPageSupabase() {
         </div>
       )}
 
-      {/* Feedback */}
+      {/* Notificação visível mesmo com a despesa expandida no fim da página. */}
       {feedback && (
-        <div className={`rounded-lg px-4 py-3 text-sm ${
-          feedback.type === "success"
-            ? "bg-success/10 border border-success/20 text-success"
-            : "bg-destructive/10 border border-destructive/20 text-destructive"
-        }`}>
-          {feedback.msg}
+        <div
+          role={feedback.type === "error" ? "alert" : "status"}
+          aria-live={feedback.type === "error" ? "assertive" : "polite"}
+          aria-atomic="true"
+          className={`fixed left-1/2 bottom-[calc(5rem+env(safe-area-inset-bottom))] sm:bottom-6 z-[100] -translate-x-1/2 w-max max-w-[calc(100vw-2rem)] flex items-center gap-3 rounded-xl px-5 py-3 text-sm font-medium text-white shadow-lg ${
+            feedback.type === "success" ? "bg-green-600" : "bg-red-600"
+          }`}
+        >
+          {feedback.type === "success" ? <CheckCircle className="h-5 w-5 shrink-0" /> : <XCircle className="h-5 w-5 shrink-0" />}
+          <span>{feedback.msg}</span>
         </div>
       )}
 
