@@ -473,29 +473,29 @@ export default function AprovacaoPageSupabase() {
                         )}
 
                         {/* Botões de ação */}
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap items-stretch gap-1.5 sm:gap-2">
                           {d.status_aprovacao === "AguardandoGestor" && !isReprovando && (
                             <>
                               <button
                                 onClick={() => setReprovandoChave(grupo.chave)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-destructive/30 text-destructive text-sm hover:bg-destructive/10 transition"
+                                className="flex flex-1 basis-0 min-w-0 items-center justify-center gap-1 px-1.5 py-2 sm:flex-none sm:basis-auto sm:gap-1.5 sm:px-3 sm:py-1.5 rounded-lg border border-destructive/30 text-destructive text-xs sm:text-sm hover:bg-destructive/10 transition"
                               >
-                                <XCircle className="w-4 h-4" />
-                                {grupo.parcelado ? `Reprovar ${grupo.numeroParcelas} Parcelas` : "Reprovar"}
+                                <XCircle className="w-4 h-4 shrink-0" />
+                                <span className="min-w-0 [overflow-wrap:anywhere]">{grupo.parcelado ? `Reprovar ${grupo.numeroParcelas} Parcelas` : "Reprovar"}</span>
                               </button>
                               <button
                                 onClick={() => handleAprovar(grupo)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-success text-white text-sm hover:bg-success/90 transition font-medium"
+                                className="flex flex-1 basis-0 min-w-0 items-center justify-center gap-1 px-1.5 py-2 sm:flex-none sm:basis-auto sm:gap-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-success text-white text-xs sm:text-sm hover:bg-success/90 transition font-medium"
                               >
-                                <CheckCircle className="w-4 h-4" />
-                                {grupo.parcelado ? `Aprovar ${grupo.numeroParcelas} Parcelas` : "Aprovar"}
+                                <CheckCircle className="w-4 h-4 shrink-0" />
+                                <span className="min-w-0 [overflow-wrap:anywhere]">{grupo.parcelado ? `Aprovar ${grupo.numeroParcelas} Parcelas` : "Aprovar"}</span>
                               </button>
                             </>
                           )}
                           {/* Revogar — disponível para gestor/admin em qualquer status exceto Rascunho */}
                           {isGestorOuAdmin && (d.status_aprovacao === "AguardandoGestor" || d.status_aprovacao === "AprovadoGestor" || d.status_aprovacao === "Reprovado") && !isReprovando && (
                             revogandoChave === grupo.chave ? (
-                              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-warning/10 border border-warning/30 text-sm">
+                              <div className="flex w-full sm:w-auto flex-wrap items-center gap-2 px-3 py-1.5 rounded-lg bg-warning/10 border border-warning/30 text-sm">
                                 <span className="text-warning font-medium">Confirmar revogação?</span>
                                 <button
                                   onClick={() => handleRevogar(grupo)}
@@ -513,10 +513,10 @@ export default function AprovacaoPageSupabase() {
                             ) : (
                               <button
                                 onClick={() => setRevogandoChave(grupo.chave)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-warning/30 text-warning text-sm hover:bg-warning/10 transition"
+                                className="flex flex-1 basis-0 min-w-0 items-center justify-center gap-1 px-1.5 py-2 sm:flex-none sm:basis-auto sm:gap-1.5 sm:px-3 sm:py-1.5 rounded-lg border border-warning/30 text-warning text-xs sm:text-sm hover:bg-warning/10 transition"
                               >
-                                <Undo2 className="w-4 h-4" />
-                                {grupo.parcelado ? `Revogar ${grupo.numeroParcelas} Parcelas` : "Revogar ao Criador"}
+                                <Undo2 className="w-4 h-4 shrink-0" />
+                                <span className="min-w-0 [overflow-wrap:anywhere]">{grupo.parcelado ? `Revogar ${grupo.numeroParcelas} Parcelas` : "Revogar ao Criador"}</span>
                               </button>
                             )
                           )}
