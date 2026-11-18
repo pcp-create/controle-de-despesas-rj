@@ -42,7 +42,7 @@ function AnexoViewer({ url, nome, compact = false }: { url: string; nome?: strin
   const [rotate, setRotate] = useViewerState(0);
 
   const isPdf = url.toLowerCase().includes(".pdf") || (nome?.toLowerCase().endsWith(".pdf") ?? false);
-  const isImage = !isPdf && /\.(jpe?g|png|gif|webp|bmp|svg)(\?|$)/i.test(url);
+  const isImage = !isPdf && (/\.(jpe?g|png|gif|webp|bmp|svg)(\?|$)/i.test(url) || /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(nome || ""));
 
   const label = nome ?? "Evidência financeiro";
 
@@ -64,12 +64,13 @@ function AnexoViewer({ url, nome, compact = false }: { url: string; nome?: strin
           onClick={() => setOpen(false)}
         >
           <div
+            role="dialog" aria-modal="true" aria-label={label}
             className="relative bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
             style={{ maxWidth: "90vw", maxHeight: "90vh", width: isPdf ? 800 : "auto" }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-border shrink-0">
               <div className="flex items-center gap-2 min-w-0">
                 <Paperclip className="w-4 h-4 text-muted-foreground shrink-0" />
                 <span className="text-sm font-medium text-foreground truncate">{label}</span>
@@ -78,6 +79,7 @@ function AnexoViewer({ url, nome, compact = false }: { url: string; nome?: strin
                 {isImage && (
                   <>
                     <button
+                      type="button"
                       onClick={() => setZoom((z) => Math.max(0.25, z - 0.25))}
                       className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
                       title="Diminuir zoom"
@@ -86,6 +88,7 @@ function AnexoViewer({ url, nome, compact = false }: { url: string; nome?: strin
                     </button>
                     <span className="text-xs text-muted-foreground w-10 text-center">{Math.round(zoom * 100)}%</span>
                     <button
+                      type="button"
                       onClick={() => setZoom((z) => Math.min(4, z + 0.25))}
                       className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
                       title="Aumentar zoom"
@@ -93,6 +96,7 @@ function AnexoViewer({ url, nome, compact = false }: { url: string; nome?: strin
                       <ZoomIn className="w-4 h-4" />
                     </button>
                     <button
+                      type="button"
                       onClick={() => setRotate((r) => (r + 90) % 360)}
                       className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
                       title="Girar"
@@ -113,7 +117,9 @@ function AnexoViewer({ url, nome, compact = false }: { url: string; nome?: strin
                   <Download className="w-4 h-4" />
                 </a>
                 <button
-                  onClick={() => setOpen(false)}
+                  type="button"
+                  aria-label="Fechar anexo"
+                  onClick={(event) => { event.stopPropagation(); setOpen(false); }}
                   className="p-1.5 rounded-lg hover:bg-muted transition text-muted-foreground"
                 >
                   <X className="w-4 h-4" />
@@ -130,7 +136,7 @@ function AnexoViewer({ url, nome, compact = false }: { url: string; nome?: strin
                     src={url}
                     alt={label}
                     style={{ transform: `scale(${zoom}) rotate(${rotate}deg)`, transformOrigin: "center", transition: "transform 0.2s" }}
-                    className="max-w-none"
+                    className="max-w-full h-auto"
                   />
                 </div>
               ) : isPdf ? (
@@ -375,13 +381,7 @@ export default function DespesaExpandida({
           <div className="flex items-center gap-3">
             <span className="text-sm text-foreground truncate flex-1">{d.comprovante_nome}</span>
             {d.comprovante_url && (
-              <button
-                onClick={() => window.open(d.comprovante_url!, "_blank")}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-input text-sm hover:bg-muted transition shrink-0"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                Ver
-              </button>
+              <AnexoViewer url={d.comprovante_url} nome={d.comprovante_nome} compact />
             )}
           </div>
         </div>
