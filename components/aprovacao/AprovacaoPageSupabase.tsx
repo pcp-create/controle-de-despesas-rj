@@ -66,10 +66,17 @@ export default function AprovacaoPageSupabase() {
     salvarApr({ filterStatus, filterFuncionario });
   }, [filterStatus, filterFuncionario]); // eslint-disable-line react-hooks/exhaustive-deps
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const [feedbackSaindo, setFeedbackSaindo] = useState(false);
   useEffect(() => {
+    setFeedbackSaindo(false);
     if (!feedback) return;
-    const timer = window.setTimeout(() => setFeedback(null), feedback.type === "error" ? 6000 : 3000);
-    return () => window.clearTimeout(timer);
+    const duracao = feedback.type === "error" ? 6000 : 3000;
+    const sair = window.setTimeout(() => setFeedbackSaindo(true), duracao);
+    const remover = window.setTimeout(() => setFeedback(null), duracao + 250);
+    return () => {
+      window.clearTimeout(sair);
+      window.clearTimeout(remover);
+    };
   }, [feedback]);
 
   const [reprovandoChave, setReprovandoChave] = useState<string | null>(null);
@@ -327,7 +334,7 @@ export default function AprovacaoPageSupabase() {
           role={feedback.type === "error" ? "alert" : "status"}
           aria-live={feedback.type === "error" ? "assertive" : "polite"}
           aria-atomic="true"
-          className={`fixed left-1/2 bottom-[calc(5rem+env(safe-area-inset-bottom))] sm:bottom-6 z-[100] -translate-x-1/2 w-max max-w-[calc(100vw-2rem)] flex items-center gap-3 rounded-xl px-5 py-3 text-sm font-medium text-white shadow-lg ${
+          className={`${feedbackSaindo ? "animate-out fade-out slide-out-to-bottom-2" : "animate-in fade-in slide-in-from-bottom-2"} duration-250 ease-out motion-reduce:animate-none fixed left-1/2 bottom-[calc(5rem+env(safe-area-inset-bottom))] sm:bottom-6 z-[100] -translate-x-1/2 w-max max-w-[calc(100vw-2rem)] flex items-center gap-3 rounded-xl px-5 py-3 text-sm font-medium text-white shadow-lg ${
             feedback.type === "success" ? "bg-green-600/80 backdrop-blur-sm" : "bg-red-600/80 backdrop-blur-sm"
           }`}
         >
