@@ -44,15 +44,9 @@ function normalizarBaseUrl(url: string): string {
   return url.replace(/\/+$/, "");
 }
 
-// ─── Regra de vencimento enviado ao M8 ──────────────────────────────────────
-// A data de vencimento real da despesa (calculada no cadastro, ex.: dia 19)
-// não pode ser "empurrada" para a data de hoje quando a despesa já está
-// vencida. Regra:
-// - Se hoje (data de envio) ainda for MENOR que o vencimento real, sobe a
-//   própria data de envio (hoje) — a despesa ainda não venceu.
-// - Se hoje já for MAIOR OU IGUAL ao vencimento real, sobe o vencimento real
-//   — a despesa já venceu e não deve "andar" para a data de hoje.
-function calcularVencimentoEnvio(dataVencimento: unknown): string {
+// Data de entrada no M8: mantém a menor data entre o envio e o vencimento.
+// Esta regra é exclusiva da entrada; o vencimento da parcela é preservado.
+function calcularDataEntrada(dataVencimento: unknown): string {
   const vencimentoIso = paraIso(dataVencimento, "Data de vencimento");
   const vencimentoData = vencimentoIso.slice(0, 10);
   const envioData = getLocalDateString();
@@ -671,10 +665,8 @@ export async function POST(request: Request) {
         pessoaId,
         tipoCompraId: 8,
         emissao: paraIso(despesa.data_despesa, "Data da despesa"),
-        // "Data de Entrada" no M8: segue a mesma regra de vencimento (nunca
-        // sobe além do vencimento real da despesa), em vez de sempre usar a
-        // data de hoje.
-        lancamento: calcularVencimentoEnvio(despesa.data_vencimento),
+        // A entrada mantém sua regra própria, sem alterar o vencimento da parcela.
+        lancamento: calcularDataEntrada(despesa.data_vencimento),
         freteId: 9,
         condicaoPagamentoId: 9,
         sintegraId: 99,
@@ -784,7 +776,8 @@ export async function POST(request: Request) {
 
       if (etapaAtual <= 4 && !etapaJaConcluida(4)) {
         const bodyEtapa4 = {
-          vencimento: calcularVencimentoEnvio(despesa.data_vencimento),
+          // O cadastro já calcula o mês conforme a data da despesa e a parcela.
+          vencimento: paraIso(despesa.data_vencimento, "Data de vencimento"),
           valor: valorDespesa!,
           condicaoPagamentoId: 9,
         };
