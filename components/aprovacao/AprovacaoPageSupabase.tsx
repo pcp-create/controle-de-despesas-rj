@@ -328,7 +328,7 @@ export default function AprovacaoPageSupabase() {
           aria-live={feedback.type === "error" ? "assertive" : "polite"}
           aria-atomic="true"
           className={`fixed left-1/2 bottom-[calc(5rem+env(safe-area-inset-bottom))] sm:bottom-6 z-[100] -translate-x-1/2 w-max max-w-[calc(100vw-2rem)] flex items-center gap-3 rounded-xl px-5 py-3 text-sm font-medium text-white shadow-lg ${
-            feedback.type === "success" ? "bg-green-600" : "bg-red-600"
+            feedback.type === "success" ? "bg-green-600/80 backdrop-blur-sm" : "bg-red-600/80 backdrop-blur-sm"
           }`}
         >
           {feedback.type === "success" ? <CheckCircle className="h-5 w-5 shrink-0" /> : <XCircle className="h-5 w-5 shrink-0" />}
