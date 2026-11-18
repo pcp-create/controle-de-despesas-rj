@@ -59,3 +59,9 @@ test('count mismatch stops the entire selection before M8 calls', async () => {
   const query = { select() { return this; }, eq() { return this; }, gte() { return this; }, lt() { return this; }, order() { return this; }, async range() { return { data: [], error: null }; } };
   await assert.rejects(novemberExpenses({ from: () => query }), /Encontrados 0 documentos/);
 });
+
+test('M8 financial title can omit NF series and return numeric status', () => {
+  assert.equal(match(undefined, [{ ...title(), serie: null, status: 0 }]).status, 'corrigir');
+  assert.throws(() => match(undefined, [{ ...title(), status: 2 }]), /status incompatível/);
+  assert.throws(() => match(undefined, [{ ...title(), serie: 'OUTRA' }]), /ausente/);
+});

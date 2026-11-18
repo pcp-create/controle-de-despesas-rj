@@ -18,11 +18,14 @@ try {
   const planPath = resolve(dir, 'conferencia.json');
   if (action === 'conferir') {
     const plan = { createdAt: new Date().toISOString(), period: PERIOD, rows: [] };
-    for (const [index, d] of rows.entries()) {
-      try { plan.rows.push(await m8.inspect(d)); }
-      catch (error) { plan.rows.push({ expenseId: d.id, document: d.numero_documento_erp, status: 'revisar', error: error.message }); }
+    for (let index = 0; index < rows.length; index += 3) {
+      const batch = await Promise.all(rows.slice(index, index + 3).map(async d => {
+        try { return await m8.inspect(d); }
+        catch (error) { return { expenseId: d.id, document: d.numero_documento_erp, status: 'revisar', error: error.message }; }
+      }));
+      plan.rows.push(...batch);
       await writeFile(planPath, JSON.stringify(plan, null, 2), { mode: 0o600 });
-      console.log(`Conferidos ${index + 1}/${rows.length}`);
+      console.log(`Conferidos ${plan.rows.length}/${rows.length}`);
     }
     console.log('Conferência finalizada:', planPath);
     console.log('Contagens:', JSON.stringify(plan.rows.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] || 0) + 1 }), {})));

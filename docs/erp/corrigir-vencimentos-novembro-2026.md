@@ -7,7 +7,7 @@ O painel Financeiro oferece **Correção dos vencimentos enviados em novembro/20
 - Data de integração concluída (`lancado_erp_em`) de 01/11/2026 00:00 até 01/12/2026 00:00, horário de Brasília. Não usa data da despesa, vencimento ou envio para aprovação.
 - `lancado_erp = true` e `erp_status = integrado`.
 - O lote deve conter exatamente 144 documentos, sem duplicidade de nota ou número por empresa. Caso contrário, interrompe sem alterar registros.
-- Conferência da nota por ERP ID, empresa, pessoa, número e valor; título por empresa, documento exato, série, pessoa/fornecedor e valor. Exige uma correspondência única e uma parcela por nota (formato usado pela integração).
+- Conferência da nota por ERP ID, empresa, pessoa, número e valor; título por empresa, documento exato, pessoa/fornecedor e valor. A série também é conferida quando preenchida no título (o M8 pode deixá-la nula). Exige uma correspondência única e uma parcela por nota (formato usado pela integração).
 - Parcelas já corretas são ignoradas. Cancelamentos, renegociações, baixas, borderôs, divergências e alterações manuais posteriores ficam para revisão.
 
 ## Alteração
