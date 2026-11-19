@@ -244,6 +244,10 @@ export default function DespesaExpandida({
   const lancadoBy  = profiles.find((p) => p.id === d.lancado_sistema_por);
   const erpBy      = profiles.find((p) => p.id === d.lancado_erp_por);
 
+  const historicoERP = Array.isArray(d.erp_resposta?.historico_estornos)
+    ? d.erp_resposta.historico_estornos as Array<{ erp_id?: string; numero_documento_erp?: number; estornado_em?: string }>
+    : [];
+
   const pagCfg = pagamentoTipoConfig[d.pagamento_tipo ?? "cartao"] ?? pagamentoTipoConfig.cartao;
   const isCombust = d.tipo_combustivel || d.litros_abastecidos;
   const isHosp    = d.data_checkin && d.data_checkout;
@@ -483,6 +487,17 @@ export default function DespesaExpandida({
       </div>
 
       }
+
+      {showLancamentos && historicoERP.length > 0 && (
+        <details className="rounded-lg border border-border p-3 text-xs">
+          <summary className="cursor-pointer font-medium">Histórico de documentos ERP estornados ({historicoERP.length})</summary>
+          <div className="mt-2 space-y-2">
+            {historicoERP.map((item, index) => (
+              <p key={index}>Documento {item.numero_documento_erp ?? "—"} · ERP ID {item.erp_id ?? "—"} · Estornado em {fmt(item.estornado_em)}</p>
+            ))}
+          </div>
+        </details>
+      )}
 
       {/* ── SEÇÃO 9: DATAS SISTEMA ────────────────────────────────── */}
       <div>

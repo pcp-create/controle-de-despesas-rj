@@ -1216,20 +1216,18 @@ export function useDespesas(userId?: string, perfil?: string) {
   };
 
   const estornarLancamentoERP = async (id: string, userId: string) => {
-    const supabase = getSupabase();
-    if (!supabase) return { error: "Supabase não disponível" };
-    const { error } = await supabase.from("despesas").update({
-      erp_status: "pendente",
-      erp_erro: "Lançamento no M8 precisa ser cancelado manualmente.",
-      erp_etapa_erro: null,
-      lancado_erp_em: null,
-      lancado_erp_por: null,
-      updated_at: new Date().toISOString(),
-    }).eq("id", id);
-    if (error) return { error: error.message };
-    await registrarAuditoria({ acao: "UPDATE", entidade: "despesa", entidadeId: id, usuarioId: userId, detalhes: "Estorno local do lançamento ERP solicitado; cancelamento no M8 deve ser feito manualmente." });
-    mutate();
-    return { error: null };
+    try {
+      const res = await fetch("/api/erp/estornar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const body = await res.json();
+      if (!res.ok) return { error: body.error || "Não foi possível estornar o envio ERP." };
+      mutate();
+      return { error: null };
+    } catch {
+      return { error: "Falha de conexão ao estornar. Atualize a tela para conferir o resultado." };
+    }
   };
 
   const estornarLancamento = async (id: string) => {

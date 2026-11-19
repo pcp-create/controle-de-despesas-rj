@@ -586,7 +586,7 @@ export async function POST(request: Request) {
     : 2;
 
   const payloads: Record<string, unknown> = {
-    ...(despesa.erp_payload && typeof despesa.erp_payload === "object"
+    ...(erpId && despesa.erp_payload && typeof despesa.erp_payload === "object"
       ? despesa.erp_payload
       : {}),
     etapa1: {
@@ -598,9 +598,11 @@ export async function POST(request: Request) {
   };
 
   const respostas: Record<string, unknown> = {
-    ...(despesa.erp_resposta && typeof despesa.erp_resposta === "object"
+    ...(erpId && despesa.erp_resposta && typeof despesa.erp_resposta === "object"
       ? despesa.erp_resposta
-      : {}),
+      : Array.isArray(despesa.erp_resposta?.historico_estornos)
+        ? { historico_estornos: despesa.erp_resposta.historico_estornos }
+        : {}),
   };
 
   try {
