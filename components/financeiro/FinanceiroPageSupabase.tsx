@@ -264,12 +264,14 @@ export default function FinanceiroPageSupabase() {
     if (enviosEmAndamento.current.has(id)) return;
     const userId = authUser?.id ?? currentUser?.id;
     if (!userId) return;
-    const confirmado = window.confirm("O documento atual será arquivado no histórico e o próximo envio criará um novo número. O documento anterior no M8 precisa ser cancelado manualmente para evitar duplicidade. Deseja estornar o vínculo local?");
+    const confirmado = window.confirm("O documento será cancelado no M8 e arquivado no histórico. O próximo envio criará um novo número. Deseja estornar?");
     if (!confirmado) return;
-    const result = await estornarLancamentoERP(id, userId);
+    enviosEmAndamento.current.add(id);
+    setFeedbackERP({ type: "warning", msg: "Cancelando o documento no M8…" });
+    const result = await estornarLancamentoERP(id, userId).finally(() => enviosEmAndamento.current.delete(id));
     setFeedbackERP(result.error
       ? { type: "error", msg: result.error }
-      : { type: "warning", msg: "Vínculo ERP estornado e documento arquivado. O próximo envio criará um novo documento. Cancele o anterior no M8 antes de reenviar." });
+      : { type: "warning", msg: "Documento cancelado no M8 e arquivado. O próximo envio criará um novo documento." });
     setTimeout(() => setFeedbackERP(null), 12000);
   };
 

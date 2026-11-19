@@ -605,6 +605,12 @@ export async function POST(request: Request) {
         : {}),
   };
 
+  // Disputa a mesma trava do estorno antes de qualquer chamada que altere o M8.
+  let claim = supabase.from("despesas").update({ erp_status: "processando", updated_at: new Date().toISOString() }).eq("id", despesaId);
+  claim = despesa.updated_at ? claim.eq("updated_at", despesa.updated_at) : claim.is("updated_at", null);
+  const { data: claimed, error: claimError } = await claim.select("id").maybeSingle();
+  if (claimError || !claimed) return NextResponse.json({ error: "Despesa alterada por outra operação. Atualize e tente novamente." }, { status: 409 });
+
   try {
     // ETAPA 1 — Gerar token
     const loginBody = {

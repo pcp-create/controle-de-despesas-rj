@@ -7,7 +7,7 @@ const exportsModule = {};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/erp-estorno.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:exportsModule});
 const {prepararEstornoERP} = exportsModule;
 const source = fs.readFileSync('app/api/integrar-erp/route.ts','utf8');
-const init = source.slice(source.indexOf('  let erpId ='), source.indexOf('\n  try {\n    // ETAPA 1'));
+const init = source.slice(source.indexOf('  let erpId ='), source.indexOf('\n  // Disputa a mesma trava'));
 function start(despesa) {
  return vm.runInNewContext(ts.transpileModule(init+'\n({erpId,numeroDocumentoErp,etapaInicial,payloads,respostas})',{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,{despesa,paraNumero:v=>v==null?null:Number(v),M8_TENANT:'t',M8_USERNAME:'u',M8_DOMAIN:'d',empresaIdM8:1});
 }
